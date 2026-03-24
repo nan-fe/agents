@@ -1,0 +1,12 @@
+fastapi
+uvicorn
+langchain
+langchain-openai
+openai
+python-dotenv
+replicate
+sse-starlette
+pydantic
+pydantic-settings
+pytest
+pytest-asyncio

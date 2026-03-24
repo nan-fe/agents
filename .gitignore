@@ -1,0 +1,40 @@
+# 后端
+backend/__pycache__/
+backend/.env
+backend/.venv/
+backend/venv/
+backend/env/
+
+# 前端
+frontend/node_modules/
+frontend/build/
+frontend/.env
+
+# 通用
+*.pyc
+*.pyo
+*.pyd
+*.swp
+*.swo
+*~
+.DS_Store
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# 测试
+.pytest_cache/
+coverage/
+
+# IDE
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+github_key
+github_key.pub
