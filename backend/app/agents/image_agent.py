@@ -34,11 +34,12 @@ class ImageAgent(BaseAgent):
         核心卖点：{', '.join(input_data.core_selling_points)}
         语气风格：{input_data.tone_style}
         图片需求：{input_data.image_requirements}
+        商品类型：{input_data.product_category}
         
         要求：
-        1. 描述要详细，包括场景、人物、物品、光线、构图等
-        2. 风格要符合小红书平台特点，美观、时尚、有吸引力
-        3. 语言要清晰，适合作为AI图片生成的提示词
+        1. 图片按照商品类型生成，根据核心卖点调整图片风格
+        2. 图片风格结合语气风格进行优化
+        3. 结合目标人群以及图片需求进一步优化图片内容
         """
         
         await self.log("生成图片描述...", log_callback)

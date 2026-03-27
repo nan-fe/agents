@@ -85,6 +85,18 @@ class AgentOrchestrator:
             "image_url": image_result.image_url
         }
         
+        # 添加商品推荐信息
+        if hasattr(planning_result, "product_recommendations") and planning_result.product_recommendations:
+            product_recommendations = []
+            for product in planning_result.product_recommendations:
+                product_recommendations.append({
+                    "product_name": product.product_name,
+                    "description": product.description,
+                    "taobao_link": product.taobao_link,
+                    "price": product.price
+                })
+            final_result["product_recommendations"] = product_recommendations
+        
         await log_callback("Orchestrator", f"多Agent协作完成，生成最终结果: {final_result}")
         
         return final_result

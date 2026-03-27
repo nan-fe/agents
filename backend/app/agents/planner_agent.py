@@ -1,7 +1,7 @@
 from app.agents.base_agent import BaseAgent
-from app.models.schemas import PlanningResult
+from app.models.schemas import PlanningResult, ProductRecommendation
 from app.services.planning_chain import PlanningChain
-from typing import Optional
+from typing import Optional, List
 
 
 class PlannerAgent(BaseAgent):
@@ -30,13 +30,24 @@ class PlannerAgent(BaseAgent):
         try:
             result = await self.planning_chain.run(input_data)
             await self.log(f"策划方案生成完成: {result}", log_callback)
+            
+            # # 处理商品推荐
+            # if "product_recommendations" in result and result["product_recommendations"]:
+            #     # 转换商品推荐为ProductRecommendation对象
+            #     product_recommendations = []
+            #     for product in result["product_recommendations"]:
+            #         product_recommendations.append(ProductRecommendation(**product))
+            #     result["product_recommendations"] = product_recommendations
+            
             return PlanningResult(**result)
         except Exception as e:
             await self.log(f"生成策划方案失败: {e}", log_callback)
             # 返回默认值
             return PlanningResult(
-                target_audience="通用人群",
+                target_audience=["通用人群"],
                 core_selling_points=["质量好", "价格实惠", "使用方便"],
                 tone_style="亲切自然",
-                image_requirements="产品实物图，清晰明亮"
+                image_requirements="产品实物图，清晰明亮",
+                product_recommendations=[],
+                product_category="通用产品"
             )

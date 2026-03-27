@@ -1,6 +1,6 @@
 from langchain_core.prompts import PromptTemplate
 from langchain_openai import ChatOpenAI
-from langchain_core.output_parsers import PydanticOutputParser
+from langchain_core.output_parsers import JsonOutputParser
 from app.config import settings
 from app.models.schemas import CopywritingResult
 
@@ -10,7 +10,7 @@ class CopywritingChain:
     def __init__(self):
         """初始化文案生成链"""
         # 创建 Pydantic 输出解析器
-        self.parser = PydanticOutputParser(pydantic_object=CopywritingResult)
+        self.parser = JsonOutputParser(pydantic_object=CopywritingResult)
         
         # 构建提示模板
         template = """
@@ -28,9 +28,11 @@ class CopywritingChain:
         要求：
         1. 包含吸引人的标题
         2. 正文内容要生动有趣，使用表情符号
-        3. 结尾添加相关话题标签
+        3. 结尾添加相关话题标签（至少3个）
         4. 整体风格符合小红书平台特点
         5. 如果有相关商品信息，请在文案中自然融入推荐
+        6. 输出内容仅包含title、content和hashtags三个字段
+        7. 输出内容仅输出 JSON 对象，不要附加任何解释
         """
         
         prompt = PromptTemplate(
@@ -40,8 +42,8 @@ class CopywritingChain:
         )
         
         self.llm = ChatOpenAI(
-            model_name='Qwen/Qwen2.5-7B-Instruct',
-            temperature=1,
+            model_name=settings.SILICONFLOW_MODEL,
+            temperature= 0.3,
             api_key=settings.SILICONFLOW_API_KEY,
             base_url=settings.SILICONFLOW_BASE_URL
         )

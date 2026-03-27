@@ -9,7 +9,7 @@ from app.models.schemas import UserInput, SSEMessage
 from app.agents.orchestrator import AgentOrchestrator
 
 # 创建FastAPI应用实例
-app = FastAPI(
+app = FastAPI(    
     title=settings.APP_NAME,
     debug=settings.DEBUG
 )

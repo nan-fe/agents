@@ -10,3 +10,9 @@ pydantic
 pydantic-settings
 pytest
 pytest-asyncio
+playwright_stealth
+playwright==1.40.0
+requests
+requests-file
+httpcore==1.0.9
+httpx==0.28.1

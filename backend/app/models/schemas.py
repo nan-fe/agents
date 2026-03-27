@@ -14,12 +14,22 @@ class AgentLog(BaseModel):
     timestamp: float
 
 
+class ProductRecommendation(BaseModel):
+    """商品推荐模型"""
+    product_name: str
+    description: str
+    taobao_link: str
+    price: Optional[str] = None
+
+
 class PlanningResult(BaseModel):
     """策划Agent输出模型"""
     target_audience: List[str]
     core_selling_points: List[str]
     tone_style: str
     image_requirements: str
+    product_category: str
+    product_recommendations: Optional[List[ProductRecommendation]] = None
 
 
 class CopywritingResult(BaseModel):
@@ -48,6 +58,7 @@ class FinalResult(BaseModel):
     content: str
     hashtags: List[str]
     image_url: str
+    product_recommendations: Optional[List[ProductRecommendation]] = None
 
 
 class SSEMessage(BaseModel):

@@ -13,27 +13,30 @@ class CopywriterAgent(BaseAgent):
         super().__init__("Copywriter", "小红书爆款文案写手")
         self.copywriting_chain = CopywritingChain()
     
-    async def run(self, input_data: dict, log_callback: Optional[callable] = None) -> CopywritingResult:
+    async def run(self, planning_result: PlanningResult, log_callback: Optional[callable] = None) -> CopywritingResult:
         """运行文案Agent
         
         Args:
-            input_data: 包含策划结果和检索结果的字典
+            planning_result: 策划结果
             log_callback: 日志回调函数
             
         Returns:
             文案结果
         """
-        # 提取策划结果和检索结果
-        planning_result = input_data.get("planning_result")
-        retrieval_result = input_data.get("retrieval_result")
-        
         await self.log(f"根据策划方案生成文案: {planning_result}", log_callback)
-        if retrieval_result:
-            await self.log(f"检索结果: {retrieval_result}", log_callback)
+        
+        # 构建商品推荐信息
+        retrieval_result = ""
+        if planning_result.product_recommendations:
+            product_info = []
+            for product in planning_result.product_recommendations:
+                product_info.append(f"{product.product_name}: {product.description}, 链接: {product.taobao_link}, 价格: {product.price or '面议'}")
+            retrieval_result = "\n".join(product_info)
+            await self.log(f"商品推荐信息: {retrieval_result}", log_callback)
         
         # 构建输入数据
         chain_input = {
-            "target_audience": planning_result.target_audience,
+            "target_audience": ", ".join(planning_result.target_audience),
             "core_selling_points": ", ".join(planning_result.core_selling_points),
             "tone_style": planning_result.tone_style,
             "retrieval_result": retrieval_result
@@ -46,7 +49,11 @@ class CopywriterAgent(BaseAgent):
             result = await self.copywriting_chain.run(chain_input)
             print(f"生成小红书风格文案 result: {result}")
             await self.log(f"文案生成完成: {result}", log_callback)
-            return CopywritingResult(**result)
+            # 检查result是否已经是CopywritingResult对象
+            if isinstance(result, CopywritingResult):
+                return result
+            else:
+                return CopywritingResult(**result)
         except Exception as e:
             await self.log(f"生成文案失败: {e}", log_callback)
             print(f"生成文案失败: {e}")
