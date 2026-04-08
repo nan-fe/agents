@@ -13,6 +13,10 @@ class AgentLog(BaseModel):
     message: str
     timestamp: float
 
+class PlanStep(BaseModel):
+    description: str                # 步骤描述
+    suggested_agent: Optional[str]  # 可选：建议使用的 Agent
+    input_overrides: Optional[dict] # 可选：该步骤的特殊输入参数覆盖
 
 class ProductRecommendation(BaseModel):
     """商品推荐模型"""
@@ -28,9 +32,11 @@ class PlanningResult(BaseModel):
     core_selling_points: List[str]
     tone_style: str
     image_requirements: str
+    topic: str
     product_category: str
-    product_recommendations: Optional[List[ProductRecommendation]] = None
 
+class ImageAgentInput(PlanningResult):
+    copywriting_content:str
 
 class CopywritingResult(BaseModel):
     """文案Agent输出模型"""

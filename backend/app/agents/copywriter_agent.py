@@ -1,7 +1,7 @@
 from app.agents.base_agent import BaseAgent
 from app.models.schemas import CopywritingResult, PlanningResult
 from app.services.langchain_chains import CopywritingChain
-from typing import Optional
+from typing import Optional, Union, Dict
 import json
 
 
@@ -13,33 +13,40 @@ class CopywriterAgent(BaseAgent):
         super().__init__("Copywriter", "小红书爆款文案写手")
         self.copywriting_chain = CopywritingChain()
     
-    async def run(self, planning_result: PlanningResult, log_callback: Optional[callable] = None) -> CopywritingResult:
+    async def run(self, planning_result: Union[PlanningResult, Dict], log_callback: Optional[callable] = None) -> CopywritingResult:
         """运行文案Agent
         
         Args:
-            planning_result: 策划结果
+            planning_result: 策划结果（可以是PlanningResult对象或字典）
             log_callback: 日志回调函数
             
         Returns:
             文案结果
         """
-        await self.log(f"根据策划方案生成文案: {planning_result}", log_callback)
+        await self.log(f"根据策划方案生成文案", log_callback)
         
-        # 构建商品推荐信息
-        retrieval_result = ""
-        if planning_result.product_recommendations:
-            product_info = []
-            for product in planning_result.product_recommendations:
-                product_info.append(f"{product.product_name}: {product.description}, 链接: {product.taobao_link}, 价格: {product.price or '面议'}")
-            retrieval_result = "\n".join(product_info)
-            await self.log(f"商品推荐信息: {retrieval_result}", log_callback)
+        # 处理不同类型的输入
+        if isinstance(planning_result, dict):
+            planning_dict = planning_result
+            target_audience = planning_dict.get("target_audience", [])
+            core_selling_points = planning_dict.get("core_selling_points", [])
+            tone_style = planning_dict.get("tone_style", "亲切自然")
+            topic = planning_dict.get("topic","默认主题")
+        else:
+            # PlanningResult对象
+            planning_dict = planning_result.model_dump()
+            target_audience = planning_result.target_audience
+            core_selling_points = planning_result.core_selling_points
+            tone_style = planning_result.tone_style
+            topic = planning_result.topic
         
         # 构建输入数据
         chain_input = {
-            "target_audience": ", ".join(planning_result.target_audience),
-            "core_selling_points": ", ".join(planning_result.core_selling_points),
-            "tone_style": planning_result.tone_style,
-            "retrieval_result": retrieval_result
+            "target_audience": ", ".join(target_audience) if isinstance(target_audience, list) else target_audience,
+            "core_selling_points": ", ".join(core_selling_points) if isinstance(core_selling_points, list) else core_selling_points,
+            "tone_style": tone_style,
+            "topic": topic,
+            # "information_summary": summary_info
         }
         
         await self.log("生成小红书风格文案...", log_callback)

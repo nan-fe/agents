@@ -36,4 +36,10 @@ class BaseAgent(ABC):
             log_callback: 日志回调函数
         """
         if log_callback:
-            await log_callback(self.name, message)
+            # 检查回调函数是否为异步函数
+            import inspect
+            if inspect.iscoroutinefunction(log_callback):
+                await log_callback(self.name, message)
+            else:
+                # 同步回调函数直接调用
+                log_callback(self.name, message)

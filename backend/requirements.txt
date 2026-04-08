@@ -16,3 +16,7 @@ requests
 requests-file
 httpcore==1.0.9
 httpx==0.28.1
+langchain-community
+duckduckgo-search
+chromadb
+pandas

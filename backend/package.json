@@ -3,9 +3,6 @@
     "pip": "^0.0.1"
   },
   "scripts": {
-    "start": "/Users/lixuefu/Library/Python/3.8/bin/uvicorn app.main:app --reload",
-    "test": "PYTHONPATH=. /Users/lixuefu/Library/Python/3.8/bin/pytest tests/",
-    "test:verbose": "PYTHONPATH=. /Users/lixuefu/Library/Python/3.8/bin/pytest tests/ -v",
-    "test:print": "PYTHONPATH=. /Users/lixuefu/Library/Python/3.8/bin/pytest tests/ -s"
+    "start": "/Users/lixuefu/Library/Python/3.13/bin/uvicorn app.main:app --reload"
   }
 }

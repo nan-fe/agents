@@ -8,7 +8,9 @@ class Settings(BaseSettings):
     SILICONFLOW_API_KEY: str
     SILICONFLOW_MODEL: str = "deepseek-ai/DeepSeek-R1-Distill-Qwen-7B"
     SILICONFLOW_BASE_URL: str = "https://api.siliconflow.cn/v1"
-    
+    COPYWRITE_MODEL: str
+    EMBEDING_MODEL: str
+    GENARATION_MODEL :str
     # 图片生成配置
     IMAGE_MODEL: str = "Kwai-Kolors/Kolors"  # free for dev
     REPLICATE_API_KEY: Optional[str] = None  # Stable Diffusion 使用
