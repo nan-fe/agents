@@ -5,6 +5,7 @@ from typing import Optional, List
 class UserInput(BaseModel):
     """用户输入模型"""
     prompt: str
+    session_id: str
 
 
 class AgentLog(BaseModel):
@@ -37,6 +38,7 @@ class PlanningResult(BaseModel):
 
 class ImageAgentInput(PlanningResult):
     copywriting_content:str
+    user_input:str
 
 class CopywritingResult(BaseModel):
     """文案Agent输出模型"""

@@ -168,11 +168,11 @@ class ProductRagAgent:
         )
         return response.choices[0].message.content
 
-    async def run(self, query: str, top_k: int = 1,log_callback: Optional[Callable] = None):
-        print("query",query,top_k)
+    async def run(self, query: str,log_callback: Optional[Callable] = None):
+        print("query",query)
         if log_callback:
             await log_callback("RagAgent", f"正在检索商品: {query}")
-        products = self.retrieve(query, top_k)
+        products = self.retrieve(query, 1)
         answer = self.generate_answer(query, products)
         if log_callback:
             await log_callback("RagAgent", f"检索到 {len(products)} 件商品")

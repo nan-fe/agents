@@ -13,12 +13,13 @@ class CopywriterAgent(BaseAgent):
         super().__init__("Copywriter", "小红书爆款文案写手")
         self.copywriting_chain = CopywritingChain()
     
-    async def run(self, planning_result: Union[PlanningResult, Dict], log_callback: Optional[callable] = None) -> CopywritingResult:
+    async def run(self, planning_result: Union[PlanningResult, Dict], log_callback: Optional[callable] = None, history: str = "") -> CopywritingResult:
         """运行文案Agent
         
         Args:
             planning_result: 策划结果（可以是PlanningResult对象或字典）
             log_callback: 日志回调函数
+            history: 历史数据
             
         Returns:
             文案结果
@@ -32,6 +33,7 @@ class CopywriterAgent(BaseAgent):
             core_selling_points = planning_dict.get("core_selling_points", [])
             tone_style = planning_dict.get("tone_style", "亲切自然")
             topic = planning_dict.get("topic","默认主题")
+            user_input = planning_dict.get("user_input","用户输入")
         else:
             # PlanningResult对象
             planning_dict = planning_result.model_dump()
@@ -39,6 +41,8 @@ class CopywriterAgent(BaseAgent):
             core_selling_points = planning_result.core_selling_points
             tone_style = planning_result.tone_style
             topic = planning_result.topic
+            user_input = planning_result.user_input
+
         
         # 构建输入数据
         chain_input = {
@@ -46,7 +50,8 @@ class CopywriterAgent(BaseAgent):
             "core_selling_points": ", ".join(core_selling_points) if isinstance(core_selling_points, list) else core_selling_points,
             "tone_style": tone_style,
             "topic": topic,
-            # "information_summary": summary_info
+            "history": history,
+            "user_input": user_input
         }
         
         await self.log("生成小红书风格文案...", log_callback)

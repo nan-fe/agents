@@ -11,6 +11,8 @@ class Settings(BaseSettings):
     COPYWRITE_MODEL: str
     EMBEDING_MODEL: str
     GENARATION_MODEL :str
+    PLAN_MODEL:str
+    INTENT_MODEL:str
     # 图片生成配置
     IMAGE_MODEL: str = "Kwai-Kolors/Kolors"  # free for dev
     REPLICATE_API_KEY: Optional[str] = None  # Stable Diffusion 使用

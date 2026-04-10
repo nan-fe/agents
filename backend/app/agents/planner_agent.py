@@ -18,6 +18,8 @@ class PlannerAgent(BaseAgent):
         你是一位小红书资深运营，擅长分析用户需求并转化为创作要点。
         
         用户输入：{input_data}
+        
+        历史数据：{history}
 
         {format_instructions}
         
@@ -30,11 +32,12 @@ class PlannerAgent(BaseAgent):
         6. 输出内容仅输出 JSON 对象，不要附加任何解释
         7. 输出的内容必须仅包含 target_audience,tone_style,core_selling_points,image_requirements,topic,product_category
         8. 请逐步思考每一步的规划
+        9. 如果有历史数据，则按照历史信息，结合用户输入的意见重新调整
         """
         
         prompt = PromptTemplate(
             template=template,
-            input_variables=["input_data"],
+            input_variables=["input_data", "history"],
             partial_variables={"format_instructions": self.parser.get_format_instructions()}
         )
         
@@ -48,17 +51,19 @@ class PlannerAgent(BaseAgent):
         self.chain = prompt | self.llm | self.parser
     
    
-    async def run(self, input_data: str, log_callback: Optional[callable] = None) -> PlanningResult:
+    async def run(self, input_data: str, log_callback: Optional[callable] = None, history: str = "") -> PlanningResult:
         """运行策划生成链
         
         Args:
             input_data: 用户输入的描述
+            log_callback: 日志回调函数
+            history: 历史数据
             
         Returns:
             策划结果字典
         """
         try:
-            planning_result = await self.chain.ainvoke({"input_data": input_data})
+            planning_result = await self.chain.ainvoke({"input_data": input_data, "history": history})
             print("plan", planning_result)
             await self.log(f"策划方案生成完成: {planning_result}", log_callback)
             

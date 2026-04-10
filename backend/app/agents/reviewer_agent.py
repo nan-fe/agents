@@ -31,7 +31,6 @@ class ReviewerAgent(BaseAgent):
             "image_url": input_data.get("image_url"),
             "image_prompt": input_data.get("image_prompt")
         }
-        print(f"chain input",chain_input)
         
          # 调用审核生成链
         try:
