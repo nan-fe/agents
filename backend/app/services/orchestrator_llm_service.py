@@ -4,6 +4,7 @@ from langchain_core.output_parsers import JsonOutputParser
 from app.config import settings
 from typing import Dict, List, Optional
 from pydantic import BaseModel
+from langchain_core.messages import BaseMessage
 
 
 class RoutingDecision(BaseModel):
@@ -42,7 +43,7 @@ class OrchestratorLLMService:
     def __init__(self):
         """初始化编排器LLM服务"""
         self.llm = ChatOpenAI(
-            model_name="THUDM/GLM-4.1V-9B-Thinking",
+            model_name= settings.PLAN_MODEL,
             temperature=0.3,
             api_key=settings.SILICONFLOW_API_KEY,
             base_url=settings.SILICONFLOW_BASE_URL
@@ -70,29 +71,32 @@ class OrchestratorLLMService:
         你是一个智能任务路由器，负责分析任务并决定调用哪些Agent。
         
         可用的Agent：
-        1. RagAgent - 商品信息RagAgent，检索本地数据库中相似的商品，拿到商品信息给文案 Agent 补充商品信息上下文
-        2. CopywriterAgent - 文案Agent，生成小红书风格文案
-        3. ImageAgent - 图片Agent，生成配图
-        4. ReviewerAgent - 质检Agent，检查文案和图片是否合规
+        1. RagAgent - 商品信息 RagAgent，检索本地数据库中相似的商品，拿到商品信息
+        2. CopywriterAgent - 文案 Agent，负责生成或者修改小红书风格文案
+        3. ImageAgent - 图片 Agent，生成配图，如果之前已经生成过，且没有提及需要生成或者修改，则不会使用
+        4. ReviewerAgent - 质检 Agent，检查文案和图片是否合规
         
         用户输入：{user_input}
         策划结果：{planning_result}
         
         请分析任务类型并决定：
         1. task_type: 任务类型（product_recommendation, content_creation, image_generation, quality_check等）
-        2. agents_to_call: 需要调用的Agent列表
+        2. agents_to_call: 需要调用的 Agent 列表
         3. reasoning: 路由决策的理由
         4. priority_order: Agent调用的优先级顺序
         
         {format_instructions}
         
         要求：
-        1. 根据任务复杂度和需求选择合适的Agent组合
-        2. 考虑任务依赖关系，确定合理的调用顺序，比如文案agent调用前，需要调用rag agent 提供商品的上下文
-        3. 如果任务简单，可以跳过某些Agent
+        1. 根据任务复杂度和需求选择合适的 Agent 组合
+        2. 考虑任务依赖关系，确定合理的调用顺序，比如 RagAgent 在商品类型没有发生改变，则只在首次使用，使用的数据可以给文案 Agent 补充商品信息上下文。
+        3. 如果任务简单，可以跳过某些 Agent
         4. 大多数情况下都需要 ReviewerAgent 进行质量检查，除非任务极简单。
         5. agents_to_call 和 priority_order 必须从可用 Agent 中选择，且顺序合理。
         6. 输出内容仅输出 JSON 对象，不要附加任何解释
+        7. 调用规划与修改分析器，分析用户意图：
+            修改类型：风格调整 + 内容补充。
+            需要修改的段落：全文语气 + 在适当位置插入折扣信息。
         """
         
         prompt = PromptTemplate(
@@ -118,77 +122,7 @@ class OrchestratorLLMService:
                 priority_order=["CopywriterAgent", "ImageAgent", "ReviewerAgent"]
             )
     
-    async def decide_agent_for_step(
-        self,
-        step_description: str,
-        available_agents: List[str],
-        context_summary: str,
-        step_input_overrides: Optional[Dict] = None
-    ) -> AgentDecision:
-        """为单个步骤动态决定使用哪个 Agent
-        
-        Args:
-            step_description: 步骤描述
-            available_agents: 可用的 Agent 名称列表
-            context_summary: 当前执行上下文的摘要
-            step_input_overrides: 步骤可能携带的输入覆盖（可选）
-            
-        Returns:
-            AgentDecision: 包含选中的 Agent 和理由
-        """
-        parser = JsonOutputParser(pydantic_object=AgentDecision)
-        
-        template = """
-        你是一个智能 Agent 路由器，负责为给定的任务步骤选择最合适的 Agent。
-        
-        可用 Agent 列表：{available_agents}
-        当前步骤描述：{step_description}
-        已有上下文摘要：{context_summary}
-        {input_overrides_info}
-        
-        请根据步骤的需求和当前上下文，从可用 Agent 中选择一个最合适的。
-        考虑因素：
-        - 步骤描述中明确需要的能力（文案生成、图片生成、审核等）
-        - 上下文是否已经产生了某些结果（例如已有文案则不需要再调用文案 Agent）
-        - 任务依赖关系
-        
-        {format_instructions}
-        
-        要求：
-        1. 只输出 JSON 对象，不要附加任何解释
-        2. selected_agent 必须来自 available_agents 列表
-        3. 如果无法决定，选择最通用的 Agent（如 CopywriterAgent）
-        """
-        
-        input_overrides_info = ""
-        if step_input_overrides:
-            input_overrides_info = f"步骤输入覆盖：{step_input_overrides}"
-        
-        prompt = PromptTemplate(
-            template=template,
-            input_variables=["step_description", "available_agents", "context_summary"],
-            partial_variables={
-                "format_instructions": parser.get_format_instructions(),
-                "input_overrides_info": input_overrides_info
-            }
-        )
-        
-        chain = prompt | self.llm | parser
-        
-        try:
-            result = await chain.ainvoke({
-                "step_description": step_description,
-                "available_agents": ", ".join(available_agents),
-                "context_summary": context_summary
-            })
-            return AgentDecision(**result)
-        except Exception as e:
-            # 默认决策：选择 CopywriterAgent（最通用的）
-            return AgentDecision(
-                selected_agent="CopywriterAgent",
-                reasoning=f"LLM 决策失败，使用默认 Agent。错误: {str(e)}"
-            )
-    
+
     async def decide_retry_strategy(
         self, 
         error_info: str, 
@@ -269,70 +203,58 @@ class OrchestratorLLMService:
                     action_type="retry_same_agent",
                     reasoning="默认策略：重试当前Agent"
                 )
-    
-    async def fuse_and_summarize_information(
-        self,
-        planning_result: Dict,
-        product_recommendations: List[Dict],
-        previous_results: Optional[List[Dict]] = None
-    ) -> InformationSummary:
-        """信息融合与摘要
+     
+    async def analyze_intent(self, user_input: str, chat_history: List[BaseMessage]) -> str:
+        """分析用户意图
         
         Args:
-            planning_result: 策划结果
-            product_recommendations: 商品推荐
-            previous_results: 之前的执行结果
+            user_input: 用户输入
+            chat_history: 对话历史
             
         Returns:
-            信息摘要
+            意图类型：new_task, refine_content, change_topic, etc.
         """
-        parser = JsonOutputParser(pydantic_object=InformationSummary)
-        
         template = """
-        你是一个信息融合专家，负责整合多个来源的信息并生成摘要。
+        你是一个意图分析专家，负责分析用户的输入意图。
         
-        策划结果：{planning_result}
-        商品推荐：{product_recommendations}
-        之前的执行结果：{previous_results}
+        对话历史：{chat_history}
+        用户当前输入：{user_input}
         
-        请分析并提取：
-        1. key_points: 关键要点（3-5个）
-        2. product_insights: 商品洞察（2-3个）
-        3. audience_insights: 受众洞察（2-3个）
-        4. style_recommendations: 风格建议（2-3个）
-        5. summary_text: 综合摘要（一段话）
-        
-        {format_instructions}
+        请分析用户的意图，并返回以下类型之一：
+        1. new_task: 开始一个新的任务
+        2. refine_content: 优化或修改现有内容
+        3. change_topic: 更改主题
+        4. ask_question: 询问问题
+        5. other: 其他意图
         
         要求：
-        1. 提取最有价值的信息
-        2. 识别关键卖点和特色
-        3. 理解目标受众需求
-        4. 提供风格和语气建议
-        5. 输出内容仅输出 JSON 对象，不要附加任何解释
+        1. 仅返回意图类型，不输出任何解释
+        2. 基于用户输入和对话历史进行综合判断
         """
         
         prompt = PromptTemplate(
             template=template,
-            input_variables=["planning_result", "product_recommendations", "previous_results"],
-            partial_variables={"format_instructions": parser.get_format_instructions()}
+            input_variables=["user_input", "chat_history"]
+        )
+        self.intent_llm = ChatOpenAI(
+            model_name= settings.INTENT_MODEL,
+            temperature=0.3,
+            api_key=settings.SILICONFLOW_API_KEY,
+            base_url=settings.SILICONFLOW_BASE_URL
         )
         
-        chain = prompt | self.llm | parser
+        chain = prompt | self.intent_llm
         
         try:
+            print("开始识别意图")
+            history_str = "\n".join([f"{msg.type}: {msg.content}" for msg in chat_history])
             result = await chain.ainvoke({
-                "planning_result": str(planning_result),
-                "product_recommendations": str(product_recommendations),
-                "previous_results": str(previous_results) if previous_results else "无"
+                "user_input": user_input,
+                "chat_history": history_str
             })
-            return InformationSummary(**result)
+            print("完成识别意图")
+
+            return result.content.strip()
         except Exception as e:
-            # 默认信息摘要
-            return InformationSummary(
-                key_points=["质量好", "价格实惠", "使用方便"],
-                product_insights=["适合目标人群", "性价比高"],
-                audience_insights=["追求品质", "注重性价比"],
-                style_recommendations=["亲切自然", "真实可信"],
-                summary_text="这是一个适合目标人群的高性价比产品，建议采用亲切自然的风格进行推荐。"
-            )
+            # 默认意图：新任务
+            return "new_task"

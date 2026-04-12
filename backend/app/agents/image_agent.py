@@ -38,6 +38,7 @@ class ImageAgent(BaseAgent):
         文案内容：{input_data.get("copywriting_content")}
         文案主题：{input_data.get("topic")}
         商品类别：{input_data.get("product_category")}
+        历史数据：{input_data.get("history", "")}
         
         【真实感强制要求】（必须严格遵守）：
         1. **拒绝完美主义**：不要出现完美无瑕的光滑表面、零反差的柔光、过于对称的构图。允许轻微的自然瑕疵（如指纹、灰尘、布料褶皱、自然色差）。
@@ -47,6 +48,7 @@ class ImageAgent(BaseAgent):
         5. **适度构图**：采用类似手机或入门相机随手拍的视角（如平视、轻微俯拍、略带偏移），允许非完美裁切、前景虚化、轻微镜头畸变或噪点。
         6. **生活化细节**：添加符合场景的辅助元素（如半杯咖啡、使用中的手机、散落的叶子、卷尺、购物小票），但不要喧宾夺主。
         7. **避免AI常见痕迹**：禁止出现“光晕”、“辉光”、“CGI渲染感”、“塑料质感”、“极度对称”、“无瑕疵倒影”等特征。
+        8. **历史数据使用**：如果有历史数据，则按照历史信息，结合用户输入的意见重新调整图片描述。
         """
         
         await self.log("生成图片描述...", log_callback)
@@ -54,12 +56,11 @@ class ImageAgent(BaseAgent):
         # 这里简化处理，直接使用策划结果中的图片需求作为提示词
         # 实际项目中可以调用OpenAI生成更详细的描述
         image_prompt = prompt
-        print("image_prompt",image_prompt)
         await self.log(f"调用图片生成API，提示词: {image_prompt}", log_callback)
         
         # 调用图片生成服务
-        image_url = await self.image_service.generate_image(image_prompt)
-        # image_url='https://bizyair-prod.oss-cn-shanghai.aliyuncs.com/outputs/2697b788-7795-4f36-8f7e-c1ea20bd61b8_6e9dfbbfb65c2b4d99bdbc0d2f76ce3b_ComfyUI_21ec1493_00001_.png'
+        # image_url = await self.image_service.generate_image(image_prompt)
+        image_url='https://bizyair-prod.oss-cn-shanghai.aliyuncs.com/outputs/2697b788-7795-4f36-8f7e-c1ea20bd61b8_6e9dfbbfb65c2b4d99bdbc0d2f76ce3b_ComfyUI_21ec1493_00001_.png'
         image_result = ImageResult(
             image_url=image_url,
             prompt=image_prompt
