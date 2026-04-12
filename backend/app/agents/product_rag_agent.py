@@ -37,7 +37,7 @@ class SiliconFlowEmbeddingFunction(EmbeddingFunction[Documents]):
 
     @staticmethod
     def name():
-        return "siliconflow_qwen3_embedding_4b"
+        return "siliconflow_free_api"
 
 class ProductRagAgent:
     def __init__(self, data_path: str = None,log_callback: Optional[Callable] = None):
@@ -46,7 +46,7 @@ class ProductRagAgent:
             data_path = os.path.join(base_dir, "data", "taobao_products.csv")
         self.data_path = data_path
         self._ensure_data_file()
-        self.chroma_client = chromadb.PersistentClient(path="./chroma_taobao")
+        self.chroma_client = chromadb.PersistentClient(path="./chroma_taobao_v1")
         self.embedding_fn = SiliconFlowEmbeddingFunction(
             api_key=SILICONFLOW_API_KEY,
             base_url=SILICONFLOW_BASE_URL,

@@ -63,7 +63,7 @@ class PlannerAgent(BaseAgent):
             策划结果字典
         """
         try:
-            planning_result = await self.chain.ainvoke({"input_data": input_data, "history": history})
+            planning_result = await self.chain.ainvoke({"input_data": input_data, "history": history or ''})
             print("plan", planning_result)
             await self.log(f"策划方案生成完成: {planning_result}", log_callback)
             

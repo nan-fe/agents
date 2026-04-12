@@ -118,7 +118,7 @@ class AgentOrchestrator:
         elif agent_name == "ImageAgent":
             # 基于图片需求和已有的文案
             copywriting = context.get("copywriting") or {}
-            print("planning",planning.get("target_audience"))
+            
             return {
                 "image_requirements": planning.get("image_requirements"),
                 "copywriting_content": copywriting.get("content", ""),

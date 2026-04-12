@@ -156,7 +156,8 @@ class DialogOrchestratorAgent:
         last_final_result = session_history.get_last_final_result()
         history_data = ""
         if last_final_result:
-            history_data = f"上次生成的文案信息：\n标题：{last_final_result.get('title', '')}\n内容：{last_final_result.get('content', '')}\n标签：{', '.join(last_final_result.get('hashtags', []))}\n图片：{last_final_result.get('image_url', '')}"
+            history_data = f"上次生成的文案信息：\n标题：{last_final_result.get('title', '')}\n内容：{last_final_result.get('content', '')}\n标签：{', '.join(last_final_result.get('hashtags', []))}\n图片：{last_final_result.get('image_url', '')}\n图片提示：{last_final_result.get('image_prompt', '')}"
+
             print("准备历史数据完成",history_data)
         # 动态决策：是否需要重新规划
         if intent == "new_task" or not session_history.last_plan:
@@ -179,7 +180,8 @@ class DialogOrchestratorAgent:
                     "hashtags": last_final_result.get("hashtags", [])
                 }
                 execution_context["image"] = {
-                    "image_url": last_final_result.get("image_url", "")
+                    "image_url": last_final_result.get("image_url", ""),
+                    "image_prompt": last_final_result.get("image_prompt","")
                 }
         
         print("LLM 动态路由决策，开始.....")
