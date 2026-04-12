@@ -28,6 +28,7 @@ chroma*
 .pytest_cache/
 coverage/
 test*
+evaluate_*
 
 # IDE
 .vscode/

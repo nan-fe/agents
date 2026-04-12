@@ -10,6 +10,9 @@ from langchain_core.messages import BaseMessage
 from langchain_core.runnables.history import RunnableWithMessageHistory
 import chromadb
 import json
+from dotenv import load_dotenv
+
+load_dotenv()
 
 class WritingSessionHistory(BaseChatMessageHistory):
     def __init__(self, session_id):
