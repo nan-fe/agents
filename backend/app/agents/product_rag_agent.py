@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 from chromadb.api.types import Documents, Embeddings, EmbeddingFunction
 from typing import Optional, Callable
 from app.config import settings
+from app.utils.search_tool import search_duckduckgo_langchain
 
 load_dotenv()
 
@@ -54,7 +55,8 @@ class ProductRagAgent:
         )
         self.collection = self.chroma_client.get_or_create_collection(
             name="taobao_products",
-            embedding_function=self.embedding_fn
+            embedding_function=self.embedding_fn,
+            metadata={"hnsw:space": "ip"}
         )
         self._load_or_index_data()
         
@@ -149,33 +151,121 @@ class ProductRagAgent:
             for i, p in enumerate(retrieved_products)
         ])
 
-        system_prompt = """你是一个淘宝购物助手。请根据用户问题和检索到的商品列表，给出推荐建议。
-            - 如果用户有明确的预算、功能偏好，请优先推荐最匹配的商品。
-            - 回答要简洁、友好，并包含商品名称、价格和推荐理由。
-            - 如果信息不足，可以询问用户更多细节。"""
+        try:
+            system_prompt = """你是一个淘宝购物助手。请根据用户问题和检索到的商品列表，给出推荐建议。
+                - 如果用户有明确的预算、功能偏好，请优先推荐最匹配的商品。
+                - 回答要简洁、友好，并包含商品名称、价格和推荐理由。
+                - 如果信息不足，可以询问用户更多细节。"""
 
-        user_prompt = f"用户问题：{query}\n\n相关商品：\n{context}\n\n请回答："
+            user_prompt = f"用户问题：{query}\n\n相关商品：\n{context}\n\n请回答："
 
-        # 使用之前初始化的 client
-        response = client.chat.completions.create(
-            model=settings.GENARATION_MODEL,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt}
-            ],
-            temperature=0.7,
-            max_tokens=300
-        )
-        return response.choices[0].message.content
+            # 使用之前初始化的 client，添加超时设置
+            response = client.chat.completions.create(
+                model=settings.GENARATION_MODEL,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ],
+                temperature=0.7,
+                max_tokens=300,
+                timeout=10  # 添加超时设置
+            )
+            return response.choices[0].message.content
+        except Exception as e:
+            print(f"generate_answer 出错: {str(e)}")
+            # 出错时使用简单回答
+            product = retrieved_products[0]
+            return f"为您找到商品：{product['name']}，价格：¥{product['price']}，店铺：{product['shop_name']}"
 
     async def run(self, query: str,log_callback: Optional[Callable] = None):
         print("query",query)
         if log_callback:
             await log_callback("RagAgent", f"正在检索商品: {query}")
+        
+        # 从本地向量库检索商品
         products = self.retrieve(query, 1)
-        answer = self.generate_answer(query, products)
-        if log_callback:
-            await log_callback("RagAgent", f"检索到 {len(products)} 件商品")
+        print("从本地向量库检索商品")
+        # 检查是否找到相关商品（相似度阈值设为0.3，确保相关性）
+        found_relevant = False
+        if products:
+            similarity = products[0].get('similarity', 0)
+            found_relevant = similarity > 0.3  # 调整阈值，确保相关性
+        print(f"found_relevant: {found_relevant}")
+        
+        if found_relevant:
+            print("使用本地向量库商品")
+            # 找到相关商品，使用本地数据生成回答
+            if log_callback:
+                await log_callback("RagAgent", f"从本地向量库检索到 {len(products)} 件商品")
+            
+            try:
+                answer = self.generate_answer(query, products)
+            except Exception as e:
+                print(f"生成回答出错: {str(e)}")
+                # 出错时使用简单回答
+                product = products[0]
+                answer = f"为您找到商品：{product['name']}，价格：¥{product['price']}，店铺：{product['shop_name']}"
+        else:
+            # 没有找到相关商品，使用网络搜索
+            print('没有找到相关商品，使用网络搜索')
+            if log_callback:
+                await log_callback("RagAgent", "本地向量库未找到相关商品，使用网络搜索")
+            
+            # 使用网络搜索获取商品信息
+            search_result = search_duckduckgo_langchain(query, site="taobao.com")
+            print("使用网络搜索获取商品信息",search_result)
+            
+            if search_result:
+                # 基于搜索结果生成回答
+                if log_callback:
+                    await log_callback("RagAgent", "网络搜索成功获取商品信息")
+                
+                try:
+                    # 使用 LLM 基于搜索结果生成回答
+                    system_prompt = """你是一个淘宝购物助手。请根据用户问题和网络搜索结果，给出推荐建议。
+                    - 回答要简洁、友好，包含商品名称、价格和推荐理由。
+                    - 如果信息不足，可以询问用户更多细节。"""
+                    
+                    user_prompt = f"用户问题：{query}\n\n网络搜索结果：\n{search_result}\n\n请回答："
+                    print("user_prompt",user_prompt)
+                    
+                    response = client.chat.completions.create(
+                        model=settings.GENARATION_MODEL,
+                        messages=[
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": user_prompt}
+                        ],
+                        temperature=0.7,
+                        max_tokens=300,
+                        timeout=10  # 添加超时设置
+                    )
+                    print("response end")
+                    answer = response.choices[0].message.content
+                    print("ans",answer)
+                except Exception as e:
+                    print(f"LLM 调用出错: {str(e)}")
+                    # 超时或出错时，直接使用搜索结果生成简单回答
+                    lines = search_result.split('\n')
+                    product_info = []
+                    for i, line in enumerate(lines[:2]):  # 取前2行
+                        if line.strip():
+                            product_info.append(f"{i+1}. {line.strip()}")
+                    
+                    if product_info:
+                        answer = f"根据搜索结果，为您找到以下商品信息：\n\n" + "\n".join(product_info)
+                    else:
+                        answer = "抱歉，搜索结果格式无法识别，请尝试其他关键词。"
+                
+                # 构建搜索结果格式
+                products = [{"id": "search", "name": "网络搜索结果", "description": search_result[:200] + "..."}]
+            else:
+                # 网络搜索也失败
+                if log_callback:
+                    await log_callback("RagAgent", "网络搜索也未找到相关商品")
+                answer = "抱歉，没有找到相关商品，请尝试其他关键词。"
+                products = []
+        
+        print("结束",products)
         return {
             "query": query,
             "retrieved_products": products,

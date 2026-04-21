@@ -51,7 +51,7 @@ class CopywritingChain:
         注意：仅输出JSON对象，不要附加任何解释或额外文字。
         """
         
-        prompt = PromptTemplate(
+        self.prompt = PromptTemplate(
             template=template,
             input_variables=["target_audience", "core_selling_points", "tone_style", "topic", "history","user_input"],
             partial_variables={"format_instructions": self.parser.get_format_instructions()}
@@ -64,7 +64,7 @@ class CopywritingChain:
             base_url=settings.SILICONFLOW_BASE_URL
         )
 
-        self.chain = prompt | self.llm | self.parser
+        self.chain = self.prompt | self.llm | self.parser
     
     async def run(self, input_data: dict) -> CopywritingResult:
         """运行文案生成链

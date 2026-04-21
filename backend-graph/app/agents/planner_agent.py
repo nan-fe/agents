@@ -5,7 +5,7 @@ from langchain_core.prompts import PromptTemplate
 from langchain_openai import ChatOpenAI
 from langchain_core.output_parsers import JsonOutputParser
 from app.config import settings
-from app.utils.token_counter import token_counter
+
 
 class PlannerAgent(BaseAgent):
     """策划Agent"""
@@ -36,7 +36,7 @@ class PlannerAgent(BaseAgent):
         9. 如果有历史数据，则按照历史信息，结合用户输入的意见重新调整
         """
         
-        self.prompt = PromptTemplate(
+        prompt = PromptTemplate(
             template=template,
             input_variables=["input_data", "history"],
             partial_variables={"format_instructions": self.parser.get_format_instructions()}
@@ -51,23 +51,6 @@ class PlannerAgent(BaseAgent):
         
         self.chain = self.prompt | self.llm | self.parser
     
-    def get_llm_with_max_tokens(self, max_tokens: int) -> ChatOpenAI:
-        """获取设置了max_tokens的LLM实例
-        
-        Args:
-            max_tokens: 最大输出token数
-            
-        Returns:
-            ChatOpenAI实例
-        """
-        return ChatOpenAI(
-            model_name=settings.SILICONFLOW_MODEL,
-            temperature=0.3,
-            max_tokens=max_tokens,
-            api_key=settings.SILICONFLOW_API_KEY,
-            base_url=settings.SILICONFLOW_BASE_URL
-        )
-    
    
     async def run(self, input_data: str, log_callback: Optional[callable] = None, history: str = "") -> PlanningResult:
         """运行策划生成链
@@ -81,28 +64,7 @@ class PlannerAgent(BaseAgent):
             策划结果字典
         """
         try:
-            # 计算token数
-            chain_input = {"input_data": input_data, "history": history or ''}
-            # 重新构建prompt以计算token数
-            rendered_prompt = self.prompt.format(**chain_input, format_instructions=self.parser.get_format_instructions())
-            token_count = token_counter.count_tokens(rendered_prompt, settings.SILICONFLOW_MODEL)
-            
-            # 分析上下文窗口
-            history_tokens = token_counter.count_tokens(history or '', settings.SILICONFLOW_MODEL)
-            current_question_tokens = token_counter.count_tokens(input_data, settings.SILICONFLOW_MODEL)
-            analysis = token_counter.format_context_analysis(history_tokens, current_question_tokens, settings.SILICONFLOW_MODEL)
-            print(f"策划Agent - 输入Token数: {token_count}")
-            print(analysis)
-            
-            # 计算max_tokens
-            max_tokens = token_counter.calculate_max_tokens(token_count, settings.SILICONFLOW_MODEL)
-            print(f"策划Agent - 最大输出Token数: {max_tokens}")
-            
-            # 使用动态max_tokens的LLM
-            llm_with_max_tokens = self.get_llm_with_max_tokens(max_tokens)
-            chain = self.prompt | llm_with_max_tokens | self.parser
-            
-            planning_result = await chain.ainvoke(chain_input)
+            planning_result = await self.chain.ainvoke({"input_data": input_data, "history": history or ''})
             print("plan", planning_result)
             await self.log(f"策划方案生成完成: {planning_result}", log_callback)
             

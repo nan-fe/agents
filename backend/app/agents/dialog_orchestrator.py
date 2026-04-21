@@ -142,6 +142,17 @@ class DialogOrchestratorAgent:
         # 分析用户意图和会话历史
         intent = await self.llm_service.analyze_intent(user_input, session_history.messages)
         await log_callback("Orchestrator", f"用户意图分析: {intent}")
+
+        # 如果是询问问题，直接提示用户
+        if intent == "ask_question":
+            await log_callback("Orchestrator", "检测到询问问题，引导用户输入创作需求")
+            return {
+                "title": "",
+                "content": "",
+                "hashtags": [],
+                "image_url": "",
+                "message": "抱歉，我无法回答问题。这是一个小红书文案生成平台，请输入您想要生成的文案要求，例如：帮我写一篇关于防晒霜的推荐文案"
+            }
         
         # 准备执行上下文
         execution_context = {
@@ -185,10 +196,11 @@ class DialogOrchestratorAgent:
                 }
         
         print("LLM 动态路由决策，开始.....")
-        # LLM 动态路由决策
+        # LLM 动态路由决策（传入意图识别结果）
         routing_decision = await self.llm_service.route_task(
-            user_input, 
-            execution_context["planning"]
+            user_input,
+            execution_context["planning"],
+            intent
         )
         await log_callback("Orchestrator", f"路由决策: 调用 {routing_decision.agents_to_call}, 顺序: {routing_decision.priority_order}")
         

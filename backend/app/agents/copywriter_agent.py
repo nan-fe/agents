@@ -6,6 +6,7 @@ from langchain_openai import ChatOpenAI
 from langchain_core.output_parsers import JsonOutputParser
 from app.config import settings
 from typing import Optional, Union, Dict
+from app.utils.token_counter import token_counter
 
 
 class CopywriterAgent(BaseAgent):
@@ -56,7 +57,7 @@ class CopywriterAgent(BaseAgent):
         注意：仅输出JSON对象，不要附加任何解释或额外文字。
         """
         
-        prompt = PromptTemplate(
+        self.prompt = PromptTemplate(
             template=template,
             input_variables=["target_audience", "core_selling_points", "tone_style", "topic", "history","user_input"],
             partial_variables={"format_instructions": self.parser.get_format_instructions()}
@@ -68,8 +69,25 @@ class CopywriterAgent(BaseAgent):
             api_key=settings.SILICONFLOW_API_KEY,
             base_url=settings.SILICONFLOW_BASE_URL
         )
-
-        self.chain = prompt | self.llm | self.parser
+        
+        self.chain = self.prompt | self.llm | self.parser
+    
+    def get_llm_with_max_tokens(self, max_tokens: int) -> ChatOpenAI:
+        """获取设置了max_tokens的LLM实例
+        
+        Args:
+            max_tokens: 最大输出token数
+            
+        Returns:
+            ChatOpenAI实例
+        """
+        return ChatOpenAI(
+            model_name=settings.COPYWRITE_MODEL,
+            temperature=0.7,
+            max_tokens=max_tokens,
+            api_key=settings.SILICONFLOW_API_KEY,
+            base_url=settings.SILICONFLOW_BASE_URL
+        )
     
     async def run(self, planning_result: Union[PlanningResult, Dict], log_callback: Optional[callable] = None, history: str = "") -> CopywritingResult:
         """运行文案Agent
@@ -116,7 +134,20 @@ class CopywriterAgent(BaseAgent):
   
         # 调用LangChain链
         try:
-            result = await self.chain.ainvoke(chain_input)
+            # 计算token数
+          
+            rendered_prompt = self.prompt.format(**chain_input, format_instructions=self.parser.get_format_instructions())
+            input_tokens = token_counter.count_tokens(rendered_prompt, settings.COPYWRITE_MODEL)
+            
+            # 计算max_tokens
+            max_tokens = token_counter.calculate_max_tokens(input_tokens, settings.COPYWRITE_MODEL)
+            print(f"文案Agent - 输入Token数: {input_tokens}, 最大输出Token数: {max_tokens}")
+            
+            # 使用动态max_tokens的LLM
+            llm_with_max_tokens = self.get_llm_with_max_tokens(max_tokens)
+            chain = self.prompt | llm_with_max_tokens | self.parser
+            
+            result = await chain.ainvoke(chain_input)
             print(f"生成小红书风格文案 result: {result}")
             await self.log(f"文案生成完成: {result}", log_callback)
             # 检查result是否已经是CopywritingResult对象
