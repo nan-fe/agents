@@ -20,3 +20,4 @@ langchain-community
 duckduckgo-search
 chromadb
 pandas
+bs4
