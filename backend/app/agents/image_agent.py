@@ -1,6 +1,9 @@
 from app.agents.base_agent import BaseAgent
 from app.models.schemas import ImageResult, ImageAgentInput
-from app.services.image_generation import ImageGenerationService
+from langchain_core.output_parsers import JsonOutputParser
+from app.config import settings
+from openai import AsyncOpenAI
+import replicate
 from typing import Optional
 
 
@@ -10,9 +13,17 @@ class ImageAgent(BaseAgent):
     def __init__(self):
         """初始化图片Agent"""
         super().__init__("Image Designer", "小红书配图设计师")
-        self.image_service = ImageGenerationService()
+        # self.image_service = ImageGenerationService()
+        self.image_model = settings.IMAGE_MODEL
+        self.client = AsyncOpenAI(
+            api_key=settings.SILICONFLOW_API_KEY,
+            base_url=settings.SILICONFLOW_BASE_URL
+        )
+        if self.image_model == "stable-diffusion" and settings.REPLICATE_API_KEY:
+            replicate.api_key = settings.REPLICATE_API_KEY
+
     
-    async def run(self, input_data: ImageAgentInput, log_callback: Optional[callable] = None) -> ImageResult:
+    async def run(self, input_data: ImageAgentInput, log_callback: Optional[callable] = None, history: str = "") -> ImageResult:
         """运行图片Agent
         
         Args:
@@ -23,8 +34,14 @@ class ImageAgent(BaseAgent):
             图片结果
         """
         await self.log(f"根据策划方案生成图片描述: {input_data}", log_callback)
-        print("image input_data",input_data.get('target_audience'))
-        # 图片需求：{input_data.image_requirements}
+                # 处理不同类型的输入
+        if isinstance(input_data, dict):
+            input_data_dict = input_data
+
+        else:
+            # PlanningResult对象
+            input_data_dict = input_data.model_dump()
+       
         # 生成图片描述
         prompt = f"""
         你是一位资深电商摄影师和设计师，擅长根据商品类别和营销文案，构思出**极具真实感、像实拍照片**的商品图描述。
@@ -32,13 +49,13 @@ class ImageAgent(BaseAgent):
         
         请根据以下信息生成一张商品介绍的图片描述：
         
-        目标人群：{', '.join(input_data.get('target_audience'))}
-        核心卖点：{', '.join(input_data.get("core_selling_points"))}
-        语气风格：{input_data.get("tone_style")}
-        文案内容：{input_data.get("copywriting_content")}
-        文案主题：{input_data.get("topic")}
-        商品类别：{input_data.get("product_category")}
-        历史数据：{input_data.get("history", "")}
+        目标人群：{', '.join(input_data_dict.get('target_audience'))}
+        核心卖点：{', '.join(input_data_dict.get("core_selling_points"))}
+        语气风格：{input_data_dict.get("tone_style")}
+        文案内容：{input_data_dict.get("copywriting_content")}
+        文案主题：{input_data_dict.get("topic")}
+        商品类别：{input_data_dict.get("product_category")}
+        历史数据：{input_data_dict.get("history", "")}
         
         【真实感强制要求】（必须严格遵守）：
         1. **拒绝完美主义**：不要出现完美无瑕的光滑表面、零反差的柔光、过于对称的构图。允许轻微的自然瑕疵（如指纹、灰尘、布料褶皱、自然色差）。
@@ -55,16 +72,46 @@ class ImageAgent(BaseAgent):
         
         # 这里简化处理，直接使用策划结果中的图片需求作为提示词
         # 实际项目中可以调用OpenAI生成更详细的描述
-        image_prompt = prompt
-        await self.log(f"调用图片生成API，提示词: {image_prompt}", log_callback)
+        size = "1024x1024"
+        await self.log(f"调用图片生成API，提示词: {prompt}", log_callback)
         
         # 调用图片生成服务
-        # image_url = await self.image_service.generate_image(image_prompt)
-        image_url='https://bizyair-prod.oss-cn-shanghai.aliyuncs.com/outputs/2697b788-7795-4f36-8f7e-c1ea20bd61b8_6e9dfbbfb65c2b4d99bdbc0d2f76ce3b_ComfyUI_21ec1493_00001_.png'
-        image_result = ImageResult(
-            image_url=image_url,
-            prompt=image_prompt
-        )
+        try:
+            # 首先尝试使用指定的模型通过OpenAI/SiliconFlow API生成图片
+            response = await self.client.images.generate(
+                model=self.image_model,
+                prompt=prompt,
+                size=size,
+                quality="standard",
+                n=1
+            )
+            image_url = response.data[0].url
+        except Exception as e:
+            # 如果OpenAI/SiliconFlow API失败，尝试使用Stable Diffusion
+            print(f"使用{self.image_model}生成图片失败: {e}")
+            try:
+                if hasattr(replicate, "run") and settings.REPLICATE_API_KEY:
+                    # 使用Stable Diffusion作为备选
+                    output = await replicate.run(
+                        "stability-ai/stable-diffusion:27b93a2413e7f36cd83da926f3656280b2931564ff050bf9575f1fdf9bcd7478",
+                        input={
+                            "prompt": prompt,
+                            "width": int(size.split("x")[0]),
+                            "height": int(size.split("x")[1]),
+                            "num_outputs": 1
+                        }
+                    )
+                    image_url = output[0] if output else "https://via.placeholder.com/1024x1024?text=Image+Generation+Failed"
+                else:
+                    # 没有备选方案，返回失败图片
+                    image_url = "https://via.placeholder.com/1024x1024?text=Image+Generation+Failed"
+            except Exception as replicate_error:
+                print(f"使用Stable Diffusion生成图片失败: {replicate_error}")
+                # 返回默认图片URL
+                image_url = "https://via.placeholder.com/1024x1024?text=Image+Generation+Failed"
+
+        # image_url='https://bizyair-prod.oss-cn-shanghai.aliyuncs.com/outputs/2697b788-7795-4f36-8f7e-c1ea20bd61b8_6e9dfbbfb65c2b4d99bdbc0d2f76ce3b_ComfyUI_21ec1493_00001_.png'
+        image_result = ImageResult(image_url=image_url,prompt=prompt)
         
         await self.log(f"图片生成完成: {image_result}", log_callback)
         return image_result

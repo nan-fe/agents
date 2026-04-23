@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     GENARATION_MODEL :str
     PLAN_MODEL:str
     INTENT_MODEL:str
+    RANKER_MODEL:str
     # 图片生成配置
     IMAGE_MODEL: str = "Kwai-Kolors/Kolors"  # free for dev
     REPLICATE_API_KEY: Optional[str] = None  # Stable Diffusion 使用
@@ -20,6 +21,12 @@ class Settings(BaseSettings):
     # 应用配置
     APP_NAME: str = "XHS Multi-Agent Creator"
     DEBUG: bool = True
+
+    #LangSmith
+    LANGCHAIN_TRACING_V2: bool = True
+    # Optional: LangSmith API key to access deployed graph
+    LANGCHAIN_API_KEY: str
+    LANGCHAIN_PROJECT: str
     
     class Config:
         env_file = ".env"

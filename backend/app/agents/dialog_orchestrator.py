@@ -10,6 +10,9 @@ from langchain_core.messages import BaseMessage
 from langchain_core.runnables.history import RunnableWithMessageHistory
 import chromadb
 import json
+from dotenv import load_dotenv
+
+load_dotenv()
 
 class WritingSessionHistory(BaseChatMessageHistory):
     def __init__(self, session_id):
@@ -139,6 +142,17 @@ class DialogOrchestratorAgent:
         # 分析用户意图和会话历史
         intent = await self.llm_service.analyze_intent(user_input, session_history.messages)
         await log_callback("Orchestrator", f"用户意图分析: {intent}")
+
+        # 如果是询问问题，直接提示用户
+        if intent == "ask_question":
+            await log_callback("Orchestrator", "检测到询问问题，引导用户输入创作需求")
+            return {
+                "title": "",
+                "content": "",
+                "hashtags": [],
+                "image_url": "",
+                "message": "抱歉，我无法回答问题。这是一个小红书文案生成平台，请输入您想要生成的文案要求，例如：帮我写一篇关于防晒霜的推荐文案"
+            }
         
         # 准备执行上下文
         execution_context = {
@@ -153,7 +167,8 @@ class DialogOrchestratorAgent:
         last_final_result = session_history.get_last_final_result()
         history_data = ""
         if last_final_result:
-            history_data = f"上次生成的文案信息：\n标题：{last_final_result.get('title', '')}\n内容：{last_final_result.get('content', '')}\n标签：{', '.join(last_final_result.get('hashtags', []))}\n图片：{last_final_result.get('image_url', '')}"
+            history_data = f"上次生成的文案信息：\n标题：{last_final_result.get('title', '')}\n内容：{last_final_result.get('content', '')}\n标签：{', '.join(last_final_result.get('hashtags', []))}\n图片：{last_final_result.get('image_url', '')}\n图片提示：{last_final_result.get('image_prompt', '')}"
+
             print("准备历史数据完成",history_data)
         # 动态决策：是否需要重新规划
         if intent == "new_task" or not session_history.last_plan:
@@ -176,14 +191,16 @@ class DialogOrchestratorAgent:
                     "hashtags": last_final_result.get("hashtags", [])
                 }
                 execution_context["image"] = {
-                    "image_url": last_final_result.get("image_url", "")
+                    "image_url": last_final_result.get("image_url", ""),
+                    "image_prompt": last_final_result.get("image_prompt","")
                 }
         
         print("LLM 动态路由决策，开始.....")
-        # LLM 动态路由决策
+        # LLM 动态路由决策（传入意图识别结果）
         routing_decision = await self.llm_service.route_task(
-            user_input, 
-            execution_context["planning"]
+            user_input,
+            execution_context["planning"],
+            intent
         )
         await log_callback("Orchestrator", f"路由决策: 调用 {routing_decision.agents_to_call}, 顺序: {routing_decision.priority_order}")
         
