@@ -58,6 +58,9 @@ jobs:
   deploy:
     runs-on: self-hosted  # 使用自定义标签指定你的Runner
     needs: build-and-push
+    permissions:
+      contents: read
+      packages: write  # 或者至少是 read
     steps:
         # 关键：这一步是在你的服务器上执行的，无需SSH！
         # 因为Runner已经身处服务器，可以直接操作Docker
