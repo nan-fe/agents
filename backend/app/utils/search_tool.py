@@ -7,14 +7,14 @@ from langchain_community.tools import DuckDuckGoSearchRun
 import requests
 from bs4 import BeautifulSoup
 import json
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.chrome.service import Service
-from webdriver_manager.chrome import ChromeDriverManager
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.common.by import By
-from selenium.common.exceptions import TimeoutException
+# from selenium import webdriver
+# from selenium.webdriver.chrome.options import Options
+# from selenium.webdriver.chrome.service import Service
+# from webdriver_manager.chrome import ChromeDriverManager
+# from selenium.webdriver.support.ui import WebDriverWait
+# from selenium.webdriver.support import expected_conditions as EC
+# from selenium.webdriver.common.by import By
+# from selenium.common.exceptions import TimeoutException
 
 def extract_product_params(url: str) -> Dict[str, Any]:
     """
@@ -251,162 +251,162 @@ def get_product_specs(product_name):
         return {'title': title, 'description': description_content}
 
 
-def get_product_details_with_selenium(product_url):
-    """
-    使用 Selenium 抓取商品详情页信息
+# def get_product_details_with_selenium(product_url):
+#     """
+#     使用 Selenium 抓取商品详情页信息
 
-    Args:
-        product_url: 商品详情页 URL
+#     Args:
+#         product_url: 商品详情页 URL
 
-    Returns:
-        商品详情信息字典
-    """
-    details = {}
+#     Returns:
+#         商品详情信息字典
+#     """
+#     details = {}
 
-    try:
-        # 配置 Chrome 浏览器
-        chrome_options = Options()
-        chrome_options.add_argument('--headless')  # 无头模式
-        chrome_options.add_argument('--no-sandbox')
-        chrome_options.add_argument('--disable-dev-shm-usage')
-        chrome_options.add_argument('--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36')
+#     try:
+#         # 配置 Chrome 浏览器
+#         chrome_options = Options()
+#         chrome_options.add_argument('--headless')  # 无头模式
+#         chrome_options.add_argument('--no-sandbox')
+#         chrome_options.add_argument('--disable-dev-shm-usage')
+#         chrome_options.add_argument('--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36')
 
-        # 初始化浏览器
-        driver = webdriver.Chrome(
-            service=Service(ChromeDriverManager().install()),
-            options=chrome_options
-        )
+#         # 初始化浏览器
+#         driver = webdriver.Chrome(
+#             service=Service(ChromeDriverManager().install()),
+#             options=chrome_options
+#         )
 
-        # 访问页面，设置页面加载超时
-        driver.set_page_load_timeout(30)  # 页面加载超时30秒
-        driver.set_script_timeout(30)  # 脚本执行超时30秒
+#         # 访问页面，设置页面加载超时
+#         driver.set_page_load_timeout(30)  # 页面加载超时30秒
+#         driver.set_script_timeout(30)  # 脚本执行超时30秒
 
-        try:
-            driver.get(product_url)
+#         try:
+#             driver.get(product_url)
 
-            # 等待商品详情标题元素出现（处理动态id的情况）
-            # id格式为: [随机前缀]-SPXQ-title
-            try:
-                WebDriverWait(driver, 20).until(
-                    EC.presence_of_element_located((By.XPATH, "//div[contains(@class, 'quality-life-exposure-placeholder')]"))
-                )
-                print("商品详情内容已加载")
-            except TimeoutException:
-                print("等待商品详情标题超时，继续处理...")
+#             # 等待商品详情标题元素出现（处理动态id的情况）
+#             # id格式为: [随机前缀]-SPXQ-title
+#             try:
+#                 WebDriverWait(driver, 20).until(
+#                     EC.presence_of_element_located((By.XPATH, "//div[contains(@class, 'quality-life-exposure-placeholder')]"))
+#                 )
+#                 print("商品详情内容已加载")
+#             except TimeoutException:
+#                 print("等待商品详情标题超时，继续处理...")
 
-            # 等待页面加载基本完成
-            WebDriverWait(driver, 10).until(
-                EC.presence_of_element_located((By.TAG_NAME, 'body'))
-            )
+#             # 等待页面加载基本完成
+#             WebDriverWait(driver, 10).until(
+#                 EC.presence_of_element_located((By.TAG_NAME, 'body'))
+#             )
 
-        except TimeoutException:
-            print("页面加载超时，继续处理已加载内容")
+#         except TimeoutException:
+#             print("页面加载超时，继续处理已加载内容")
 
-        # 滚动页面以触发懒加载内容
-        def scroll_page(driver, scroll_pause_time=1, max_scrolls=5):
-            """滚动页面以加载动态内容"""
-            for i in range(max_scrolls):
-                driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-                time.sleep(scroll_pause_time)
+#         # 滚动页面以触发懒加载内容
+#         def scroll_page(driver, scroll_pause_time=1, max_scrolls=5):
+#             """滚动页面以加载动态内容"""
+#             for i in range(max_scrolls):
+#                 driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+#                 time.sleep(scroll_pause_time)
 
-        scroll_page(driver)
+#         scroll_page(driver)
 
-        # 获取页面源码
-        page_source = driver.page_source
-        soup = BeautifulSoup(page_source, 'html.parser')
+#         # 获取页面源码
+#         page_source = driver.page_source
+#         soup = BeautifulSoup(page_source, 'html.parser')
 
-        # 提取商品信息
-        # 1. 标题
-        title = soup.find('title')
-        if title:
-            details['title'] = title.get_text(strip=True)
+#         # 提取商品信息
+#         # 1. 标题
+#         title = soup.find('title')
+#         if title:
+#             details['title'] = title.get_text(strip=True)
 
-        # 2. 价格
-        # 淘宝/天猫价格
-        price_ele = soup.find(class_='tm-price') or soup.find(class_='price') or soup.find(class_='J-p-')
-        if price_ele:
-            details['price'] = price_ele.get_text(strip=True)
+#         # 2. 价格
+#         # 淘宝/天猫价格
+#         price_ele = soup.find(class_='tm-price') or soup.find(class_='price') or soup.find(class_='J-p-')
+#         if price_ele:
+#             details['price'] = price_ele.get_text(strip=True)
 
-        # 3. 商品描述
-        description_meta = soup.find('meta', {'name': 'description'})
-        if description_meta:
-            details['description'] = description_meta.get('content', '')
+#         # 3. 商品描述
+#         description_meta = soup.find('meta', {'name': 'description'})
+#         if description_meta:
+#             details['description'] = description_meta.get('content', '')
 
-        # 4. 规格参数 - 查找包含"商品详情"文本的div附近的规格信息
-        specs = {}
-        # 尝试查找商品详情区域
-        detail_section = soup.find('div', {'id': re.compile(r'.*-title.*')})
-        if detail_section:
-            print(f"找到商品详情区域: {detail_section.get_text()[:100]}")
+#         # 4. 规格参数 - 查找包含"商品详情"文本的div附近的规格信息
+#         specs = {}
+#         # 尝试查找商品详情区域
+#         detail_section = soup.find('div', {'id': re.compile(r'.*-title.*')})
+#         if detail_section:
+#             print(f"找到商品详情区域: {detail_section.get_text()[:100]}")
 
-        # 京东商品详情页特定处理
-        if 'jd.com' in product_url:
-            # 查找商品详情标签页内容
-            detail_tab = soup.find(class_='tab-con')
-            if detail_tab:
-                # 查找参数表格
-                spec_sections = detail_tab.find_all(class_='Ptable')
-                for section in spec_sections:
-                    # 查找表格行
-                    rows = section.find_all('tr')
-                    for row in rows:
-                        # 京东的参数表格结构
-                        th = row.find('th')
-                        tds = row.find_all('td')
-                        if th and tds:
-                            key = th.get_text(strip=True)
-                            # 有些行有多个 td，取第一个
-                            value = tds[0].get_text(strip=True)
-                            if key and value:
-                                specs[key] = value
-        else:
-            # 其他网站的通用处理
-            spec_tables = soup.find_all('table', class_=['attributes-list', 'spec-table'])
-            for table in spec_tables:
-                rows = table.find_all('tr')
-                for row in rows:
-                    cols = row.find_all(['th', 'td'])
-                    if len(cols) >= 2:
-                        key = cols[0].get_text(strip=True)
-                        value = cols[1].get_text(strip=True)
-                        specs[key] = value
+#         # 京东商品详情页特定处理
+#         if 'jd.com' in product_url:
+#             # 查找商品详情标签页内容
+#             detail_tab = soup.find(class_='tab-con')
+#             if detail_tab:
+#                 # 查找参数表格
+#                 spec_sections = detail_tab.find_all(class_='Ptable')
+#                 for section in spec_sections:
+#                     # 查找表格行
+#                     rows = section.find_all('tr')
+#                     for row in rows:
+#                         # 京东的参数表格结构
+#                         th = row.find('th')
+#                         tds = row.find_all('td')
+#                         if th and tds:
+#                             key = th.get_text(strip=True)
+#                             # 有些行有多个 td，取第一个
+#                             value = tds[0].get_text(strip=True)
+#                             if key and value:
+#                                 specs[key] = value
+#         else:
+#             # 其他网站的通用处理
+#             spec_tables = soup.find_all('table', class_=['attributes-list', 'spec-table'])
+#             for table in spec_tables:
+#                 rows = table.find_all('tr')
+#                 for row in rows:
+#                     cols = row.find_all(['th', 'td'])
+#                     if len(cols) >= 2:
+#                         key = cols[0].get_text(strip=True)
+#                         value = cols[1].get_text(strip=True)
+#                         specs[key] = value
 
-        # 如果找到了规格参数，添加到详情中
-        if specs:
-            details['specs'] = specs
+#         # 如果找到了规格参数，添加到详情中
+#         if specs:
+#             details['specs'] = specs
 
-        # 5. 商品图片
-        images = []
-        img_tags = soup.find_all('img')
-        for img in img_tags:
-            img_url = img.get('src') or img.get('data-src')
-            if img_url and 'http' in img_url:
-                images.append(img_url)
-        if images:
-            details['images'] = images[:5]  # 只保存前5张图片
+#         # 5. 商品图片
+#         images = []
+#         img_tags = soup.find_all('img')
+#         for img in img_tags:
+#             img_url = img.get('src') or img.get('data-src')
+#             if img_url and 'http' in img_url:
+#                 images.append(img_url)
+#         if images:
+#             details['images'] = images[:5]  # 只保存前5张图片
 
-        # 6. 商品ID
-        if 'taobao.com' in product_url or 'tmall.com' in product_url:
-            product_id_match = re.search(r'id=(\d+)', product_url)
-            if product_id_match:
-                details['product_id'] = product_id_match.group(1)
-        elif 'jd.com' in product_url:
-            product_id_match = re.search(r'/\d+\.html', product_url)
-            if product_id_match:
-                details['product_id'] = product_id_match.group(0).strip('/.html')
+#         # 6. 商品ID
+#         if 'taobao.com' in product_url or 'tmall.com' in product_url:
+#             product_id_match = re.search(r'id=(\d+)', product_url)
+#             if product_id_match:
+#                 details['product_id'] = product_id_match.group(1)
+#         elif 'jd.com' in product_url:
+#             product_id_match = re.search(r'/\d+\.html', product_url)
+#             if product_id_match:
+#                 details['product_id'] = product_id_match.group(0).strip('/.html')
 
-        # 7. URL信息
-        details['url'] = product_url
+#         # 7. URL信息
+#         details['url'] = product_url
 
-        # 关闭浏览器
-        driver.quit()
+#         # 关闭浏览器
+#         driver.quit()
 
-    except Exception as e:
-        print(f"Selenium 抓取出错: {str(e)}")
-        if 'driver' in locals():
-            driver.quit()
+#     except Exception as e:
+#         print(f"Selenium 抓取出错: {str(e)}")
+#         if 'driver' in locals():
+#             driver.quit()
 
-    return details
+#     return details
 
 if __name__ == "__main__":
     # 测试搜索功能
