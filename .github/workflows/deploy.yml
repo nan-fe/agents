@@ -75,5 +75,5 @@ jobs:
               cd .
               docker pull ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.IMAGE_NAME_BACKEND }}:${{ github.sha }}
               docker pull ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.IMAGE_NAME_FRONTEND }}:${{ github.sha }}
-              docker-compose down
-              docker-compose up -d
+              docker compose down
+              docker compose up -d
