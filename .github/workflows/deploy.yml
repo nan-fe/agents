@@ -56,20 +56,15 @@ jobs:
 
   # ---------- 部署到服务器 (通过 SSH) ----------
   deploy:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64]  # 使用自定义标签指定你的Runner
     needs: build-and-push
     steps:
-      # (可选) 使用 appleboy/ssh-action 远程登录服务器并执行部署
-      - name: Deploy via SSH
-        uses: appleboy/ssh-action@v1
-        with:
-          host: ${{ secrets.SERVER_HOST }}
-          username: ${{ secrets.SERVER_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          script: |
-            cd /path/to/your/deploy/folder
-            docker login ghcr.io -u ${{ github.actor }} -p ${{ secrets.GITHUB_TOKEN }}
-            docker pull ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.IMAGE_NAME_BACKEND }}:${{ github.sha }}
-            docker pull ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.IMAGE_NAME_FRONTEND }}:${{ github.sha }}
-            docker-compose down
-            docker-compose up -d
+        # 关键：这一步是在你的服务器上执行的，无需SSH！
+        # 因为Runner已经身处服务器，可以直接操作Docker
+        - name: Deploy Application
+          run: |
+              cd /path/to/your/deploy/folder
+              docker pull ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.IMAGE_NAME_BACKEND }}:${{ github.sha }}
+              docker pull ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.IMAGE_NAME_FRONTEND }}:${{ github.sha }}
+              docker-compose down
+              docker-compose up -d
