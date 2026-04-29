@@ -27,7 +27,7 @@ jobs:
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          password: ${{ secrets.GHCR_PAT }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3 # 构建增强（多平台/缓存/SBOM）
@@ -64,6 +64,12 @@ jobs:
     steps:
         # 关键：这一步是在你的服务器上执行的，无需SSH！
         # 因为Runner已经身处服务器，可以直接操作Docker
+        - name: Log in to GHCR with PAT
+          uses: docker/login-action@v3
+          with:
+            registry: ${{ env.REGISTRY }}
+            username: ${{ github.actor }}
+            password: ${{ secrets.GHCR_PAT }}
         - name: Deploy Application
           run: |
               cd .
