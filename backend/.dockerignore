@@ -1,0 +1,30 @@
+# 忽略的文件和目录
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.DS_Store
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# 忽略测试目录
+tests/
+
+# 忽略上传的数据集
+app/data/
+
+# 忽略包管理文件
+package.json
+package-lock.json
+
+# 忽略 pytest 配置
+pytest.ini
+
+# 忽略 README 文件
+README.md
+
+# 忽略其他无关文件
+upload_dataset.py
