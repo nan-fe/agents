@@ -56,7 +56,7 @@ jobs:
 
   # ---------- 部署到服务器 (通过 SSH) ----------
   deploy:
-    runs-on: [self-hosted, linux, x64]  # 使用自定义标签指定你的Runner
+    runs-on: self-hosted  # 使用自定义标签指定你的Runner
     needs: build-and-push
     steps:
         # 关键：这一步是在你的服务器上执行的，无需SSH！
