@@ -1,6 +1,6 @@
 services:
   backend:
-    image: ${BACKEND_IMAGE}
+    image: ghcr.io/nan-fe/xhs-multi-agent-backend:latest
     build:
       context: ./backend
       dockerfile: Dockerfile
@@ -16,7 +16,7 @@ services:
       - app-network
 
   frontend:
-    image: ${FRONTEND_IMAGE}
+    image: ghcr.io/nan-fe/xhs-multi-agent-frontend:latest
     build:
       context: ./frontend-ts
       dockerfile: Dockerfile
