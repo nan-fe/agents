@@ -1,6 +1,7 @@
 import re
+import time
 from urllib.parse import urlparse, parse_qs
-from ddgs import DDGS
+from duckduckgo_search import DDGS
 from typing import List, Dict, Any
 from langchain_community.tools import DuckDuckGoSearchRun
 import requests
@@ -253,15 +254,15 @@ def get_product_specs(product_name):
 def get_product_details_with_selenium(product_url):
     """
     使用 Selenium 抓取商品详情页信息
-    
+
     Args:
         product_url: 商品详情页 URL
-        
+
     Returns:
         商品详情信息字典
     """
     details = {}
-    
+
     try:
         # 配置 Chrome 浏览器
         chrome_options = Options()
@@ -269,53 +270,75 @@ def get_product_details_with_selenium(product_url):
         chrome_options.add_argument('--no-sandbox')
         chrome_options.add_argument('--disable-dev-shm-usage')
         chrome_options.add_argument('--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36')
-        
+
         # 初始化浏览器
         driver = webdriver.Chrome(
             service=Service(ChromeDriverManager().install()),
             options=chrome_options
         )
-        
+
         # 访问页面，设置页面加载超时
-        driver.set_page_load_timeout(10)  # 页面加载超时10秒
-        driver.set_script_timeout(10)  # 脚本执行超时10秒
-        
+        driver.set_page_load_timeout(30)  # 页面加载超时30秒
+        driver.set_script_timeout(30)  # 脚本执行超时30秒
+
         try:
             driver.get(product_url)
-            
-            # 等待页面加载
+
+            # 等待商品详情标题元素出现（处理动态id的情况）
+            # id格式为: [随机前缀]-SPXQ-title
+            try:
+                WebDriverWait(driver, 20).until(
+                    EC.presence_of_element_located((By.XPATH, "//div[contains(@class, 'quality-life-exposure-placeholder')]"))
+                )
+                print("商品详情内容已加载")
+            except TimeoutException:
+                print("等待商品详情标题超时，继续处理...")
+
+            # 等待页面加载基本完成
             WebDriverWait(driver, 10).until(
                 EC.presence_of_element_located((By.TAG_NAME, 'body'))
             )
+
         except TimeoutException:
             print("页面加载超时，继续处理已加载内容")
-            # 即使超时也继续处理，获取已加载的内容
-        
+
+        # 滚动页面以触发懒加载内容
+        def scroll_page(driver, scroll_pause_time=1, max_scrolls=5):
+            """滚动页面以加载动态内容"""
+            for i in range(max_scrolls):
+                driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+                time.sleep(scroll_pause_time)
+
+        scroll_page(driver)
+
         # 获取页面源码
         page_source = driver.page_source
         soup = BeautifulSoup(page_source, 'html.parser')
-        
+
         # 提取商品信息
         # 1. 标题
         title = soup.find('title')
         if title:
             details['title'] = title.get_text(strip=True)
-        
+
         # 2. 价格
         # 淘宝/天猫价格
         price_ele = soup.find(class_='tm-price') or soup.find(class_='price') or soup.find(class_='J-p-')
         if price_ele:
             details['price'] = price_ele.get_text(strip=True)
-        
+
         # 3. 商品描述
         description_meta = soup.find('meta', {'name': 'description'})
         if description_meta:
             details['description'] = description_meta.get('content', '')
-        
-        # 4. 规格参数
+
+        # 4. 规格参数 - 查找包含"商品详情"文本的div附近的规格信息
         specs = {}
-        # 尝试从不同位置提取规格参数
-        
+        # 尝试查找商品详情区域
+        detail_section = soup.find('div', {'id': re.compile(r'.*-title.*')})
+        if detail_section:
+            print(f"找到商品详情区域: {detail_section.get_text()[:100]}")
+
         # 京东商品详情页特定处理
         if 'jd.com' in product_url:
             # 查找商品详情标签页内容
@@ -347,11 +370,11 @@ def get_product_details_with_selenium(product_url):
                         key = cols[0].get_text(strip=True)
                         value = cols[1].get_text(strip=True)
                         specs[key] = value
-        
+
         # 如果找到了规格参数，添加到详情中
         if specs:
             details['specs'] = specs
-        
+
         # 5. 商品图片
         images = []
         img_tags = soup.find_all('img')
@@ -361,7 +384,7 @@ def get_product_details_with_selenium(product_url):
                 images.append(img_url)
         if images:
             details['images'] = images[:5]  # 只保存前5张图片
-        
+
         # 6. 商品ID
         if 'taobao.com' in product_url or 'tmall.com' in product_url:
             product_id_match = re.search(r'id=(\d+)', product_url)
@@ -371,18 +394,18 @@ def get_product_details_with_selenium(product_url):
             product_id_match = re.search(r'/\d+\.html', product_url)
             if product_id_match:
                 details['product_id'] = product_id_match.group(0).strip('/.html')
-        
+
         # 7. URL信息
         details['url'] = product_url
-        
+
         # 关闭浏览器
         driver.quit()
-        
+
     except Exception as e:
         print(f"Selenium 抓取出错: {str(e)}")
         if 'driver' in locals():
             driver.quit()
-    
+
     return details
 
 if __name__ == "__main__":
@@ -415,6 +438,6 @@ if __name__ == "__main__":
     #     print(f"   来源URL: {result['source_url']}")
     
     # 测试 LangChain 搜索
-    print("\nLangChain 搜索结果 (淘宝):")
-    langchain_result = search_duckduckgo_langchain("运动鞋 男")
-    print(langchain_result)
+    # print("\nLangChain 搜索结果 (淘宝):")
+    # langchain_result = search_duckduckgo_langchain("运动鞋 男")
+    # print(langchain_result)

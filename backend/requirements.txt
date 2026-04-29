@@ -21,3 +21,5 @@ duckduckgo-search
 chromadb
 pandas
 bs4
+rank-bm25
+selenium

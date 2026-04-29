@@ -1,0 +1,32 @@
+services:
+  backend:
+    image: ${BACKEND_IMAGE}
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - PYTHONUNBUFFERED=1
+    env_file:
+      - ./backend/.env
+    volumes:
+      - ./backend:/app
+    networks:
+      - app-network
+
+  frontend:
+    image: ${FRONTEND_IMAGE}
+    build:
+      context: ./frontend-ts
+      dockerfile: Dockerfile
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
