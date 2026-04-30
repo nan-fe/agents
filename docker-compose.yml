@@ -8,8 +8,18 @@ services:
       - "8000:8000"
     environment:
       - PYTHONUNBUFFERED=1
-    env_file:
-      - ./backend/.env
+      - SILICONFLOW_API_KEY=${SILICONFLOW_API_KEY}
+      - SILICONFLOW_MODEL=${SILICONFLOW_MODEL}
+      - COPYWRITE_MODEL=${COPYWRITE_MODEL}
+      - EMBEDING_MODEL=${EMBEDING_MODEL}
+      - GENARATION_MODEL=${GENARATION_MODEL}
+      - PLAN_MODEL=${PLAN_MODEL}
+      - INTENT_MODEL=${INTENT_MODEL}
+      - RANKER_MODEL=${RANKER_MODEL}
+      - IMAGE_MODEL=${IMAGE_MODEL}
+      - SILICONFLOW_BASE_URL=${SILICONFLOW_BASE_URL}
+    # env_file:
+    #   - ./backend/.env
     volumes:
       - ./backend:/app
     networks:
