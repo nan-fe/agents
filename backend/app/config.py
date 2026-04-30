@@ -1,5 +1,6 @@
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings,SettingsConfigDict
 from typing import Optional
+import os
 
 
 class Settings(BaseSettings):
@@ -28,9 +29,14 @@ class Settings(BaseSettings):
     LANGCHAIN_API_KEY: str
     LANGCHAIN_PROJECT: str
     
-    class Config:
-        env_file = ".env"
-        case_sensitive = True
+    model_config = SettingsConfigDict(
+        # 1. 尝试读取 .env 文件，如果文件不存在则忽略而不报错
+        env_file=".env" if os.path.exists(".env") else None,
+        # 2. 区分大小写（保持你原有的逻辑）
+        case_sensitive=True,
+        # 3. 允许额外环境变量（防止因多余变量导致初始化失败）
+        extra="ignore"
+    )
 
 
 # 创建全局配置实例
