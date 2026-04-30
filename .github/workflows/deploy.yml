@@ -62,6 +62,15 @@ jobs:
       contents: read
       packages: write
     steps:
+        - name: Export all env vars from .env
+          run: |
+            cd /Users/lixuefu/Documents/trae_projects/agents/xhs-multi-agent-creator
+            # 导出所有非注释行
+            export $(cat ./backend/.env | grep -v '^#' | xargs)
+            # 将所有变量写入 GITHUB_ENV
+            cat ./backend/.env | grep -v '^#' | while read line; do
+              echo "$line" >> $GITHUB_ENV
+            done
         # 关键：这一步是在你的服务器上执行的，无需SSH！
         # 因为Runner已经身处服务器，可以直接操作Docker
         - name: Log in to GHCR with PAT
