@@ -77,7 +77,6 @@ jobs:
         - name: Deploy Application
           run: |
               cd /Users/lixuefu/Documents/trae_projects/agents/xhs-multi-agent-creator
-              docker pull ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.IMAGE_NAME_BACKEND }}:${{ github.sha }}
-              docker pull ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.IMAGE_NAME_FRONTEND }}:${{ github.sha }}
               docker compose down
-              docker compose up -d --force-recreate
+              docker compose pull
+              docker compose up
