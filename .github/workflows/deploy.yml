@@ -83,4 +83,4 @@ jobs:
               cd /Users/lixuefu/Documents/trae_projects/agents/xhs-multi-agent-creator
               docker compose down
               docker compose pull
-              docker compose up
+              docker compose up -d
