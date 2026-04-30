@@ -81,4 +81,4 @@ jobs:
               docker pull ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.IMAGE_NAME_FRONTEND }}:${{ github.sha }}
               docker compose down
               docker compose pull
-              docker compose up -d --force-recreate
+              docker compose up -d
