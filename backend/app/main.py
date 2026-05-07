@@ -3,7 +3,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from sse_starlette.sse import EventSourceResponse
 import asyncio
 from datetime import datetime
-
 from app.config import settings
 from app.models.schemas import UserInput, SSEMessage
 from app.agents.orchestrator import AgentOrchestrator
@@ -37,7 +36,7 @@ async def generate_event_stream(user_input: str):
         log_message = SSEMessage(
             type="log",
             data={
-                "agent_name": agent_name,
+                "from": agent_name,
                 "message": message,
                 "timestamp": datetime.now().timestamp()
             }
@@ -76,44 +75,52 @@ async def generate_event_stream(user_input: str):
     }
 
 
-async def generate_dialog_event_stream(user_input: str,session_id:str):
-    """生成事件流"""
+async def generate_dialog_event_stream(user_input: str, session_id: str):
+    """生成事件流 - 直接 yield SSE 格式"""
     orchestrator = DialogOrchestratorAgent()
     
-    # 定义日志事件队列
-    log_queue = asyncio.Queue()
+    # 使用 asyncio.Queue 但不延迟消费
+    event_queue = asyncio.Queue()
     
-    # 定义日志回调函数
     async def log_callback(agent_name: str, message: str):
         log_message = SSEMessage(
             type="log",
             data={
-                "agent_name": agent_name,
+                "from": agent_name,
                 "message": message,
-                "timestamp": datetime.now().timestamp()
+                "timestamp": int(datetime.now().timestamp() * 1000)
             }
         )
-        await log_queue.put({
+        print("time",int(datetime.now().timestamp() * 1000))
+        # 立即放入队列
+        await event_queue.put({
             "event": "message",
             "data": log_message.model_dump_json()
         })
-        await asyncio.sleep(0.1)
+        # 不添加任何 sleep
     
-    # 执行多Agent协作
-    task = asyncio.create_task(orchestrator.run(user_input,session_id, log_callback))
+    # 创建任务
+    task = asyncio.create_task(orchestrator.run(user_input, session_id, log_callback))
     
-    # 发送日志事件
-    while not task.done() or not log_queue.empty():
+    # 立即开始消费队列，不等待超时
+    while True:
+        # 检查任务是否完成且队列为空
+        if task.done() and event_queue.empty():
+            break
+        
         try:
-            # 尝试从队列中获取事件，最多等待1秒
-            event = await asyncio.wait_for(log_queue.get(), timeout=1.0)
-            yield event
-            log_queue.task_done()
+            # 立即获取事件，不等待（或极短超时）
+            event = await asyncio.wait_for(event_queue.get(), timeout=0.01)
+            yield event 
+            await asyncio.sleep(0)
+            event_queue.task_done()
         except asyncio.TimeoutError:
-            # 超时，继续检查任务状态
+            # 如果队列为空但任务未完成，继续等待
+            if task.done():
+                break
             continue
     
-    # 获取多Agent协作的结果
+    # 获取最终结果
     final_result = await task
     
     # 发送最终结果
@@ -126,8 +133,7 @@ async def generate_dialog_event_stream(user_input: str,session_id:str):
         "data": result_message.model_dump_json()
     }
 
-
-@app.post("generate")
+@app.post("/generate")
 async def generate(request: Request, user_input: UserInput):
     """对话式生成小红书内容"""
     return EventSourceResponse(
@@ -140,8 +146,15 @@ async def generateDialog(request: Request, user_input: UserInput):
     """对话式生成小红书内容"""
     
     return EventSourceResponse(
-        generate_dialog_event_stream(user_input.prompt,user_input.session_id),
-        media_type="text/event-stream"
+        generate_dialog_event_stream(user_input.prompt, user_input.session_id),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "Transfer-Encoding": "chunked",
+            "X-Accel-Buffering":"no",
+            "Content-Type": "text/event-stream",
+        }
     )
 
 

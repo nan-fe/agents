@@ -1,5 +1,6 @@
 fastapi
 uvicorn
+uvloop
 langchain
 langchain-openai
 openai

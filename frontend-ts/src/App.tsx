@@ -1,62 +1,30 @@
-import React, {useState} from 'react';
-import InputForm from './components/input-form';
-import AgentLogs from './components/agent-logs';
-import ResultDisplay from './components/result-display';
-import DialogContent from './pages/dialog-content';
-import {LogType} from './types'
-
-import './App.css';
-import { generateContent } from './services/api';
-
+import React, { useState } from 'react';
 import {
-  MenuFoldOutlined,
-  MenuUnfoldOutlined,
   UserOutlined,
   VideoCameraOutlined,
 } from '@ant-design/icons';
-import { Button, Layout, Menu, theme } from 'antd';
+import { Layout, Menu, theme } from 'antd';
+import DialogContent from './pages/dialog-content';
 
-const { Header, Sider, Content } = Layout;
+import './App.css';
 
+const { Sider, Content } = Layout;
+enum PageMenu {
+  DIALOG_CONTENT = 1,
+  PRODUCT_MARKETING,
+}
+/**
+ * TODO: 菜单后续会新增选品池，目前仅支持内容生成
+ */
 const App: React.FC = () => {
-  const [collapsed, setCollapsed] = useState(false);
   const {
     token: { colorBgContainer, borderRadiusLG },
   } = theme.useToken();
-  const [logs, setLogs] = useState<LogType[]>([]);
-  const [result, setResult] = useState(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [activeMenu, setActiveMenu] = useState('1');
-  
-  const handleSubmit = async (prompt:string) => {
-    setLogs([]);
-    setResult(null);
-    setIsLoading(true);
-
-    try {
-      await generateContent(
-       { prompt,
-        onLog:(log) => {
-          setLogs(prevLogs => [...prevLogs, log]);
-        },
-        onResult:(resultData) => {
-          setResult(resultData);
-          setIsLoading(false);
-        },
-        onError:(error) => {
-          console.error('生成失败:', error);
-          setIsLoading(false);
-        }}
-      );
-    } catch (error) {
-      console.error('生成失败:', error);
-      setIsLoading(false);
-    }
-  };
+  const [activeMenu, setActiveMenu] = useState(String(PageMenu.DIALOG_CONTENT));
 
   return (
     <Layout className="w-full h-full">
-      <Sider trigger={null} collapsible collapsed={collapsed}>
+      <Sider trigger={null} collapsible>
         <div className="demo-logo-vertical" />
         <Menu
           theme="dark"
@@ -65,48 +33,28 @@ const App: React.FC = () => {
           onClick={({ key }) => setActiveMenu(key)}
           items={[
             {
-              key: '1', 
-              icon: <UserOutlined />,
-              label: '一次性生成内容',
-            },
-            {
-              key: '2',
+              key: String(PageMenu.DIALOG_CONTENT),
               icon: <VideoCameraOutlined />,
               label: '多轮对话生成内容',
+            },
+            {
+              key: String(PageMenu.PRODUCT_MARKETING),
+              icon: <UserOutlined />,
+              label: '选品池（待建设）',
             },
           ]}
         />
       </Sider>
-      <Layout>
-        <Header style={{ padding: 0, background: colorBgContainer }}>
-          <Button
-            type="text"
-            icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
-            onClick={() => setCollapsed(!collapsed)}
-            style={{
-              fontSize: '16px',
-              width: 64,
-              height: 64,
-            }}
-          />
-          <h1>小红书内容生成器</h1>
-        </Header>
-        <Content
-          style={{
-            margin: '24px 16px',
-            padding: 24,
-            minHeight: 280,
-            background: colorBgContainer,
-            borderRadius: borderRadiusLG,
-          }}
-        >
-         {activeMenu==='1'?( <div className="app">
-            <InputForm onSubmit={handleSubmit} isLoading={isLoading} />
-            <AgentLogs logs={logs} />
-            <ResultDisplay result={result} />
-          </div>):(<DialogContent />)}
-        </Content>
-      </Layout>
+      <Content
+        style={{
+          padding: 24,
+          minHeight: 280,
+          background: colorBgContainer,
+          borderRadius: borderRadiusLG,
+        }}
+      >
+        <DialogContent />
+      </Content>
     </Layout>
   );
 };
