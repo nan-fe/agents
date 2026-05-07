@@ -10,3 +10,10 @@
 # evaluate copywriter agent
 using the langsmith.evaluation to evaluate the core agent
 <img width="3380" height="1040" alt="image" src="https://github.com/user-attachments/assets/2fd49dbd-0a9a-457c-bd9a-1190ee8943da" />
+
+# run the project
+ using the following command:
+ ```bash
+ docker compose up -d
+ docker compose start
+ ```

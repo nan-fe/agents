@@ -7,7 +7,6 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  # 镜像名称直接沿用仓库名，可以同步改成你自己的
   IMAGE_NAME_BACKEND: xhs-multi-agent-backend
   IMAGE_NAME_FRONTEND: xhs-multi-agent-frontend
 
@@ -58,9 +57,9 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-  # ---------- 部署到服务器 (通过 SSH) ----------
+  # ---------- 部署到服务器 (通过 Self hosted runner) ----------
   deploy:
-    runs-on: self-hosted  # 使用自定义标签指定你的Runner
+    runs-on: self-hosted  
     needs: build-and-push
     permissions:
       contents: read
@@ -70,8 +69,6 @@ jobs:
           run: |
             cd /Users/lixuefu/Documents/trae_projects/agents/xhs-multi-agent-creator
             cp ./backend/.env .env || echo ".env already exists or not needed"
-        # 关键：这一步是在你的服务器上执行的，无需SSH！
-        # 因为Runner已经身处服务器，可以直接操作Docker
         - name: Log in to GHCR with PAT
           uses: docker/login-action@v3
           with:
