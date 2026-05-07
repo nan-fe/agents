@@ -4,17 +4,20 @@ FROM node:18-alpine
 # 设置工作目录
 WORKDIR /app
 
-# 复制 package.json 和 package-lock.json
-COPY package*.json ./
+# 安装 pnpm
+RUN npm install -g pnpm
 
-# 安装依赖
-RUN npm install
+# 复制 package.json 和 pnpm-lock.yaml
+COPY package*.json pnpm-lock.yaml* ./
+
+# 安装依赖（使用 pnpm）
+RUN pnpm install --frozen-lockfile
 
 # 复制项目代码
 COPY . .
 
 # 构建项目
-RUN npm run build
+RUN pnpm run build
 
 # 使用 nginx 作为生产服务器
 FROM nginx:alpine
