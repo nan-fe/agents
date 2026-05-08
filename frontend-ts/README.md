@@ -3,23 +3,22 @@
 ## 项目结构
 
 ```
-frontend/
-├── public/              # 静态资源
-│   └── index.html       # HTML入口文件
-├── src/                 # 源代码
-│   ├── App.js           # 主组件
-│   ├── index.js         # 入口文件
-│   ├── components/      # 组件
-│   │   ├── AgentLogs.js     # Agent日志
-│   │   └── ResultDisplay.js # 结果展示
-│   ├── services/        # 服务
-│   │   └── api.js           # API服务
-│   ├── styles/          # 样式
-│   │   └── App.css          # 主样式文件
-│   └── utils/           # 工具函数
-│       └── helpers.js        # 辅助函数
-├── package.json         # 前端依赖
-└── README.md            # 前端说明
+frontend-ts/
+├── src/
+│   ├── components/                # UI组件
+│   │   ├── agent-logs.tsx         # Agent日志展示
+│   │   └── result-display.tsx     # 结果展示组件
+│   ├── pages/
+│   │   └── dialog-content.tsx     # 对话页面
+│   ├── services/
+│   │   └── api.ts                 # API调用服务
+│   ├── utils/
+│   │   └── helper.ts              # 工具函数
+│   └── types.ts                   # TypeScript类型定义
+├── public/                        # 静态资源
+├── package.json                   # 依赖配置
+├── tailwind.config.js             # Tailwind配置
+└── Dockerfile                     # Docker配置
 ```
 
 ## 安装依赖
