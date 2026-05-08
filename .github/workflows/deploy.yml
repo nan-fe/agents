@@ -6,30 +6,26 @@ on:
     tags: [ "v*" ]
 
 env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME_BACKEND: xhs-multi-agent-backend
-  IMAGE_NAME_FRONTEND: xhs-multi-agent-frontend
+  REGISTRY: crpi-qeypgng4u8e2ezh6.cn-shanghai.personal.cr.aliyuncs.com
+  NAMESPACE: nan-fe
+  IMAGE_NAME: agents
 
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Log in to GitHub Container Registry
+      - name: Log in to Aliyun ACR
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GHCR_PAT }}
+          username: ${{ secrets.SSH_USER }}
+          password: ${{ secrets.ALIYUN_PASSWORD }}
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3 # 构建增强（多平台/缓存/SBOM）
+        uses: docker/setup-buildx-action@v3
 
       # ---------- 构建和推送后端镜像 ----------
       - name: Build and push Backend
@@ -39,8 +35,8 @@ jobs:
           file: ./backend/Dockerfile
           push: true
           tags: |
-            ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.IMAGE_NAME_BACKEND }}:${{ github.sha }}
-            ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.IMAGE_NAME_BACKEND }}:latest
+            ${{ env.REGISTRY }}/${{ env.NAMESPACE }}/${{ env.IMAGE_NAME }}:backend
+            ${{ env.REGISTRY }}/${{ env.NAMESPACE }}/${{ env.IMAGE_NAME }}:${{ github.sha }}-backend
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -52,32 +48,28 @@ jobs:
           file: ./frontend-ts/Dockerfile
           push: true
           tags: |
-            ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.IMAGE_NAME_FRONTEND }}:${{ github.sha }}
-            ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.IMAGE_NAME_FRONTEND }}:latest
+            ${{ env.REGISTRY }}/${{ env.NAMESPACE }}/${{ env.IMAGE_NAME }}:frontend
+            ${{ env.REGISTRY }}/${{ env.NAMESPACE }}/${{ env.IMAGE_NAME }}:${{ github.sha }}-frontend
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-  # ---------- 部署到服务器 (通过 Self hosted runner) ----------
+  # ---------- 部署到 aliyun 服务器----------
   deploy:
-    runs-on: self-hosted  
+    runs-on: ubuntu-latest  
     needs: build-and-push
-    permissions:
-      contents: read
-      packages: write
     steps:
-        - name: Export all env vars from .env
-          run: |
-            cd /Users/lixuefu/Documents/trae_projects/agents/xhs-multi-agent-creator
-            cp ./backend/.env .env || echo ".env already exists or not needed"
-        - name: Log in to GHCR with PAT
-          uses: docker/login-action@v3
-          with:
-            registry: ${{ env.REGISTRY }}
-            username: ${{ github.actor }}
-            password: ${{ secrets.GHCR_PAT }}
-        - name: Deploy Application
-          run: |
-              cd /Users/lixuefu/Documents/trae_projects/agents/xhs-multi-agent-creator
-              docker compose down
-              docker compose pull
-              docker compose up -d
+      - name: Deploy to Aliyun Server via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SERVER_IP }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script: |
+            cd /root/agents
+            
+            git pull origin feat-init
+            echo "${{ secrets.ALIYUN_PASSWORD }}" | docker login --username=${{ secrets.SSH_USER }} --password-stdin ${{ env.REGISTRY }}
+            docker compose pull
+            docker compose up -d
+            docker image prune -f
