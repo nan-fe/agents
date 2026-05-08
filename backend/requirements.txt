@@ -18,7 +18,7 @@ requests-file
 httpcore==1.0.9
 httpx==0.28.1
 langchain-community
-duckduckgo-search
+duckduckgo-search>=5.3.0
 chromadb
 pandas
 bs4

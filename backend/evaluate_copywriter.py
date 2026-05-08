@@ -1,4 +1,4 @@
-import os
+
 import asyncio
 from langsmith import Client, wrappers
 from langsmith.evaluation import aevaluate

@@ -166,8 +166,8 @@ class DialogOrchestratorAgent:
         execution_context = {
             "planning": session_history.last_plan or {},
             "rag_context": None,  # 商品上下文（按需填充）
-            "copywriting": None,
-            "image": None,
+            "copywriting": {},
+            "image": {},
             "review": None,
         }
 
@@ -522,6 +522,7 @@ class DialogOrchestratorAgent:
             "content": copy.get("content", "默认内容"),
             "hashtags": copy.get("hashtags", ["#小红书", "#推荐"]),
             "image_url": image.get("image_url", "https://via.placeholder.com/800x600"),
+            "image_prompt": image.get("prompt", ""),
         }
         # 添加商品推荐
         if plan.get("product_recommendations"):

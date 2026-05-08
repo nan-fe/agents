@@ -13,6 +13,7 @@ import { SendOutlined, HistoryOutlined } from '@ant-design/icons';
 import { generateDialogContent } from '../services/api';
 import AgentLogs from '../components/agent-logs';
 import ResultDisplay from '../components/result-display';
+import HistoryPanel, { HistoryItem } from '../components/history-panel';
 import { LogType } from '../types';
 
 const { Header, Content } = Layout;
@@ -34,20 +35,22 @@ interface Version {
   imageUrl: string;
 }
 
-
 const DialogContent: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [versions, setVersions] = useState<Version[]>([]);
   const [currentVersion, setCurrentVersion] = useState<number>(-1);
   const [inputValue, setInputValue] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
-  const [sessionId] = useState<string>(`session_${Date.now()}`);
+  // const [currentSessionId] = useState<string>(`session_${Date.now()}`);
   const [logs, setLogs] = useState<LogType[]>([]);
   const [result, setResult] = useState<any>(null);
   const [finishTask, setFinishTask] = useState(false);
+  const [history, setHistory] = useState<HistoryItem[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const initialized = useRef(false);
 
   useEffect(() => {
+    if(initialized.current) return;
     // 添加系统消息
     const systemMessage: Message = {
       id: `msg_${Date.now() + 1}`,
@@ -56,6 +59,7 @@ const DialogContent: React.FC = () => {
         '哈喽～我是你的内容创作助手 小H，你可以输入内容描述（例如：推荐一款适合学生党的平价防晒霜，清爽不油腻）我将生成一段图文给你发小红书',
       timestamp: Date.now(),
     };
+    initialized.current = true;
     setMessages((prev) => [...prev, systemMessage]);
   }, []);
 
@@ -72,7 +76,6 @@ const DialogContent: React.FC = () => {
 
     // 清空之前的日志和结果
     setLogs([]);
-    setResult(null);
 
     // 添加用户消息
     const userMessage: Message = {
@@ -86,10 +89,12 @@ const DialogContent: React.FC = () => {
     setLoading(true);
 
     try {
+      const newSessionId = `session_${Date.now()}`;
+      
       // 调用API生成内容
       const resultData = await generateDialogContent({
         user_input: inputValue,
-        session_id: sessionId,
+        session_id: newSessionId,
         log_callback: (from: string, message: string) => {
           console.log(`${from}: ${message}`);
           // 更新日志
@@ -128,6 +133,14 @@ const DialogContent: React.FC = () => {
       setVersions((prev) => [...prev, newVersion]);
       setCurrentVersion(newVersion.id);
 
+      // 添加到历史记录
+      const historyItem: HistoryItem = {
+        id: newSessionId,
+        userInput: inputValue,
+        timestamp: Date.now(),
+        title: resultData.title,
+      };
+      setHistory((prev) => [historyItem, ...prev]);
     } catch (error) {
       message.error('生成内容失败，请重试');
       console.error('Error generating content:', error);
@@ -136,30 +149,35 @@ const DialogContent: React.FC = () => {
     }
   };
 
-  // const handleRollback = async (versionId: number) => {
-  //   setLoading(true);
-  //   try {
-  //     // 模拟回退操作
-  //     const version = versions[versionId];
-  //     setCurrentVersion(versionId);
+  const handleSelectHistory = (item: HistoryItem) => {
+    message.info(`已选择历史记录: ${item.title || item.userInput}`);
+  };
 
-  //     // 添加系统消息
-  //     const systemMessage: Message = {
-  //       id: `msg_${Date.now()}`,
-  //       type: 'system',
-  //       content: `已回退至V${versionId + 1}`,
-  //       timestamp: Date.now(),
-  //     };
-  //     setMessages((prev) => [...prev, systemMessage]);
+  const handleDeleteHistory = (id: string) => {
+    setHistory((prev) => prev.filter((item) => item.id !== id));
+    message.success('历史记录已删除');
+  };
 
-  //     message.success(`已回退至V${versionId + 1}`);
-  //   } catch (error) {
-  //     message.error('回退失败，请重试');
-  //     console.error('Error rolling back:', error);
-  //   } finally {
-  //     setLoading(false);
-  //   }
-  // };
+  const handleVersionSelect = (versionId: number) => {
+    const version = versions[versionId];
+    setCurrentVersion(versionId);
+    setResult({
+      title: version.title,
+      content: version.content,
+      hashtags: version.hashtags,
+      image_url: version.imageUrl,
+    });
+
+    const systemMessage: Message = {
+      id: `msg_${Date.now()}`,
+      type: 'system',
+      content: `已切换至版本 V${versionId + 1}`,
+      timestamp: Date.now(),
+    };
+    setMessages((prev) => [...prev, systemMessage]);
+
+    message.success(`已切换至版本 V${versionId + 1}`);
+  };
 
   return (
     <Layout style={{ height: 'auto' }}>
@@ -177,6 +195,14 @@ const DialogContent: React.FC = () => {
       <Layout>
         <Content className="w-full flex">
           <div className="flex w-full" style={{ height: 'calc(100vh - 160px)' }}>
+            {/* 历史记录面板 */}
+            {/* <HistoryPanel
+              history={history}
+              onSelectHistory={handleSelectHistory}
+              onDeleteHistory={handleDeleteHistory}
+              currentSessionId={currentSessionId}
+            /> */}
+            
             {/* 聊天窗口 */}
             <Card
               title="聊天记录"
@@ -189,9 +215,15 @@ const DialogContent: React.FC = () => {
                   renderItem={(message) => (
                     <List.Item>
                       <div
-                        style={{ display: 'flex', flexDirection: 'column', marginBottom: '8px' }}
+                        style={{
+                          display: "flex",
+                          flexDirection: "column",
+                          marginBottom: "8px",
+                        }}
                       >
-                        <Text strong>{message.type === 'user' ? '用户' : '系统'}</Text>
+                        <Text strong>
+                          {message.type === "user" ? "用户" : "系统"}
+                        </Text>
                         <Paragraph>{message.content}</Paragraph>
                         <Text type="secondary" style={{ fontSize: '12px' }}>
                           {new Date(message.timestamp).toLocaleString()}
@@ -228,14 +260,14 @@ const DialogContent: React.FC = () => {
               <Card title="文案版本" extra={<HistoryOutlined />}>
                 <Select
                   value={currentVersion}
-                  // onChange={handleRollback}
+                  onChange={handleVersionSelect}
                   style={{ width: '100%' }}
                   placeholder="选择版本"
-                  disabled
                 >
                   {versions.map((version) => (
                     <Select.Option key={version.id} value={version.id}>
-                      V{version.id + 1} - {new Date(version.timestamp).toLocaleString()}
+                      V{version.id + 1} -{" "}
+                      {new Date(version.timestamp).toLocaleString()}
                     </Select.Option>
                   ))}
                 </Select>
@@ -249,7 +281,11 @@ const DialogContent: React.FC = () => {
               ) : null}
 
               {/* Agent 日志 */}
-              <AgentLogs logs={logs} isCollapse={finishTask} />
+              <AgentLogs
+                logs={logs}
+                isCollapse={finishTask}
+                isLoading={loading}
+              />
             </div>
           </div>
         </Content>

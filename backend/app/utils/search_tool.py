@@ -1,12 +1,16 @@
 import re
 import time
+import warnings
 from urllib.parse import urlparse, parse_qs
-from duckduckgo_search import DDGS
 from typing import List, Dict, Any
 from langchain_community.tools import DuckDuckGoSearchRun
 import requests
 from bs4 import BeautifulSoup
 import json
+
+with warnings.catch_warnings():
+    warnings.simplefilter("ignore", RuntimeWarning)
+    from duckduckgo_search import DDGS
 
 # from selenium import webdriver
 # from selenium.webdriver.chrome.options import Options
