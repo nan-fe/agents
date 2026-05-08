@@ -3,28 +3,22 @@ import asyncio
 from langsmith import Client, wrappers
 from langsmith.evaluation import aevaluate
 from langchain_core.output_parsers import JsonOutputParser
+from app.config import settings
 
 import openai
 from pydantic import BaseModel
 from app.agents.copywriter_agent import CopywriterAgent
+from dotenv import load_dotenv
 
-# 配置LangSmith
-os.environ["LANGCHAIN_TRACING_V2"] = "true"
-os.environ["LANGCHAIN_API_KEY"] = "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"
-os.environ["LANGCHAIN_PROJECT"] = "Copywriter Agent Evaluation"
-
+load_dotenv()
 # 初始化文案Agent和LangSmith客户端
 copywriter_agent = CopywriterAgent()
 client = Client()
 
-# 从环境变量或直接设置获取 API 密钥
-SILICONFLOW_API_KEY = "sk-zbmufnvfvcxcfdjkjerosblljfarahlpjqdiperswadtpdqf"
-SILICONFLOW_BASE_URL = "https://api.siliconflow.cn/v1"
-
 # 初始化 OpenAI 客户端（用于评估）
 oai_client = wrappers.wrap_openai(openai.OpenAI(
-    api_key=SILICONFLOW_API_KEY,
-    base_url=SILICONFLOW_BASE_URL,
+    api_key=settings.SILICONFLOW_API_KEY,
+    base_url=settings.SILICONFLOW_BASE_URL,
 ))
 
 # ========== 评估器定义 ==========

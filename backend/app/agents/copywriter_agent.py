@@ -1,23 +1,21 @@
 from app.agents.base_agent import BaseAgent
 from app.models.schemas import CopywritingResult, PlanningResult
-# from app.services.langchain_chains import CopywritingChain
 from langchain_core.prompts import PromptTemplate
 from langchain_openai import ChatOpenAI
 from langchain_core.output_parsers import JsonOutputParser
 from app.config import settings
 from typing import Optional, Union, Dict
-from app.utils.token_counter import token_counter
+from app.utils.llm_factory import llm_factory
 
 
 class CopywriterAgent(BaseAgent):
     """文案Agent"""
-    
+
     def __init__(self):
         """初始化文案Agent"""
         super().__init__("Copywriter", "小红书爆款文案写手")
-        # self.copywriting_chain = CopywritingChain()
         self.parser = JsonOutputParser(pydantic_object=CopywritingResult)
-        
+
         # 构建提示模板
         template = """
         你是一位小红书爆款文案写手，擅长创作符合小红书风格的文案。
@@ -56,60 +54,57 @@ class CopywriterAgent(BaseAgent):
         
         注意：仅输出JSON对象，不要附加任何解释或额外文字。
         """
-        
+
         self.prompt = PromptTemplate(
             template=template,
-            input_variables=["target_audience", "core_selling_points", "tone_style", "topic", "history","user_input"],
-            partial_variables={"format_instructions": self.parser.get_format_instructions()}
+            input_variables=[
+                "target_audience",
+                "core_selling_points",
+                "tone_style",
+                "topic",
+                "history",
+                "user_input",
+            ],
+            partial_variables={
+                "format_instructions": self.parser.get_format_instructions()
+            },
         )
-        
+
         self.llm = ChatOpenAI(
             model_name=settings.COPYWRITE_MODEL,
             temperature=0.7,
             api_key=settings.SILICONFLOW_API_KEY,
-            base_url=settings.SILICONFLOW_BASE_URL
+            base_url=settings.SILICONFLOW_BASE_URL,
         )
-        
+
         self.chain = self.prompt | self.llm | self.parser
-    
-    def get_llm_with_max_tokens(self, max_tokens: int) -> ChatOpenAI:
-        """获取设置了max_tokens的LLM实例
-        
-        Args:
-            max_tokens: 最大输出token数
-            
-        Returns:
-            ChatOpenAI实例
-        """
-        return ChatOpenAI(
-            model_name=settings.COPYWRITE_MODEL,
-            temperature=0.7,
-            max_tokens=max_tokens,
-            api_key=settings.SILICONFLOW_API_KEY,
-            base_url=settings.SILICONFLOW_BASE_URL
-        )
-    
-    async def run(self, planning_result: Union[PlanningResult, Dict], log_callback: Optional[callable] = None, history: str = "") -> CopywritingResult:
+
+    async def run(
+        self,
+        planning_result: Union[PlanningResult, Dict],
+        log_callback: Optional[callable] = None,
+        history: str = "",
+    ) -> CopywritingResult:
         """运行文案Agent
-        
+
         Args:
             planning_result: 策划结果（可以是PlanningResult对象或字典）
             log_callback: 日志回调函数
             history: 历史数据
-            
+
         Returns:
             文案结果
         """
         await self.log(f"根据策划方案生成文案", log_callback)
-        
+
         # 处理不同类型的输入
         if isinstance(planning_result, dict):
             planning_dict = planning_result
             target_audience = planning_dict.get("target_audience", [])
             core_selling_points = planning_dict.get("core_selling_points", [])
             tone_style = planning_dict.get("tone_style", "亲切自然")
-            topic = planning_dict.get("topic","默认主题")
-            user_input = planning_dict.get("user_input","用户输入")
+            topic = planning_dict.get("topic", "默认主题")
+            user_input = planning_dict.get("user_input", "用户输入")
         else:
             # PlanningResult对象
             planning_dict = planning_result.model_dump()
@@ -119,38 +114,37 @@ class CopywriterAgent(BaseAgent):
             topic = planning_result.topic
             user_input = planning_result.user_input
 
-        
         # 构建输入数据
         chain_input = {
-            "target_audience": ", ".join(target_audience) if isinstance(target_audience, list) else target_audience,
-            "core_selling_points": ", ".join(core_selling_points) if isinstance(core_selling_points, list) else core_selling_points,
+            "target_audience": (
+                ", ".join(target_audience)
+                if isinstance(target_audience, list)
+                else target_audience
+            ),
+            "core_selling_points": (
+                ", ".join(core_selling_points)
+                if isinstance(core_selling_points, list)
+                else core_selling_points
+            ),
             "tone_style": tone_style,
             "topic": topic,
             "history": history or "",
-            "user_input": user_input
+            "user_input": user_input,
         }
-        
+
         await self.log("生成小红书风格文案...", log_callback)
-  
-        # 调用LangChain链
+
         try:
-            # 计算token数
-          
-            rendered_prompt = self.prompt.format(**chain_input, format_instructions=self.parser.get_format_instructions())
-            input_tokens = token_counter.count_tokens(rendered_prompt, settings.COPYWRITE_MODEL)
-            
-            # 计算max_tokens
-            max_tokens = token_counter.calculate_max_tokens(input_tokens, settings.COPYWRITE_MODEL)
-            print(f"文案Agent - 输入Token数: {input_tokens}, 最大输出Token数: {max_tokens}")
-            
-            # 使用动态max_tokens的LLM
-            llm_with_max_tokens = self.get_llm_with_max_tokens(max_tokens)
-            chain = self.prompt | llm_with_max_tokens | self.parser
-            
-            result = await chain.ainvoke(chain_input)
+            result = await llm_factory.run_chain_with_dynamic_tokens(
+                prompt_template=self.prompt,
+                chain_input=chain_input,
+                parser=self.parser,
+                model_name=settings.COPYWRITE_MODEL,
+                temperature=0.7,
+                history=history,
+            )
             print(f"生成小红书风格文案 result: {result}")
             await self.log(f"文案生成完成: {result}", log_callback)
-            # 检查result是否已经是CopywritingResult对象
             if isinstance(result, CopywritingResult):
                 return result
             else:
@@ -159,9 +153,6 @@ class CopywriterAgent(BaseAgent):
             await self.log(f"生成文案失败: {e}", log_callback)
             print(f"生成文案失败: {e}")
 
-            # 返回默认值
             return CopywritingResult(
-                title="默认标题",
-                content="默认内容",
-                hashtags=["#小红书", "#推荐"]
+                title="默认标题", content="默认内容", hashtags=["#小红书", "#推荐"]
             )

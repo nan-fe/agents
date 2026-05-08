@@ -10,18 +10,16 @@ from app.utils.token_counter import token_counter
 
 class RoutingDecision(BaseModel):
     """路由决策模型"""
+
     task_type: str
     agents_to_call: List[str]
     reasoning: str
     priority_order: List[str]
 
-class AgentDecision(BaseModel):
-    """单个步骤的 Agent 决策结果"""
-    selected_agent: str   # 选中的 Agent 名称
-    reasoning: str        # 决策理由
 
 class RetryDecision(BaseModel):
     """重试决策模型"""
+
     should_retry: bool
     action_type: str
     target_agent: Optional[str] = None
@@ -29,34 +27,25 @@ class RetryDecision(BaseModel):
     reasoning: str
 
 
-class InformationSummary(BaseModel):
-    """信息摘要模型"""
-    key_points: List[str]
-    product_insights: List[str]
-    audience_insights: List[str]
-    style_recommendations: List[str]
-    summary_text: str
-
-
 class OrchestratorLLMService:
     """编排器LLM服务"""
-    
+
     def __init__(self):
         """初始化编排器LLM服务"""
         self.llm = ChatOpenAI(
-            model_name= settings.PLAN_MODEL,
+            model_name=settings.PLAN_MODEL,
             temperature=0.3,
             api_key=settings.SILICONFLOW_API_KEY,
-            base_url=settings.SILICONFLOW_BASE_URL
+            base_url=settings.SILICONFLOW_BASE_URL,
         )
-        
+
     def get_llm_with_max_tokens(self, model_name: str, max_tokens: int) -> ChatOpenAI:
         """获取设置了max_tokens的LLM实例
-        
+
         Args:
             model_name: 模型名称
             max_tokens: 最大输出token数
-            
+
         Returns:
             ChatOpenAI实例
         """
@@ -65,10 +54,12 @@ class OrchestratorLLMService:
             temperature=0.3,
             max_tokens=max_tokens,
             api_key=settings.SILICONFLOW_API_KEY,
-            base_url=settings.SILICONFLOW_BASE_URL
+            base_url=settings.SILICONFLOW_BASE_URL,
         )
-    
-    async def route_task(self, user_input: str, planning_result: Dict, intent: str = "new_task") -> RoutingDecision:
+
+    async def route_task(
+        self, user_input: str, planning_result: Dict, intent: str = "new_task"
+    ) -> RoutingDecision:
         """动态路由决策
 
         Args:
@@ -100,7 +91,7 @@ class OrchestratorLLMService:
             intent_guidance = "用户只是询问问题，可能不需要调用任何生成 Agent。"
         else:
             intent_guidance = "根据具体情况判断需要的 Agent。"
-        
+
         template = """
         你是一个智能任务路由器，负责分析任务并决定调用哪些Agent。
 
@@ -140,35 +131,52 @@ class OrchestratorLLMService:
 
         prompt = PromptTemplate(
             template=template,
-            input_variables=["user_input", "planning_result", "intent_guidance", "intent"],
-            partial_variables={"format_instructions": parser.get_format_instructions()}
+            input_variables=[
+                "user_input",
+                "planning_result",
+                "intent_guidance",
+                "intent",
+            ],
+            partial_variables={"format_instructions": parser.get_format_instructions()},
         )
-        
+
         # 计算token数
         input_data = {
             "user_input": user_input,
             "planning_result": str(planning_result),
             "intent": intent,
-            "intent_guidance": intent_guidance
+            "intent_guidance": intent_guidance,
         }
         # 渲染prompt
-        rendered_prompt = prompt.format(**input_data, format_instructions=parser.get_format_instructions())
+        rendered_prompt = prompt.format(
+            **input_data, format_instructions=parser.get_format_instructions()
+        )
         input_tokens = token_counter.count_tokens(rendered_prompt, settings.PLAN_MODEL)
-        
+
         # 计算max_tokens
-        max_tokens = token_counter.calculate_max_tokens(input_tokens, settings.PLAN_MODEL)
+        max_tokens = token_counter.calculate_max_tokens(
+            input_tokens, settings.PLAN_MODEL
+        )
         print(f"路由决策 - 输入Token数: {input_tokens}, 最大输出Token数: {max_tokens}")
-        
+
         # 分析上下文窗口
-        history_tokens = token_counter.count_tokens(str(planning_result), settings.PLAN_MODEL)
-        current_question_tokens = token_counter.count_tokens(user_input, settings.PLAN_MODEL)
-        analysis = token_counter.format_context_analysis(history_tokens, current_question_tokens, settings.PLAN_MODEL)
+        history_tokens = token_counter.count_tokens(
+            str(planning_result), settings.PLAN_MODEL
+        )
+        current_question_tokens = token_counter.count_tokens(
+            user_input, settings.PLAN_MODEL
+        )
+        analysis = token_counter.format_context_analysis(
+            history_tokens, current_question_tokens, settings.PLAN_MODEL
+        )
         print(analysis)
-        
+
         # 使用动态max_tokens的LLM
-        llm_with_max_tokens = self.get_llm_with_max_tokens(settings.PLAN_MODEL, max_tokens)
+        llm_with_max_tokens = self.get_llm_with_max_tokens(
+            settings.PLAN_MODEL, max_tokens
+        )
         chain = prompt | llm_with_max_tokens | parser
-        
+
         try:
             result = await chain.ainvoke(input_data)
             return RoutingDecision(**result)
@@ -178,30 +186,29 @@ class OrchestratorLLMService:
                 task_type="content_creation",
                 agents_to_call=["CopywriterAgent", "ImageAgent", "ReviewerAgent"],
                 reasoning="默认路由：执行完整的内容创作流程",
-                priority_order=["CopywriterAgent", "ImageAgent", "ReviewerAgent"]
+                priority_order=["CopywriterAgent", "ImageAgent", "ReviewerAgent"],
             )
-    
 
     async def decide_retry_strategy(
-        self, 
-        error_info: str, 
+        self,
+        error_info: str,
         current_agent: str,
         attempt_count: int,
-        max_attempts: int = 3
+        max_attempts: int = 3,
     ) -> RetryDecision:
         """自适应重试策略
-        
+
         Args:
             error_info: 错误信息
             current_agent: 当前Agent
             attempt_count: 当前尝试次数
             max_attempts: 最大尝试次数
-            
+
         Returns:
             重试决策
         """
         parser = JsonOutputParser(pydantic_object=RetryDecision)
-        
+
         template = """
         你是一个智能重试策略决策器，负责分析错误并决定最佳的重试策略。
         
@@ -231,32 +238,43 @@ class OrchestratorLLMService:
         3. 如果尝试次数过多，考虑中止任务
         4. 输出内容仅输出 JSON 对象，不要附加任何解释
         """
-        
+
         prompt = PromptTemplate(
             template=template,
-            input_variables=["current_agent", "error_info", "attempt_count", "max_attempts"],
-            partial_variables={"format_instructions": parser.get_format_instructions()}
+            input_variables=[
+                "current_agent",
+                "error_info",
+                "attempt_count",
+                "max_attempts",
+            ],
+            partial_variables={"format_instructions": parser.get_format_instructions()},
         )
-        
+
         # 计算token数
         input_data = {
             "current_agent": current_agent,
             "error_info": error_info,
             "attempt_count": attempt_count,
-            "max_attempts": max_attempts
+            "max_attempts": max_attempts,
         }
         # 渲染prompt
-        rendered_prompt = prompt.format(**input_data, format_instructions=parser.get_format_instructions())
+        rendered_prompt = prompt.format(
+            **input_data, format_instructions=parser.get_format_instructions()
+        )
         input_tokens = token_counter.count_tokens(rendered_prompt, settings.PLAN_MODEL)
-        
+
         # 计算max_tokens
-        max_tokens = token_counter.calculate_max_tokens(input_tokens, settings.PLAN_MODEL)
+        max_tokens = token_counter.calculate_max_tokens(
+            input_tokens, settings.PLAN_MODEL
+        )
         print(f"重试策略 - 输入Token数: {input_tokens}, 最大输出Token数: {max_tokens}")
-        
+
         # 使用动态max_tokens的LLM
-        llm_with_max_tokens = self.get_llm_with_max_tokens(settings.PLAN_MODEL, max_tokens)
+        llm_with_max_tokens = self.get_llm_with_max_tokens(
+            settings.PLAN_MODEL, max_tokens
+        )
         chain = prompt | llm_with_max_tokens | parser
-        
+
         try:
             result = await chain.ainvoke(input_data)
             return RetryDecision(**result)
@@ -266,22 +284,24 @@ class OrchestratorLLMService:
                 return RetryDecision(
                     should_retry=False,
                     action_type="abort",
-                    reasoning=f"已达到最大尝试次数{max_attempts}，中止任务"
+                    reasoning=f"已达到最大尝试次数{max_attempts}，中止任务",
                 )
             else:
                 return RetryDecision(
                     should_retry=True,
                     action_type="retry_same_agent",
-                    reasoning="默认策略：重试当前Agent"
+                    reasoning="默认策略：重试当前Agent",
                 )
-     
-    async def analyze_intent(self, user_input: str, chat_history: List[BaseMessage]) -> str:
+
+    async def analyze_intent(
+        self, user_input: str, chat_history: List[BaseMessage]
+    ) -> str:
         """分析用户意图
-        
+
         Args:
             user_input: 用户输入
             chat_history: 对话历史
-            
+
         Returns:
             意图类型：new_task, refine_content, change_topic, etc.
         """
@@ -304,43 +324,53 @@ class OrchestratorLLMService:
         2. 基于用户输入和对话历史进行综合判断
         3. 如果用户提到图片相关关键词（如换图、重新生成图片、修改图片），优先判断为 refine_image
         """
-        
+
         prompt = PromptTemplate(
-            template=template,
-            input_variables=["user_input", "chat_history"]
+            template=template, input_variables=["user_input", "chat_history"]
         )
         self.intent_llm = ChatOpenAI(
-            model_name= settings.INTENT_MODEL,
+            model_name=settings.INTENT_MODEL,
             temperature=0.3,
             api_key=settings.SILICONFLOW_API_KEY,
-            base_url=settings.SILICONFLOW_BASE_URL
+            base_url=settings.SILICONFLOW_BASE_URL,
         )
-        
+
         try:
             print("开始识别意图")
-            history_str = "\n".join([f"{msg.type}: {msg.content}" for msg in chat_history])
-            input_data = {
-                "user_input": user_input,
-                "chat_history": history_str
-            }
+            history_str = "\n".join(
+                [f"{msg.type}: {msg.content}" for msg in chat_history]
+            )
+            input_data = {"user_input": user_input, "chat_history": history_str}
             # 计算token数
             rendered_prompt = prompt.format(**input_data)
-            input_tokens = token_counter.count_tokens(rendered_prompt, settings.INTENT_MODEL)
-            
+            input_tokens = token_counter.count_tokens(
+                rendered_prompt, settings.INTENT_MODEL
+            )
+
             # 计算max_tokens
-            max_tokens = token_counter.calculate_max_tokens(input_tokens, settings.INTENT_MODEL)
-            print(f"意图识别 - 输入Token数: {input_tokens}, 最大输出Token数: {max_tokens}")
-            
+            max_tokens = token_counter.calculate_max_tokens(
+                input_tokens, settings.INTENT_MODEL
+            )
+            print(
+                f"意图识别 - 输入Token数: {input_tokens}, 最大输出Token数: {max_tokens}"
+            )
+
             # 分析上下文窗口
-            history_tokens = token_counter.count_tokens(history_str, settings.INTENT_MODEL)
-            current_question_tokens = token_counter.count_tokens(user_input, settings.INTENT_MODEL)
-            analysis = token_counter.format_context_analysis(history_tokens, current_question_tokens, settings.INTENT_MODEL)
+            history_tokens = token_counter.count_tokens(
+                history_str, settings.INTENT_MODEL
+            )
+            current_question_tokens = token_counter.count_tokens(
+                user_input, settings.INTENT_MODEL
+            )
+            analysis = token_counter.format_context_analysis(
+                history_tokens, current_question_tokens, settings.INTENT_MODEL
+            )
             print(analysis)
-            
+
             # 使用动态max_tokens的LLM
             intent_llm = self.get_llm_with_max_tokens(settings.INTENT_MODEL, max_tokens)
             chain = prompt | intent_llm
-            
+
             result = await chain.ainvoke(input_data)
             print("完成识别意图")
 

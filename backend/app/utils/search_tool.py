@@ -7,6 +7,7 @@ from langchain_community.tools import DuckDuckGoSearchRun
 import requests
 from bs4 import BeautifulSoup
 import json
+
 # from selenium import webdriver
 # from selenium.webdriver.chrome.options import Options
 # from selenium.webdriver.chrome.service import Service
@@ -16,85 +17,88 @@ import json
 # from selenium.webdriver.common.by import By
 # from selenium.common.exceptions import TimeoutException
 
+
 def extract_product_params(url: str) -> Dict[str, Any]:
     """
     从 URL 中提取商品参数信息
-    
+
     Args:
         url: 商品链接 URL
-        
+
     Returns:
         提取的商品参数字典
     """
     params = {}
-    
+
     try:
         # 解析 URL
         parsed_url = urlparse(url)
         query_params = parse_qs(parsed_url.query)
-        
+
         # 处理淘宝 URL
-        if 'taobao.com' in parsed_url.netloc:
+        if "taobao.com" in parsed_url.netloc:
             # 处理 pcdetail.taobao.com 链接（会重定向）
-            if 'pcdetail.taobao.com' in parsed_url.netloc:
-                params['url_type'] = 'taobao_pcdetail'
-                params['note'] = '该链接会重定向到标准商品页面'
-                
+            if "pcdetail.taobao.com" in parsed_url.netloc:
+                params["url_type"] = "taobao_pcdetail"
+                params["note"] = "该链接会重定向到标准商品页面"
+
                 # 尝试从 URL 路径中提取可能的参数
                 path = parsed_url.path
-                if path and path.endswith('.html'):
+                if path and path.endswith(".html"):
                     # 提取文件名部分（可能包含编码的商品信息）
-                    filename = path.split('/')[-1].replace('.html', '')
-                    params['encoded_params'] = filename
-            
+                    filename = path.split("/")[-1].replace(".html", "")
+                    params["encoded_params"] = filename
+
             # 提取商品 ID
-            item_id_match = re.search(r'id=(\d+)', url)
+            item_id_match = re.search(r"id=(\d+)", url)
             if item_id_match:
-                params['item_id'] = item_id_match.group(1)
-            
+                params["item_id"] = item_id_match.group(1)
+
             # 提取店铺 ID
-            shop_id_match = re.search(r'shop_id=(\d+)', url)
+            shop_id_match = re.search(r"shop_id=(\d+)", url)
             if shop_id_match:
-                params['shop_id'] = shop_id_match.group(1)
-            
+                params["shop_id"] = shop_id_match.group(1)
+
             # 提取其他参数
             for key, value in query_params.items():
-                if key in ['id', 'shop_id', 'spm', 'scm']:
+                if key in ["id", "shop_id", "spm", "scm"]:
                     params[key] = value[0]
-        
+
         # 处理京东 URL
-        elif 'jd.com' in parsed_url.netloc:
+        elif "jd.com" in parsed_url.netloc:
             # 提取商品 ID
-            product_id_match = re.search(r'/(\d+)\.html', url)
+            product_id_match = re.search(r"/(\d+)\.html", url)
             if product_id_match:
-                params['product_id'] = product_id_match.group(1)
-        
+                params["product_id"] = product_id_match.group(1)
+
         # 处理天猫 URL
-        elif 'tmall.com' in parsed_url.netloc:
+        elif "tmall.com" in parsed_url.netloc:
             # 提取商品 ID
-            item_id_match = re.search(r'id=(\d+)', url)
+            item_id_match = re.search(r"id=(\d+)", url)
             if item_id_match:
-                params['item_id'] = item_id_match.group(1)
-        
+                params["item_id"] = item_id_match.group(1)
+
         # 通用参数提取
-        if 'q' in query_params:
-            params['search_query'] = query_params['q'][0]
-        
+        if "q" in query_params:
+            params["search_query"] = query_params["q"][0]
+
     except Exception as e:
         print(f"提取参数出错: {str(e)}")
-    
+
     return params
 
 
-def search_duckduckgo(query: str, max_results: int = 5, site: str = None) -> List[Dict[str, Any]]:
+def search_duckduckgo(
+    query: str, max_results: int = 5, site: str = None
+) -> List[Dict[str, Any]]:
     """
     使用 DuckDuckGo 搜索获取相关信息，并从 URL 中提取商品参数
-    
+
     Args:
         query: 搜索查询词
         max_results: 最大返回结果数
         site: 限定的网站域名，如 "taobao.com"
-        
+
     Returns:
         搜索结果列表，每个结果包含标题、链接、摘要和商品参数
     """
@@ -104,20 +108,22 @@ def search_duckduckgo(query: str, max_results: int = 5, site: str = None) -> Lis
             search_query = query
             if site:
                 search_query = f"{query} site:{site}"
-                
+
             results = []
             for result in ddgs.text(search_query, max_results=max_results):
-                print('originaltext', result)
+                print("originaltext", result)
                 url = result.get("href", "")
                 # 提取商品参数
                 product_params = extract_product_params(url)
-                
-                results.append({
-                    "title": result.get("title", ""),
-                    "url": url,
-                    "snippet": result.get("body", ""),
-                    "product_params": product_params  # 添加商品参数
-                })
+
+                results.append(
+                    {
+                        "title": result.get("title", ""),
+                        "url": url,
+                        "snippet": result.get("body", ""),
+                        "product_params": product_params,  # 添加商品参数
+                    }
+                )
             return results
     except Exception as e:
         print(f"搜索出错: {str(e)}")
@@ -127,11 +133,11 @@ def search_duckduckgo(query: str, max_results: int = 5, site: str = None) -> Lis
 def search_news(query: str, max_results: int = 3) -> List[Dict[str, Any]]:
     """
     使用 DuckDuckGo 搜索获取新闻信息
-    
+
     Args:
         query: 搜索查询词
         max_results: 最大返回结果数
-        
+
     Returns:
         新闻结果列表，每个结果包含标题、链接、摘要和日期
     """
@@ -139,12 +145,14 @@ def search_news(query: str, max_results: int = 3) -> List[Dict[str, Any]]:
         with DDGS() as ddgs:
             results = []
             for result in ddgs.news(query, max_results=max_results):
-                results.append({
-                    "title": result.get("title", ""),
-                    "url": result.get("url", ""),
-                    "snippet": result.get("body", ""),
-                    "date": result.get("date", "")
-                })
+                results.append(
+                    {
+                        "title": result.get("title", ""),
+                        "url": result.get("url", ""),
+                        "snippet": result.get("body", ""),
+                        "date": result.get("date", ""),
+                    }
+                )
             return results
     except Exception as e:
         print(f"新闻搜索出错: {str(e)}")
@@ -154,11 +162,11 @@ def search_news(query: str, max_results: int = 3) -> List[Dict[str, Any]]:
 def search_images(query: str, max_results: int = 3) -> List[Dict[str, Any]]:
     """
     使用 DuckDuckGo 搜索获取图片信息
-    
+
     Args:
         query: 搜索查询词
         max_results: 最大返回结果数
-        
+
     Returns:
         图片结果列表，每个结果包含标题、图片URL和来源URL
     """
@@ -166,11 +174,13 @@ def search_images(query: str, max_results: int = 3) -> List[Dict[str, Any]]:
         with DDGS() as ddgs:
             results = []
             for result in ddgs.images(query, max_results=max_results):
-                results.append({
-                    "title": result.get("title", ""),
-                    "image_url": result.get("image", ""),
-                    "source_url": result.get("url", "")
-                })
+                results.append(
+                    {
+                        "title": result.get("title", ""),
+                        "image_url": result.get("image", ""),
+                        "source_url": result.get("url", ""),
+                    }
+                )
             return results
     except Exception as e:
         print(f"图片搜索出错: {str(e)}")
@@ -180,27 +190,27 @@ def search_images(query: str, max_results: int = 3) -> List[Dict[str, Any]]:
 def search_duckduckgo_langchain(query: str, site: str = "taobao.com"):
     """
     使用 LangChain 的 DuckDuckGoSearchRun 搜索特定网站
-    
+
     Args:
         query: 搜索查询词
         site: 限定的网站域名
-        
+
     Returns:
         搜索结果文本
     """
     try:
         # 优先使用我们自己的搜索函数，因为它能提取商品参数
         results = search_duckduckgo(query, max_results=5, site=site)
-        
+
         # 构建结果文本
         result_text = ""
         for i, result in enumerate(results):
             result_text += f"{i+1}. {result['title']}\n"
             result_text += f"   URL: {result['url']}\n"
-            if result.get('product_params'):
+            if result.get("product_params"):
                 result_text += f"   商品参数: {result['product_params']}\n"
             result_text += f"   摘要: {result['snippet']}\n\n"
-        
+
         return result_text
     except Exception as e:
         print(f"LangChain 搜索出错: {str(e)}")
@@ -223,8 +233,10 @@ def get_product_specs(product_name):
             return None
 
         # 2. 获取第一个结果的页面内容
-        target_url = search_results[0]['href']
-        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+        target_url = search_results[0]["href"]
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        }
         try:
             response = requests.get(target_url, headers=headers, timeout=10)
             response.raise_for_status()
@@ -233,22 +245,24 @@ def get_product_specs(product_name):
             return None
 
         # 3. 解析HTML，提取参数
-        soup = BeautifulSoup(response.text, 'html.parser')
+        soup = BeautifulSoup(response.text, "html.parser")
         # 示例：尝试从JSON-LD中提取
-        json_ld_script = soup.find('script', type='application/ld+json')
+        json_ld_script = soup.find("script", type="application/ld+json")
         if json_ld_script:
             try:
                 data = json.loads(json_ld_script.string)
-                return data.get('description', '')  # 假设JSON中包含描述信息
+                return data.get("description", "")  # 假设JSON中包含描述信息
             except:
                 pass
-        
+
         # 备选方案：提取商品标题和描述
-        title = soup.find('title').get_text(strip=True) if soup.find('title') else '无标题'
+        title = (
+            soup.find("title").get_text(strip=True) if soup.find("title") else "无标题"
+        )
         # 使用 .get_text() 提取纯文本并清理
-        description = soup.find('meta', {'name': 'description'})
-        description_content = description['content'] if description else '无描述'
-        return {'title': title, 'description': description_content}
+        description = soup.find("meta", {"name": "description"})
+        description_content = description["content"] if description else "无描述"
+        return {"title": title, "description": description_content}
 
 
 # def get_product_details_with_selenium(product_url):
@@ -412,15 +426,15 @@ if __name__ == "__main__":
     # 测试搜索功能
     query = "按摩器"
     print(f"搜索: {query}")
-    
+
     # 测试文本搜索
     print("\n文本搜索结果:")
-    text_results = search_duckduckgo(query,2,"www.taobao.com")
+    text_results = search_duckduckgo(query, 2, "www.taobao.com")
     for i, result in enumerate(text_results):
         print(f"{i+1}. {result['title']}")
         print(f"   URL: {result['url']}")
         print(f"   摘要: {result['snippet'][:100]}...")
-    
+
     # # 测试新闻搜索
     # print("\n新闻搜索结果:")
     # news_results = search_news(query)
@@ -428,7 +442,7 @@ if __name__ == "__main__":
     #     print(f"{i+1}. {result['title']}")
     #     print(f"   URL: {result['url']}")
     #     print(f"   日期: {result['date']}")
-    
+
     # # 测试图片搜索
     # print("\n图片搜索结果:")
     # image_results = search_images(query)
@@ -436,7 +450,7 @@ if __name__ == "__main__":
     #     print(f"{i+1}. {result['title']}")
     #     print(f"   图片URL: {result['image_url']}")
     #     print(f"   来源URL: {result['source_url']}")
-    
+
     # 测试 LangChain 搜索
     # print("\nLangChain 搜索结果 (淘宝):")
     # langchain_result = search_duckduckgo_langchain("运动鞋 男")
