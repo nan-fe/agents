@@ -5,7 +5,7 @@
 import { LogType } from '../types';
 
 // docker 模式下 API_BASE_URL = '' 本地启动需要加上http://localhost:8000 不然nginx 冲突导致流式生成不生效
-const API_BASE_URL = '';
+const API_BASE_URL = 'http://localhost:8000';
 export type SSEType = {
   prompt: string;
   onLog: (value: LogType) => void;

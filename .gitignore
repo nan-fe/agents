@@ -27,7 +27,6 @@ chroma*
 # 测试
 .pytest_cache/
 coverage/
-test*
 evaluate_*
 
 # IDE
