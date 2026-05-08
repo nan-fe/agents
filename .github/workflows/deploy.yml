@@ -6,7 +6,7 @@ on:
     tags: [ "v*" ]
 
 env:
-  REGISTRY: crpi-qeypgng4u8e2ezh6.cn-shanghai.personal.cr.aliyuncs.com
+  REGISTRY: crpi-qeygpng4u8e2ezh6.cn-shanghai.personal.cr.aliyuncs.com
   NAMESPACE: nan-fe
   IMAGE_NAME: agents
 

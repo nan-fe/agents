@@ -1,6 +1,6 @@
 services:
   backend:
-    image: crpi-qeypgng4u8e2ezh6.cn-shanghai.personal.cr.aliyuncs.com/nan-fe/agents:backend
+    image: crpi-qeygpng4u8e2ezh6.cn-shanghai.personal.cr.aliyuncs.com/nan-fe/agents:backend
     container_name: agents-backend
     ports:
       - "8000:8000"
@@ -15,7 +15,7 @@ services:
     restart: unless-stopped
 
   frontend:
-    image: crpi-qeypgng4u8e2ezh6.cn-shanghai.personal.cr.aliyuncs.com/nan-fe/agents:frontend
+    image: crpi-qeygpng4u8e2ezh6.cn-shanghai.personal.cr.aliyuncs.com/nan-fe/agents:frontend
     container_name: agents-frontend
     ports:
       - "3000:80"
