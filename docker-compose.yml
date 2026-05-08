@@ -1,9 +1,7 @@
 services:
   backend:
-    image: ghcr.io/nan-fe/xhs-multi-agent-backend:latest
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
+    image: crpi-qeypgng4u8e2ezh6.cn-shanghai.personal.cr.aliyuncs.com/nan-fe/agents:backend
+    container_name: agents-backend
     ports:
       - "8000:8000"
     environment:
@@ -14,18 +12,18 @@ services:
       - ./backend:/app
     networks:
       - app-network
+    restart: unless-stopped
 
   frontend:
-    image: ghcr.io/nan-fe/xhs-multi-agent-frontend:latest
-    build:
-      context: ./frontend-ts
-      dockerfile: Dockerfile
+    image: crpi-qeypgng4u8e2ezh6.cn-shanghai.personal.cr.aliyuncs.com/nan-fe/agents:frontend
+    container_name: agents-frontend
     ports:
       - "3000:80"
     depends_on:
       - backend
     networks:
       - app-network
+    restart: unless-stopped
 
 networks:
   app-network:
