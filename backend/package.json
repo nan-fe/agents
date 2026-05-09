@@ -4,6 +4,6 @@
   },
   "scripts": {
     "start": "/Users/lixuefu/Library/Python/3.13/bin/uvicorn app.main:app --reload",
-    "test": "pytest tests"
+    "test": "pytest app/tests"
   }
 }

@@ -2,7 +2,7 @@ from app.agents.planner_agent import PlannerAgent
 from app.agents.copywriter_agent import CopywriterAgent
 from app.agents.image_agent import ImageAgent
 from app.agents.reviewer_agent import ReviewerAgent
-from app.agents.product_rag_agent import ProductRagAgent
+from app.agents.product_rag_system.agent import ProductRagAgent
 from app.services.orchestrator_llm_service import OrchestratorLLMService
 from typing import Optional, Callable, Dict, Any, List
 from langchain_core.chat_history import BaseChatMessageHistory

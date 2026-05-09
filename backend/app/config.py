@@ -15,6 +15,8 @@ class Settings(BaseSettings):
     PLAN_MODEL: str
     INTENT_MODEL: str
     # 图片生成配置
+    SILICONFLOW_API_KEY: str
+    SILICONFLOW_BASE_URL: str
     IMAGE_MODEL: str
     REPLICATE_API_KEY: Optional[str] = None
 

@@ -1,7 +1,6 @@
 # XHS Multi-Agent Creator
 
 一个基于多智能体架构的小红书内容创作平台，自动生成高质量的小红书文案和配图。
-访问 👉：http://www.creator-agent-aliyun.asia:3000/ 
 
 ## 📖 项目简介
 
@@ -87,6 +86,7 @@
 │  └──────────────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────────────┘
 ```
+访问 👉：http://47.100.107.192:3000/ （域名还在审核中）
 
 ### CI/CD 工作流
 
@@ -159,9 +159,9 @@ frontend-ts/README.md
 
 ```env
 # 硅基流动API配置
-API_KEY=your_api_key
-BASE_MODEL=deepseek-chat
-MODEL_BASE_URL=https://api.siliconflow.cn/v1
+SILICONFLOW_API_KEY=your_api_key
+SILICONFLOW_MODEL=deepseek-chat
+SILICONFLOW_BASE_URL=https://api.siliconflow.cn/v1
 
 # 模型配置
 COPYWRITE_MODEL=deepseek-chat
@@ -231,8 +231,6 @@ python3  test_xxxx.py
 | 2 | RAG 补充商品信息的效果待验证 | 待验证 | 需要收集更多测试数据进行验证 |
 | 3 | 图片生成的相关性较弱 | 待优化 | 计划尝试其他图片生成模型进行比对 |
 | 4 | 评估代码目前只支持文案 Agent 和 RAG Agent | 待扩展 | 其他 Agent 的系统评估方案还待探索 |
-| 5 | prompt 优化，目前比较宽泛，需要一些领域信息增强 | 待优化 | 预计下个 PR 支持 |
-| 6 | log 输出信息过多，需要进行简化 | 待优化 | 预计下个 PR 支持 |
 
 ## 📄 许可证
 
