@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 # 配置LangSmith
-os.environ["LANGCHAIN_API_KEY"] = "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"
+# os.environ["LANGCHAIN_API_KEY"] = "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"
 
 # 初始化LangSmith客户端
 client = Client()

@@ -12,18 +12,18 @@ from app.utils.search_tool import search_duckduckgo_langchain
 
 load_dotenv()
 
-SILICONFLOW_API_KEY = os.getenv("SILICONFLOW_API_KEY")
-SILICONFLOW_BASE_URL = "https://api.siliconflow.cn/v1"
+API_KEY = os.getenv("API_KEY")
+MODEL_BASE_URL = "https://api.siliconflow.cn/v1"
 
 # 初始化 OpenAI 客户端
 client = openai.OpenAI(
-    api_key=SILICONFLOW_API_KEY,
-    base_url=SILICONFLOW_BASE_URL,
+    api_key=API_KEY,
+    base_url=MODEL_BASE_URL,
 )
 
 
 class SiliconFlowEmbeddingFunction(EmbeddingFunction[Documents]):
-    def __init__(self, api_key, base_url, model_name=settings.EMBEDING_MODEL):
+    def __init__(self, api_key, base_url, model_name=settings.BASE_MODEL):
         self.api_key = api_key
         self.base_url = base_url
         self.model_name = model_name
@@ -48,13 +48,12 @@ class ProductRagAgent:
             base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
             data_path = os.path.join(base_dir, "data", "taobao_products.csv")
         self.data_path = data_path
-        self.model_name = settings.EMBEDING_MODEL
-        self.ranker_model = settings.RANKER_MODEL
+        self.model_name = settings.BASE_MODEL
         self._ensure_data_file()
         self.chroma_client = chromadb.PersistentClient(path="./chroma_taobao_v1")
         self.embedding_fn = SiliconFlowEmbeddingFunction(
-            api_key=SILICONFLOW_API_KEY,
-            base_url=SILICONFLOW_BASE_URL,
+            api_key=API_KEY,
+            base_url=MODEL_BASE_URL,
             model_name=self.model_name,
         )
 
@@ -104,7 +103,7 @@ class ProductRagAgent:
         def embed_texts(texts):
             # 硅基流动的嵌入 API 调用
             response = client.embeddings.create(
-                model=settings.EMBEDING_MODEL, input=texts
+                model=settings.BASE_MODEL, input=texts
             )
             # 返回向量列表
             return [item.embedding for item in response.data]
@@ -293,7 +292,7 @@ class ProductRagAgent:
 
             # 使用之前初始化的 client，添加超时设置
             response = client.chat.completions.create(
-                model=settings.GENARATION_MODEL,
+                model=settings.BASE_MODEL,
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt},
@@ -377,7 +376,7 @@ class ProductRagAgent:
                     print("user_prompt", user_prompt)
 
                     response = client.chat.completions.create(
-                        model=settings.GENARATION_MODEL,
+                        model=settings.BASE_MODEL,
                         messages=[
                             {"role": "system", "content": system_prompt},
                             {"role": "user", "content": user_prompt},

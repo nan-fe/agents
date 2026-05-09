@@ -79,7 +79,7 @@ class ReviewerAgent(BaseAgent):
                 prompt_template=self.prompt,
                 chain_input=chain_input,
                 parser=self.parser,
-                model_name=settings.SILICONFLOW_MODEL,
+                model_name=settings.BASE_MODEL,
                 temperature=0.7,
             )
             await self.log(f"审核完成: {result}", log_callback)

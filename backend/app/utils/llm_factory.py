@@ -23,36 +23,47 @@ class LLMFactory:
         Args:
             prompt: 当前prompt文本
             history: 历史数据文本
-            model_name: 模型名称，默认使用settings.SILICONFLOW_MODEL
+            model_name: 模型名称，默认使用settings.BASE_MODEL
             temperature: 温度参数，默认0.7
-            api_key: API密钥，默认使用settings.SILICONFLOW_API_KEY
-            base_url: API基础URL，默认使用settings.SILICONFLOW_BASE_URL
             safety_buffer: 安全缓冲token数，默认200
             **kwargs: 其他传递给ChatOpenAI的参数
 
         Returns:
             配置好的ChatOpenAI实例
         """
-        model = model_name or settings.SILICONFLOW_MODEL
-
-        input_tokens = token_counter.calculate_input_tokens(
-            prompt=prompt, history=history, model_name=model
+        model = model_name or settings.BASE_MODEL
+        
+        # 计算输入token总数
+        input_text = prompt + history
+        input_tokens = token_counter.count_tokens(input_text)
+        
+        # 检查输入是否超限
+        is_valid, total_window, max_input = token_counter.is_input_valid(
+            input_tokens, model_name=model, safety_buffer=safety_buffer
         )
-
+        
+        if not is_valid:
+            raise ValueError(
+                f"输入Token超限！最大允许 {max_input} token，当前 {input_tokens} token。"
+                f"请减少历史记录或prompt长度。"
+            )
+        
+        # 计算最大输出token数
         max_tokens = token_counter.calculate_max_tokens(
             input_tokens=input_tokens, model_name=model, safety_buffer=safety_buffer
         )
-
+        
         print(
-            f"LLMFactory - 输入Token数: {input_tokens}, 最大输出Token数: {max_tokens}"
+            f"LLMFactory - 输入Token: {input_tokens}/{max_input}, "
+            f"最大输出Token: {max_tokens}, 总窗口: {total_window}"
         )
-
+        
         return ChatOpenAI(
             model_name=model,
             temperature=temperature,
             max_tokens=max_tokens,
-            api_key=settings.SILICONFLOW_API_KEY,
-            base_url=settings.SILICONFLOW_BASE_URL,
+            api_key=settings.API_KEY,
+            base_url=settings.MODEL_BASE_URL,
             **kwargs,
         )
 
@@ -75,8 +86,6 @@ class LLMFactory:
             parser: 输出解析器（可选）
             model_name: 模型名称
             temperature: 温度参数
-            api_key: API密钥
-            base_url: API基础URL
             history: 历史数据文本
             safety_buffer: 安全缓冲token数
             **kwargs: 其他传递给ChatOpenAI的参数
@@ -84,14 +93,17 @@ class LLMFactory:
         Returns:
             chain执行结果
         """
+        # 获取格式说明（如果需要）
         format_instructions = ""
         if parser and hasattr(parser, "get_format_instructions"):
             format_instructions = parser.get_format_instructions()
-
+        
+        # 渲染完整prompt
         rendered_prompt = prompt_template.format(
             **chain_input, format_instructions=format_instructions
         )
-
+        
+        # 创建LLM实例
         llm = LLMFactory.create_llm_with_dynamic_tokens(
             prompt=rendered_prompt,
             history=history,
@@ -100,12 +112,13 @@ class LLMFactory:
             safety_buffer=safety_buffer,
             **kwargs,
         )
-
+        
+        # 构建chain
         if parser:
             chain = prompt_template | llm | parser
         else:
             chain = prompt_template | llm
-
+        
         return await chain.ainvoke(chain_input)
 
 

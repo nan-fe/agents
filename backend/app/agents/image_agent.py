@@ -15,7 +15,7 @@ class ImageAgent(BaseAgent):
         # self.image_service = ImageGenerationService()
         self.image_model = settings.IMAGE_MODEL
         self.client = AsyncOpenAI(
-            api_key=settings.SILICONFLOW_API_KEY, base_url=settings.SILICONFLOW_BASE_URL
+            api_key=settings.API_KEY, base_url=settings.MODEL_BASE_URL
         )
         if self.image_model == "stable-diffusion" and settings.REPLICATE_API_KEY:
             replicate.api_key = settings.REPLICATE_API_KEY

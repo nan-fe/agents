@@ -1,6 +1,7 @@
 # XHS Multi-Agent Creator
 
 一个基于多智能体架构的小红书内容创作平台，自动生成高质量的小红书文案和配图。
+访问 👉：http://www.creator-agent-aliyun.asia:3000/ 
 
 ## 📖 项目简介
 
@@ -86,7 +87,6 @@
 │  └──────────────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────────────┘
 ```
-访问 👉：http://47.100.107.192:3000/ （域名还在审核中）
 
 ### CI/CD 工作流
 
@@ -159,9 +159,9 @@ frontend-ts/README.md
 
 ```env
 # 硅基流动API配置
-SILICONFLOW_API_KEY=your_api_key
-SILICONFLOW_MODEL=deepseek-chat
-SILICONFLOW_BASE_URL=https://api.siliconflow.cn/v1
+API_KEY=your_api_key
+BASE_MODEL=deepseek-chat
+MODEL_BASE_URL=https://api.siliconflow.cn/v1
 
 # 模型配置
 COPYWRITE_MODEL=deepseek-chat

@@ -4,97 +4,55 @@ from app.agents.image_agent import ImageAgent
 from app.agents.reviewer_agent import ReviewerAgent
 from app.agents.product_rag_agent import ProductRagAgent
 from app.services.orchestrator_llm_service import OrchestratorLLMService
-from typing import Optional, Callable, Dict, Any
+from typing import Optional, Callable, Dict, Any, List
 from langchain_core.chat_history import BaseChatMessageHistory
-from langchain_core.messages import BaseMessage
-import chromadb
-import json
+from langchain_core.messages import BaseMessage,AIMessage,HumanMessage
+from collections import deque
 from dotenv import load_dotenv
 
 load_dotenv()
 
 
 class WritingSessionHistory(BaseChatMessageHistory):
-    def __init__(self, session_id):
+    """内存存储"""
+    def __init__(self, session_id: str, max_messages: int = 20):
         self.session_id = session_id
-        self.messages = []  # 用户-Agent对话历史
-        self.outputs = []  # 每一轮生成的完整文案（版本列表）
-        self.current_version = -1  # 当前展示的版本索引
-        self.last_plan = None  # 最近一次生成的大纲
-        self.last_final_result = None  # 最近一次完整的FinalResult结果
-        self._chroma_client = chromadb.Client()
-        self._collection = self._chroma_client.get_or_create_collection(
-            name="writing_sessions"
-        )
-        self._load_from_db()
-
+        # 使用 deque 限制消息数量，自动淘汰旧消息
+        self.messages: deque = deque(maxlen=max_messages)
+        # 只保留最新结果
+        self.current_result: Optional[Dict[str, Any]] = None
+        self.last_plan: Optional[Dict[str, Any]] = None
+    
     def add_message(self, message: BaseMessage) -> None:
+        """添加消息，自动维护最大长度"""
         self.messages.append(message)
-        self._save_to_db()
-
+    
+    def get_messages(self) -> List[BaseMessage]:
+        """获取所有消息"""
+        return list[Any](self.messages)
+    
     def clear(self) -> None:
-        self.messages = []
-        self.outputs = []
-        self.current_version = -1
+        """清空会话"""
+        self.messages.clear()
+        self.current_result = None
         self.last_plan = None
-        self.last_final_result = None
-        self._save_to_db()
-
-    def add_output(self, output: Dict[str, Any]) -> None:
-        self.outputs.append(output)
-        self.current_version = len(self.outputs) - 1
-        self._save_to_db()
-
-    def set_last_plan(self, plan: Dict[str, Any]) -> None:
+    
+    def update_result(self, result: Dict[str, Any]) -> None:
+        """更新最新结果"""
+        self.current_result = result
+    
+    def get_last_result(self) -> Optional[Dict[str, Any]]:
+        """获取最新结果"""
+        return self.current_result
+    
+    def update_plan(self, plan: Dict[str, Any]) -> None:
+        """更新计划"""
         self.last_plan = plan
-        self._save_to_db()
-
-    def set_last_final_result(self, final_result: Dict[str, Any]) -> None:
-        """存储完整的FinalResult结果
-
-        Args:
-            final_result: 包含title, content, hashtags, image_url等信息的字典
-        """
-        self.last_final_result = final_result
-        self._save_to_db()
-
-    def get_last_final_result(self) -> Optional[Dict[str, Any]]:
-        """获取最近一次完整的FinalResult结果
-
-        Returns:
-            包含title, content, hashtags, image_url等信息的字典，如果没有则返回None
-        """
-        return self.last_final_result
-
-    def _save_to_db(self) -> None:
-        session_data = {
-            "messages": [msg.dict() for msg in self.messages],
-            "outputs": self.outputs,
-            "current_version": self.current_version,
-            "last_plan": self.last_plan,
-            "last_final_result": self.last_final_result,
-        }
-        self._collection.upsert(
-            documents=[json.dumps(session_data)], ids=[self.session_id]
-        )
-
-    def _load_from_db(self) -> None:
-        results = self._collection.get(ids=[self.session_id])
-        if results and results.get("documents"):
-            session_data = json.loads(results["documents"][0])
-            self.messages = [
-                BaseMessage(**msg) for msg in session_data.get("messages", [])
-            ]
-            self.outputs = session_data.get("outputs", [])
-            self.current_version = session_data.get("current_version", -1)
-            self.last_plan = session_data.get("last_plan", None)
-            self.last_final_result = session_data.get("last_final_result", None)
-
 
 class DialogOrchestratorAgent:
     """Agent协调器"""
 
-    def __init__(self):
+    def __init__(self,session_timeout_seconds: int = 1800):
         """初始化协调器"""
         self.planner_agent = PlannerAgent()
         self.copywriter_agent = CopywriterAgent()
@@ -114,16 +72,8 @@ class DialogOrchestratorAgent:
 
         # 会话历史存储
         self.session_histories: Dict[str, WritingSessionHistory] = {}
-
+    
     def get_session_history(self, session_id: str) -> WritingSessionHistory:
-        """获取会话历史
-
-        Args:
-            session_id: 会话ID
-
-        Returns:
-            WritingSessionHistory实例
-        """
         if session_id not in self.session_histories:
             self.session_histories[session_id] = WritingSessionHistory(session_id)
         return self.session_histories[session_id]
@@ -143,6 +93,9 @@ class DialogOrchestratorAgent:
         """
         # 获取会话历史
         session_history = self.get_session_history(session_id)
+        # 将用户消息添加到历史
+        session_history.add_message(HumanMessage(content=user_input))
+
         await log_callback("Orchestrator", "开始智能任务编排...")
 
         # 分析用户意图和会话历史
@@ -150,17 +103,6 @@ class DialogOrchestratorAgent:
             user_input, session_history.messages
         )
         await log_callback("Orchestrator", f"用户意图分析: {intent}")
-
-        # 如果是询问问题，直接提示用户
-        if intent == "ask_question":
-            await log_callback("Orchestrator", "检测到询问问题，引导用户输入创作需求")
-            return {
-                "title": "",
-                "content": "",
-                "hashtags": [],
-                "image_url": "",
-                "message": "抱歉，我无法回答问题。这是一个小红书文案生成平台，请输入您想要生成的文案要求，例如：帮我写一篇关于防晒霜的推荐文案",
-            }
 
         # 准备执行上下文
         execution_context = {
@@ -172,7 +114,7 @@ class DialogOrchestratorAgent:
         }
 
         # 准备历史数据
-        last_final_result = session_history.get_last_final_result()
+        last_final_result = session_history.get_last_result()
         history_data = ""
         if last_final_result:
             history_data = f"上次生成的文案信息：\n标题：{last_final_result.get('title', '')}\n内容：{last_final_result.get('content', '')}\n标签：{', '.join(last_final_result.get('hashtags', []))}\n图片：{last_final_result.get('image_url', '')}\n图片提示：{last_final_result.get('image_prompt', '')}"
@@ -188,7 +130,7 @@ class DialogOrchestratorAgent:
                 "Orchestrator", f"策划完成，主题: {planning_result.topic}"
             )
             execution_context["planning"] = planning_result.model_dump()
-            session_history.set_last_plan(execution_context["planning"])
+            session_history.update_plan(execution_context["planning"])
         else:
             # 使用历史计划
             await log_callback("Orchestrator", "使用历史计划")
@@ -267,13 +209,12 @@ class DialogOrchestratorAgent:
         # 整合最终结果
         final_result = self._build_final_result(execution_context)
 
-        # 保存结果到会话历史
-        session_history.add_output(final_result)
-
-        # 存储完整的FinalResult信息，供下次对话使用
-        session_history.set_last_final_result(final_result)
-
         await log_callback("Orchestrator", "多Agent协作完成，生成最终结果")
+        # 将 AI 回复添加到历史
+        session_history.add_message(AIMessage(content=final_result.get('content', '')))
+        
+        # 保存最新结果
+        session_history.update_result(final_result)
         return final_result
 
     def _build_input_for_agent(

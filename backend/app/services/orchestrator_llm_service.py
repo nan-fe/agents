@@ -33,10 +33,10 @@ class OrchestratorLLMService:
     def __init__(self):
         """初始化编排器LLM服务"""
         self.llm = ChatOpenAI(
-            model_name=settings.PLAN_MODEL,
+            model_name=settings.BASE_MODEL,
             temperature=0.3,
-            api_key=settings.SILICONFLOW_API_KEY,
-            base_url=settings.SILICONFLOW_BASE_URL,
+            api_key=settings.API_KEY,
+            base_url=settings.MODEL_BASE_URL,
         )
 
     def get_llm_with_max_tokens(self, model_name: str, max_tokens: int) -> ChatOpenAI:
@@ -53,8 +53,8 @@ class OrchestratorLLMService:
             model_name=model_name,
             temperature=0.3,
             max_tokens=max_tokens,
-            api_key=settings.SILICONFLOW_API_KEY,
-            base_url=settings.SILICONFLOW_BASE_URL,
+            api_key=settings.API_KEY,
+            base_url=settings.MODEL_BASE_URL,
         )
 
     async def route_task(
@@ -87,8 +87,6 @@ class OrchestratorLLMService:
             intent_guidance = "用户想根据输入的要求重新生成图片信息，应只调用 ImageAgent（如需要可加 ReviewerAgent），不需要重新规划。"
         elif intent == "change_topic":
             intent_guidance = "用户更换了主题，需要重新规划并执行完整流程。"
-        elif intent == "ask_question":
-            intent_guidance = "用户只是询问问题，可能不需要调用任何生成 Agent。"
         else:
             intent_guidance = "根据具体情况判断需要的 Agent。"
 
@@ -121,7 +119,6 @@ class OrchestratorLLMService:
            - refine_content：只调用必要的 Agent（如 CopywriterAgent），不需要重新规划
            - refine_image：只调用 ImageAgent（如需要可加 ReviewerAgent），不需要重新规划
            - change_topic：需要完整流程
-           - ask_question：可能只需要查询或回答，不需要生成
         2. 考虑任务依赖关系，确定合理的调用顺序，比如 RagAgent 在商品类型没有发生改变，则只在首次使用，使用的数据可以给文案 Agent 补充商品信息上下文。
         3. 如果任务简单，可以跳过某些 Agent
         4. 大多数情况下都需要 ReviewerAgent 进行质量检查，除非任务极简单。
@@ -151,29 +148,29 @@ class OrchestratorLLMService:
         rendered_prompt = prompt.format(
             **input_data, format_instructions=parser.get_format_instructions()
         )
-        input_tokens = token_counter.count_tokens(rendered_prompt, settings.PLAN_MODEL)
+        input_tokens = token_counter.count_tokens(rendered_prompt, settings.BASE_MODEL)
 
         # 计算max_tokens
         max_tokens = token_counter.calculate_max_tokens(
-            input_tokens, settings.PLAN_MODEL
+            input_tokens, settings.BASE_MODEL
         )
         print(f"路由决策 - 输入Token数: {input_tokens}, 最大输出Token数: {max_tokens}")
 
         # 分析上下文窗口
         history_tokens = token_counter.count_tokens(
-            str(planning_result), settings.PLAN_MODEL
+            str(planning_result), settings.BASE_MODEL
         )
         current_question_tokens = token_counter.count_tokens(
-            user_input, settings.PLAN_MODEL
+            user_input, settings.BASE_MODEL
         )
         analysis = token_counter.format_context_analysis(
-            history_tokens, current_question_tokens, settings.PLAN_MODEL
+            history_tokens, current_question_tokens, settings.BASE_MODEL
         )
         print(analysis)
 
         # 使用动态max_tokens的LLM
         llm_with_max_tokens = self.get_llm_with_max_tokens(
-            settings.PLAN_MODEL, max_tokens
+            settings.BASE_MODEL, max_tokens
         )
         chain = prompt | llm_with_max_tokens | parser
 
@@ -261,17 +258,17 @@ class OrchestratorLLMService:
         rendered_prompt = prompt.format(
             **input_data, format_instructions=parser.get_format_instructions()
         )
-        input_tokens = token_counter.count_tokens(rendered_prompt, settings.PLAN_MODEL)
+        input_tokens = token_counter.count_tokens(rendered_prompt, settings.BASE_MODEL)
 
         # 计算max_tokens
         max_tokens = token_counter.calculate_max_tokens(
-            input_tokens, settings.PLAN_MODEL
+            input_tokens, settings.BASE_MODEL
         )
         print(f"重试策略 - 输入Token数: {input_tokens}, 最大输出Token数: {max_tokens}")
 
         # 使用动态max_tokens的LLM
         llm_with_max_tokens = self.get_llm_with_max_tokens(
-            settings.PLAN_MODEL, max_tokens
+            settings.BASE_MODEL, max_tokens
         )
         chain = prompt | llm_with_max_tokens | parser
 
@@ -303,7 +300,7 @@ class OrchestratorLLMService:
             chat_history: 对话历史
 
         Returns:
-            意图类型：new_task, refine_content, change_topic, etc.
+            意图类型: new_task, refine_content, change_topic, etc.
         """
         template = """
         你是一个意图分析专家，负责分析用户的输入意图。
@@ -316,23 +313,23 @@ class OrchestratorLLMService:
         2. refine_content: 优化或修改现有文案内容（如修改语气、风格、内容）
         3. refine_image: 根据要求重新生成或修改图片（如更换背景、调整风格、修改构图）
         4. change_topic: 更改主题
-        5. ask_question: 询问问题
-        6. other: 其他意图
 
         要求：
         1. 仅返回意图类型，不输出任何解释
         2. 基于用户输入和对话历史进行综合判断
         3. 如果用户提到图片相关关键词（如换图、重新生成图片、修改图片），优先判断为 refine_image
+        4. 如果用户提到主题相关关键词（如改题、修改主题、更改主题），优先判断为 change_topic
+        5. 如果用户提到补充/添加/增加相关关键词（如补充内容、添加图片、增加元素），优先判断为 refine_content
         """
 
         prompt = PromptTemplate(
             template=template, input_variables=["user_input", "chat_history"]
         )
         self.intent_llm = ChatOpenAI(
-            model_name=settings.INTENT_MODEL,
-            temperature=0.3,
-            api_key=settings.SILICONFLOW_API_KEY,
-            base_url=settings.SILICONFLOW_BASE_URL,
+            model_name=settings.BASE_MODEL,
+            temperature=1,
+            api_key=settings.API_KEY,
+            base_url=settings.MODEL_BASE_URL,
         )
 
         try:
@@ -344,12 +341,12 @@ class OrchestratorLLMService:
             # 计算token数
             rendered_prompt = prompt.format(**input_data)
             input_tokens = token_counter.count_tokens(
-                rendered_prompt, settings.INTENT_MODEL
+                rendered_prompt, settings.BASE_MODEL
             )
 
             # 计算max_tokens
             max_tokens = token_counter.calculate_max_tokens(
-                input_tokens, settings.INTENT_MODEL
+                input_tokens, settings.BASE_MODEL
             )
             print(
                 f"意图识别 - 输入Token数: {input_tokens}, 最大输出Token数: {max_tokens}"
@@ -357,18 +354,18 @@ class OrchestratorLLMService:
 
             # 分析上下文窗口
             history_tokens = token_counter.count_tokens(
-                history_str, settings.INTENT_MODEL
+                history_str, settings.BASE_MODEL
             )
             current_question_tokens = token_counter.count_tokens(
-                user_input, settings.INTENT_MODEL
+                user_input, settings.BASE_MODEL
             )
             analysis = token_counter.format_context_analysis(
-                history_tokens, current_question_tokens, settings.INTENT_MODEL
+                history_tokens, current_question_tokens, settings.BASE_MODEL
             )
             print(analysis)
 
             # 使用动态max_tokens的LLM
-            intent_llm = self.get_llm_with_max_tokens(settings.INTENT_MODEL, max_tokens)
+            intent_llm = self.get_llm_with_max_tokens(settings.BASE_MODEL, max_tokens)
             chain = prompt | intent_llm
 
             result = await chain.ainvoke(input_data)
