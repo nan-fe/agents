@@ -5,7 +5,7 @@ import asyncio
 from datetime import datetime
 from app.config import settings
 from app.models.schemas import UserInput, SSEMessage
-from app.agents.orchestrator import DialogOrchestratorAgent
+from app.agents.orchestrator.agent import DialogOrchestratorAgent
 
 # 创建FastAPI应用实例
 app = FastAPI(title=settings.APP_NAME, debug=settings.DEBUG)
