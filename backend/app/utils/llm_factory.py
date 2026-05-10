@@ -98,10 +98,19 @@ class LLMFactory:
         if parser and hasattr(parser, "get_format_instructions"):
             format_instructions = parser.get_format_instructions()
         
-        # 渲染完整prompt
-        rendered_prompt = prompt_template.format(
-            **chain_input, format_instructions=format_instructions
-        )
+        # 创建新的prompt模板，设置partial_variables
+        partial_input = {}
+        if format_instructions:
+            partial_input["format_instructions"] = format_instructions
+        
+        prompt_to_use = prompt_template.partial(**partial_input)
+        
+        # 先渲染一次prompt来计算token数
+        test_input = {**chain_input}
+        if format_instructions:
+            test_input["format_instructions"] = format_instructions
+        
+        rendered_prompt = prompt_template.format(**test_input)
         
         # 创建LLM实例
         llm = LLMFactory.create_llm_with_dynamic_tokens(
@@ -115,9 +124,9 @@ class LLMFactory:
         
         # 构建chain
         if parser:
-            chain = prompt_template | llm | parser
+            chain = prompt_to_use | llm | parser
         else:
-            chain = prompt_template | llm
+            chain = prompt_to_use | llm
         
         return await chain.ainvoke(chain_input)
 

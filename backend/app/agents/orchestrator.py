@@ -104,6 +104,19 @@ class DialogOrchestratorAgent:
         )
         await log_callback("Orchestrator", f"用户意图分析: {intent}")
 
+        if intent == "ask_question":
+            # 询问问题 提前结束
+            await log_callback(
+                "Orchestrator", f"很抱歉，我无法回答您的问题，你可以换个问题，比如让我写商品的宣传文案"
+            )
+            return {
+                "title": "",
+                "content": "",
+                "hashtags": [],
+                "image_url": "",
+                "message": "抱歉，我无法回答问题。这是一个小红书文案生成平台，请输入您想要生成的文案要求，例如：帮我写一篇关于防晒霜的推荐文案",
+            }
+
         # 准备执行上下文
         execution_context = {
             "planning": session_history.last_plan or {},
@@ -112,14 +125,7 @@ class DialogOrchestratorAgent:
             "image": {},
             "review": None,
         }
-
-        # 准备历史数据
-        last_final_result = session_history.get_last_result()
         history_data = ""
-        if last_final_result:
-            history_data = f"上次生成的文案信息：\n标题：{last_final_result.get('title', '')}\n内容：{last_final_result.get('content', '')}\n标签：{', '.join(last_final_result.get('hashtags', []))}\n图片：{last_final_result.get('image_url', '')}\n图片提示：{last_final_result.get('image_prompt', '')}"
-
-            print("准备历史数据完成", history_data)
         # 动态决策：是否需要重新规划
         if intent == "new_task" or not session_history.last_plan:
             # 生成新的任务计划
@@ -132,12 +138,17 @@ class DialogOrchestratorAgent:
             execution_context["planning"] = planning_result.model_dump()
             session_history.update_plan(execution_context["planning"])
         else:
+            # 准备历史数据
+            last_final_result = session_history.get_last_result()
+            print("last_final_result", last_final_result)
             # 使用历史计划
             await log_callback("Orchestrator", "使用历史计划")
             print("历史计划", session_history.last_plan, execution_context["planning"])
 
             # 如果不是新任务，读取上次的FinalResult信息到执行上下文
             if last_final_result:
+                history_data = f"上次生成的文案信息：\n标题：{last_final_result.get('title', '')}\n内容：{last_final_result.get('content', '')}\n标签：{', '.join(last_final_result.get('hashtags', []))}\n图片：{last_final_result.get('image_url', '')}\n图片提示：{last_final_result.get('image_prompt', '')}"
+                print("准备历史数据完成", history_data)
                 await log_callback("Orchestrator", "加载上次生成的文案信息")
                 execution_context["copywriting"] = {
                     "title": last_final_result.get("title", ""),
@@ -156,7 +167,7 @@ class DialogOrchestratorAgent:
         )
         await log_callback(
             "Orchestrator",
-            f"路由决策: 调用 {routing_decision.agents_to_call}, 顺序: {routing_decision.priority_order}",
+            f"路由决策: 调用 {routing_decision.agents_to_call}",
         )
 
         # 按优先级顺序执行 Agent
@@ -165,25 +176,6 @@ class DialogOrchestratorAgent:
                 await log_callback("Orchestrator", f"未知 Agent: {agent_name}，跳过")
                 continue
 
-            # 特殊处理：如果当前是 CopywriterAgent 且 RAG 上下文尚未加载，则先调用 RagAgent
-            if (
-                agent_name == "CopywriterAgent"
-                and execution_context["rag_context"] is None
-            ):
-                await log_callback(
-                    "Orchestrator",
-                    "检测到需要生成文案，正在调用 RagAgent 获取商品上下文...",
-                )
-                rag_result = await self._execute_with_retry(
-                    self.rag_agent,
-                    user_input,
-                    log_callback,
-                    "RagAgent",
-                    history=history_data,
-                )
-                execution_context["rag_context"] = rag_result
-                await log_callback("Orchestrator", "RAG 商品上下文已加载")
-
             # 构建当前 Agent 的输入
             agent_input = self._build_input_for_agent(
                 agent_name, execution_context, user_input
@@ -191,20 +183,12 @@ class DialogOrchestratorAgent:
             print("agent_input", agent_name, agent_input)
             # 执行 Agent
             agent = self.agent_map[agent_name]
-            result = await self._execute_with_retry(
+            result = await self._execute_agent(
                 agent, agent_input, log_callback, agent_name, history=history_data
             )
 
             # 存储结果
             self._store_result_to_context(agent_name, result, execution_context)
-
-            # 如果审核不通过，尝试修正（重新生成文案）
-            if (
-                agent_name == "ReviewerAgent"
-                and hasattr(result, "approved")
-                and not result.approved
-            ):
-                await self._handle_review_failure(execution_context, log_callback)
 
         # 整合最终结果
         final_result = self._build_final_result(execution_context)
@@ -215,6 +199,7 @@ class DialogOrchestratorAgent:
         
         # 保存最新结果
         session_history.update_result(final_result)
+        print("final_result", final_result)
         return final_result
 
     def _build_input_for_agent(
@@ -236,7 +221,7 @@ class DialogOrchestratorAgent:
         elif agent_name == "ImageAgent":
             # 基于图片需求和已有的文案
             copywriting = context.get("copywriting") or {}
-            print("planning", planning.get("target_audience"))
+
             return {
                 "image_requirements": planning.get("image_requirements"),
                 "copywriting_content": copywriting.get("content", ""),
@@ -285,16 +270,15 @@ class DialogOrchestratorAgent:
         elif agent_name == "RagAgent":
             context["rag_context"] = result
 
-    async def _execute_with_retry(
+    async def _execute_agent(
         self,
         agent,
         input_data,
         log_callback: Optional[Callable],
         agent_name: str,
         history: str = "",
-        max_attempts: int = 3,
     ):
-        """执行Agent并支持自适应重试
+        """执行Agent
 
         Args:
             agent: Agent实例
@@ -302,155 +286,30 @@ class DialogOrchestratorAgent:
             log_callback: 日志回调
             agent_name: Agent名称
             history: 历史数据
-            max_attempts: 最大尝试次数
 
         Returns:
             执行结果
         """
-        attempt_count = 0
-        last_error = None
-
-        while attempt_count < max_attempts:
-            attempt_count += 1
-            try:
-                await log_callback(
-                    "Orchestrator",
-                    f"执行 {agent_name}，第 {attempt_count} 次尝试,{input_data}",
-                )
-                # 根据Agent类型传递不同的参数
-                if agent_name == "CopywriterAgent":
-                    result = await agent.run(input_data, log_callback, history=history)
-                elif agent_name == "PlannerAgent":
-                    result = await agent.run(input_data, log_callback, history=history)
-                elif agent_name == "ImageAgent":
-                    # 为ImageAgent添加历史数据
-                    if isinstance(input_data, dict):
-                        input_data["history"] = history
-                    result = await agent.run(input_data, log_callback)
-                else:
-                    print("retry", agent_name, input_data)
-                    result = await agent.run(input_data, log_callback)
-                await log_callback("Orchestrator", f"{agent_name} 执行成功")
-                return result
-            except Exception as e:
-                last_error = str(e)
-                await log_callback(
-                    "Orchestrator", f"{agent_name} 执行失败: {last_error}"
-                )
-                print("last_error", agent_name, last_error)
-
-                # 使用LLM决定重试策略
-                retry_decision = await self.llm_service.decide_retry_strategy(
-                    error_info=last_error,
-                    current_agent=agent_name,
-                    attempt_count=attempt_count,
-                    max_attempts=max_attempts,
-                )
-
-                await log_callback(
-                    "Orchestrator",
-                    f"重试决策: {retry_decision.action_type}, 理由: {retry_decision.reasoning}",
-                )
-
-                if not retry_decision.should_retry:
-                    await log_callback("Orchestrator", f"中止重试，返回默认结果")
-                    break
-
-                # 根据决策调整策略
-                if retry_decision.action_type == "switch_agent":
-                    # 切换到其他Agent
-                    target_agent_name = retry_decision.target_agent
-                    if target_agent_name and target_agent_name in self.agent_map:
-                        agent = self.agent_map[target_agent_name]
-                        agent_name = target_agent_name
-                        await log_callback(
-                            "Orchestrator", f"切换到 {target_agent_name}"
-                        )
-                elif retry_decision.action_type == "modify_params":
-                    # 修改参数
-                    if retry_decision.modified_params:
-                        input_data = self._merge_params(
-                            input_data, retry_decision.modified_params
-                        )
-                        await log_callback(
-                            "Orchestrator",
-                            f"修改参数: {retry_decision.modified_params}",
-                        )
-
-        # 返回默认结果
-        await log_callback("Orchestrator", f"{agent_name} 所有尝试失败，返回默认结果")
-        return self._get_default_result(agent_name)
-
-    async def _handle_review_failure(self, context: dict, log_callback: Callable):
-        """处理审核失败
-
-        Args:
-            review_result: 审核结果
-            planning_result: 策划结果
-            log_callback: 日志回调
-        """
-        review = context.get("review", {})
-        await log_callback("Orchestrator", f"审核未通过: {review.get('feedback')}")
-
-        # 使用 LLM 决定修正策略
-        retry_decision = await self.llm_service.decide_retry_strategy(
-            error_info=review.get("feedback", "审核未通过"),
-            current_agent="ReviewerAgent",
-            attempt_count=1,
-            max_attempts=3,
-        )
-
-        if (
-            retry_decision.action_type == "modify_params"
-            and retry_decision.modified_params
-        ):
-            # 重新生成文案
-            enhanced = context["planning"].copy()
-            enhanced.update(retry_decision.modified_params)
-            if context.get("rag_context"):
-                enhanced["product_context"] = context["rag_context"]
-            new_copy = await self._execute_with_retry(
-                self.copywriter_agent, enhanced, log_callback, "CopywriterAgent"
+        try:
+            await log_callback(
+                "Orchestrator",
+                f"执行 {agent_name}, input: {input_data}",
             )
-            self._store_result_to_context("CopywriterAgent", new_copy, context)
-
-    def _merge_params(self, original_params: dict, new_params: dict) -> dict:
-        """合并参数
-
-        Args:
-            original_params: 原始参数
-            new_params: 新参数
-
-        Returns:
-            合并后的参数
-        """
-        merged = original_params.copy()
-        merged.update(new_params)
-        return merged
-
-    def _get_default_result(self, agent_name: str):
-        """获取Agent的默认结果
-
-        Args:
-            agent_name: Agent名称
-
-        Returns:
-            默认结果
-        """
-        from app.models.schemas import CopywritingResult, ImageResult, ReviewResult
-
-        if agent_name == "CopywriterAgent":
-            return CopywritingResult(
-                title="默认标题", content="默认内容", hashtags=["#小红书", "#推荐"]
-            )
-        elif agent_name == "ImageAgent":
-            return ImageResult(
-                image_url="https://via.placeholder.com/800x600", prompt="默认图片"
-            )
-        elif agent_name == "ReviewerAgent":
-            return ReviewResult(approved=True, feedback="默认通过")
-        else:
-            return None
+            if agent_name == "CopywriterAgent":
+                result = await agent.run(input_data, log_callback, history=history)
+            elif agent_name == "PlannerAgent":
+                result = await agent.run(input_data, log_callback, history=history)
+            elif agent_name == "ImageAgent":
+                if isinstance(input_data, dict):
+                    input_data["history"] = history
+                result = await agent.run(input_data, log_callback)
+            else:
+                result = await agent.run(input_data, log_callback)
+            await log_callback("Orchestrator", f"{agent_name} 执行成功")
+            return result
+        except Exception as e:
+            await log_callback("Orchestrator", f"{agent_name} 执行失败: {str(e)}")
+            raise
 
     def _build_final_result(self, context: dict) -> dict:
         """从上下文中提取最终结果"""

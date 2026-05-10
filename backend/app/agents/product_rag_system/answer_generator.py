@@ -51,7 +51,7 @@ class AnswerGenerator:
                 prompt_template=self.product_prompt,
                 chain_input={"query": query, "context": context},
                 model_name=settings.BASE_MODEL,
-                temperature=1,
+                temperature=0.7,
             )
             return result.content
         except Exception as e:
