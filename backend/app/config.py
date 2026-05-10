@@ -6,16 +6,17 @@ import os
 class Settings(BaseSettings):
     """应用配置管理"""
 
-    SILICONFLOW_API_KEY: str
-    SILICONFLOW_MODEL: str
-    SILICONFLOW_BASE_URL: str
+    API_KEY: str
+    BASE_MODEL: str
+    MODEL_BASE_URL: str
     COPYWRITE_MODEL: str
     EMBEDING_MODEL: str
     GENARATION_MODEL: str
     PLAN_MODEL: str
     INTENT_MODEL: str
-    RANKER_MODEL: str
     # 图片生成配置
+    SILICONFLOW_API_KEY: str
+    SILICONFLOW_BASE_URL: str
     IMAGE_MODEL: str
     REPLICATE_API_KEY: Optional[str] = None
 

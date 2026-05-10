@@ -2,7 +2,6 @@ from app.agents.base_agent import BaseAgent
 from app.models.schemas import PlanningResult
 from typing import Optional
 from langchain_core.prompts import PromptTemplate
-from langchain_openai import ChatOpenAI
 from langchain_core.output_parsers import JsonOutputParser
 from app.config import settings
 from app.utils.llm_factory import llm_factory
@@ -45,15 +44,6 @@ class PlannerAgent(BaseAgent):
             },
         )
 
-        self.llm = ChatOpenAI(
-            model_name=settings.SILICONFLOW_MODEL,
-            temperature=0.3,
-            api_key=settings.SILICONFLOW_API_KEY,
-            base_url=settings.SILICONFLOW_BASE_URL,
-        )
-
-        self.chain = self.prompt | self.llm | self.parser
-
     async def run(
         self,
         input_data: str,
@@ -77,7 +67,7 @@ class PlannerAgent(BaseAgent):
                 prompt_template=self.prompt,
                 chain_input=chain_input,
                 parser=self.parser,
-                model_name=settings.SILICONFLOW_MODEL,
+                model_name=settings.BASE_MODEL,
                 temperature=0.3,
                 history=history,
             )

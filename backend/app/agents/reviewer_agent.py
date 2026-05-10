@@ -33,7 +33,7 @@ class ReviewerAgent(BaseAgent):
         1. 内容是否违反法律法规
         2. 内容是否违反平台规则
         3. 内容是否适合目标人群
-        4. 内容是否符合小红书风格
+        4. 内容是否符合商品宣传的小红书风格
         5. 图片是否清晰、美观
         6. 输出内容仅输出 JSON 对象，不要附加任何解释
         """
@@ -79,8 +79,8 @@ class ReviewerAgent(BaseAgent):
                 prompt_template=self.prompt,
                 chain_input=chain_input,
                 parser=self.parser,
-                model_name=settings.SILICONFLOW_MODEL,
-                temperature=0.7,
+                model_name=settings.BASE_MODEL,
+                temperature=0.1,
             )
             await self.log(f"审核完成: {result}", log_callback)
             return ReviewResult(**result)

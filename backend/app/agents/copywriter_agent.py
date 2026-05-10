@@ -1,7 +1,6 @@
 from app.agents.base_agent import BaseAgent
 from app.models.schemas import CopywritingResult, PlanningResult
 from langchain_core.prompts import PromptTemplate
-from langchain_openai import ChatOpenAI
 from langchain_core.output_parsers import JsonOutputParser
 from app.config import settings
 from typing import Optional, Union, Dict
@@ -70,15 +69,6 @@ class CopywriterAgent(BaseAgent):
             },
         )
 
-        self.llm = ChatOpenAI(
-            model_name=settings.COPYWRITE_MODEL,
-            temperature=0.7,
-            api_key=settings.SILICONFLOW_API_KEY,
-            base_url=settings.SILICONFLOW_BASE_URL,
-        )
-
-        self.chain = self.prompt | self.llm | self.parser
-
     async def run(
         self,
         planning_result: Union[PlanningResult, Dict],
@@ -139,7 +129,7 @@ class CopywriterAgent(BaseAgent):
                 prompt_template=self.prompt,
                 chain_input=chain_input,
                 parser=self.parser,
-                model_name=settings.COPYWRITE_MODEL,
+                model_name=settings.BASE_MODEL,
                 temperature=0.7,
                 history=history,
             )
