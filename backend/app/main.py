@@ -10,6 +10,9 @@ from app.agents.orchestrator.agent import DialogOrchestratorAgent
 # 创建FastAPI应用实例
 app = FastAPI(title=settings.APP_NAME, debug=settings.DEBUG)
 
+# 创建Orchestrator单例（全局实例）
+orchestrator = DialogOrchestratorAgent()
+
 # 配置CORS
 app.add_middleware(
     CORSMiddleware,
@@ -21,8 +24,6 @@ app.add_middleware(
 
 
 async def generate_dialog_event_stream(user_input: str, session_id: str):
-    orchestrator = DialogOrchestratorAgent()
-
     # 使用 asyncio.Queue 但不延迟消费
     event_queue = asyncio.Queue()
 

@@ -10,7 +10,7 @@ from .agent_executor import AgentExecutor
 from .result_mapper import ResultMapper
 from typing import Optional, Callable, Dict, Any, List
 from langchain_core.chat_history import BaseChatMessageHistory
-from langchain_core.messages import BaseMessage, AIMessage, HumanMessage
+from langchain_core.messages import BaseMessage, HumanMessage
 from collections import deque
 from dotenv import load_dotenv
 
@@ -18,53 +18,41 @@ load_dotenv()
 
 
 class WritingSessionHistory(BaseChatMessageHistory):
-    """内存存储 - 单一数据源"""
+    """内存存储"""
+
     def __init__(self, session_id: str, max_messages: int = 20):
         self.session_id = session_id
         self.messages: deque = deque(maxlen=max_messages)
+        self._last_result: Optional[Dict[str, Any]] = None
+        self._last_plan: Optional[Dict[str, Any]] = None
 
     def add_message(self, message: BaseMessage) -> None:
-        """添加消息，自动维护最大长度"""
+        """添加消息"""
         self.messages.append(message)
 
     def get_messages(self) -> List[BaseMessage]:
         """获取所有消息"""
-        return list[Any](self.messages)
+        return list(self.messages)
 
     def clear(self) -> None:
         """清空会话"""
         self.messages.clear()
+        self._last_result = None
+        self._last_plan = None
 
     def get_last_result(self) -> Optional[Dict[str, Any]]:
-        """从消息中提取最后的结果"""
-        for msg in reversed(self.messages):
-            if isinstance(msg, AIMessage) and hasattr(msg, 'additional_kwargs'):
-                return msg.additional_kwargs.get('result')
-        return None
+        """获取最后的结果"""
+        print(f"[DEBUG] get_last_result - 返回: {self._last_result}")
+        return self._last_result
 
     def get_last_plan(self) -> Optional[Dict[str, Any]]:
-        """从消息中提取最后的 plan"""
-        for msg in reversed(self.messages):
-            plan = msg.additional_kwargs.get('plan') if hasattr(msg, 'additional_kwargs') else None
-            if plan:
-                return plan
-        return None
+        return self._last_plan
 
     def update_result(self, result: Dict[str, Any]) -> None:
-        """更新结果时同时更新最后一条消息"""
-        if self.messages and isinstance(self.messages[-1], AIMessage):
-            if not hasattr(self.messages[-1], 'additional_kwargs'):
-                self.messages[-1].additional_kwargs = {}
-            self.messages[-1].additional_kwargs['result'] = result
+        self._last_result = result
 
     def update_plan(self, plan: Dict[str, Any]) -> None:
-        """更新 plan 到最后一条 HumanMessage"""
-        for i in range(len(self.messages) - 1, -1, -1):
-            if isinstance(self.messages[i], HumanMessage):
-                if not hasattr(self.messages[i], 'additional_kwargs'):
-                    self.messages[i].additional_kwargs = {}
-                self.messages[i].additional_kwargs['plan'] = plan
-                return
+        self._last_plan = plan
 
 
 class DialogOrchestratorAgent:
@@ -179,9 +167,8 @@ class DialogOrchestratorAgent:
         log_callback: Optional[Callable] = None,
     ) -> None:
         """准备执行上下文"""
-        last_plan = session_history.get_last_plan()
         # 是否需要新规划
-        if intent == "new_task" or not last_plan:
+        if intent == "new_task":
             planning_result = await self.planner_agent.run(
                 user_input, log_callback, history=""
             )
@@ -190,6 +177,8 @@ class DialogOrchestratorAgent:
             )
             context.set_planning(planning_result)
         else:
+            last_plan = session_history.get_last_plan()
+            print(f"使用历史规划：{last_plan}")
             # 使用历史规划
             if last_plan:
                 context.load_from_dict({"planning": last_plan})
@@ -197,6 +186,7 @@ class DialogOrchestratorAgent:
 
         # 加载历史结果到上下文
         last_result = session_history.get_last_result()
+        print(f"使用历史结果：{last_result}")
         if last_result:
             context.load_from_dict({
                 "copywriting": {
@@ -206,7 +196,7 @@ class DialogOrchestratorAgent:
                 },
                 "image": {
                     "image_url": last_result.get("image_url", ""),
-                    "prompt": last_result.get("image_prompt", ""),
+                    "prompt": last_result.get("prompt", ""),
                 },
             })
 
@@ -243,5 +233,3 @@ class DialogOrchestratorAgent:
             # 映射结果到上下文
             if result is not None:
                 mapper.map_result(agent_name, result)
-
-

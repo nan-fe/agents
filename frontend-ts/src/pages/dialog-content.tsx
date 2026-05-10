@@ -41,7 +41,24 @@ const DialogContent: React.FC = () => {
   const [currentVersion, setCurrentVersion] = useState<number>(-1);
   const [inputValue, setInputValue] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
-  // const [currentSessionId] = useState<string>(`session_${Date.now()}`);
+  
+  // 从 sessionStorage 获取或生成会话 ID
+  const getOrCreateSessionId = (): string => {
+    const STORAGE_KEY = 'xhs_session_id';
+    
+    let storedId = sessionStorage.getItem(STORAGE_KEY);
+    
+    // 如果没有存储的会话 ID，生成新的
+    if (!storedId) {
+      storedId = `session_${Date.now()}`;
+      sessionStorage.setItem(STORAGE_KEY, storedId);
+    }
+    
+    return storedId;
+  };
+  
+  const [currentSessionId] = useState<string>(getOrCreateSessionId());
+  
   const [logs, setLogs] = useState<LogType[]>([]);
   const [result, setResult] = useState<any>(null);
   const [finishTask, setFinishTask] = useState(false);
@@ -89,12 +106,10 @@ const DialogContent: React.FC = () => {
     setLoading(true);
 
     try {
-      const newSessionId = `session_${Date.now()}`;
-      
       // 调用API生成内容
       const resultData = await generateDialogContent({
         user_input: inputValue,
-        session_id: newSessionId,
+        session_id: currentSessionId,
         log_callback: (from: string, message: string) => {
           console.log(`${from}: ${message}`);
           // 更新日志
@@ -135,7 +150,7 @@ const DialogContent: React.FC = () => {
 
       // 添加到历史记录
       const historyItem: HistoryItem = {
-        id: newSessionId,
+        id: currentSessionId,
         userInput: inputValue,
         timestamp: Date.now(),
         title: resultData.title,
