@@ -49,11 +49,12 @@ class WritingSessionHistory(BaseChatMessageHistory):
         return self._last_plan
 
     def update_result(self, result: Dict[str, Any]) -> None:
-        self._last_result = result
+        if result:
+            self._last_result = result
 
     def update_plan(self, plan: Dict[str, Any]) -> None:
-        self._last_plan = plan
-
+        if plan:
+            self._last_plan = plan
 
 class DialogOrchestratorAgent:
     """Agent协调器"""
@@ -84,7 +85,9 @@ class DialogOrchestratorAgent:
 
     def get_session_history(self, session_id: str) -> WritingSessionHistory:
         if session_id not in self.session_histories:
-            self.session_histories[session_id] = WritingSessionHistory(session_id)
+            self.session_histories[session_id] = WritingSessionHistory(
+                session_id
+            )
         return self.session_histories[session_id]
 
     async def run(
@@ -100,6 +103,9 @@ class DialogOrchestratorAgent:
         Returns:
             最终结果
         """
+        session_id = (session_id or "").strip()
+        if not session_id:
+            raise ValueError("session_id 不能为空")
         # 获取会话历史
         session_history = self.get_session_history(session_id)
         session_history.add_message(HumanMessage(content=user_input))
@@ -150,11 +156,13 @@ class DialogOrchestratorAgent:
         # 构建最终结果
         final_result = context.build_final_result()
 
-        await log_callback("Orchestrator", "多Agent协作完成，生成最终结果")
-
         # 保存会话状态
         session_history.update_result(final_result)
         session_history.update_plan(context.get_planning())
+        print(f"[DEBUG] save_history - last_plan: {session_history.get_last_plan()}")
+        print(f"[DEBUG] save_history - last_result: {session_history.get_last_result()}")
+
+        await log_callback("Orchestrator", "多Agent协作完成，生成最终结果")
 
         return final_result
 
@@ -182,6 +190,13 @@ class DialogOrchestratorAgent:
             # 使用历史规划
             if last_plan:
                 context.load_from_dict({"planning": last_plan})
+            else:
+                # 历史缺失（如服务重启/SSE重连后命中新进程）时，降级重新规划，避免下游输入为空
+                planning_result = await self.planner_agent.run(
+                    user_input, log_callback, history=""
+                )
+                context.set_planning(planning_result)
+                await log_callback("Orchestrator", "未找到历史规划，已自动重建规划")
             await log_callback("Orchestrator", "使用历史计划")
 
         # 加载历史结果到上下文
@@ -196,7 +211,7 @@ class DialogOrchestratorAgent:
                 },
                 "image": {
                     "image_url": last_result.get("image_url", ""),
-                    "prompt": last_result.get("prompt", ""),
+                    "prompt": last_result.get("prompt", last_result.get("image_prompt", "")),
                 },
             })
 

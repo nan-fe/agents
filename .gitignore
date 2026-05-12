@@ -42,3 +42,4 @@ github_key
 github_key.pub
 
 actions-runner/
+node_modules/

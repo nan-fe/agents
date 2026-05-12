@@ -17,6 +17,17 @@ const AgentLogs = (param: IAgentLog) => {
   const [showThinking, setShowThinking] = useState(false);
 
   useEffect(() => {
+    setIsColl(isCollapse);
+  }, [isCollapse]);
+
+  useEffect(() => {
+    if (isLoading) {
+      // 任务进行中自动展开，保证流式日志可见
+      setIsColl(false);
+    }
+  }, [isLoading]);
+
+  useEffect(() => {
     if (isLoading && logs.length > 0) {
       const timer = setTimeout(() => {
         setShowThinking(true);

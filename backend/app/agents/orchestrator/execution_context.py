@@ -184,12 +184,15 @@ class ExecutionContext:
 
     def build_final_result(self) -> Dict[str, Any]:
         """构建最终结果"""
+        image_prompt = self.image.prompt or ""
         final = {
             "title": self.copywriting.title or "默认标题",
             "content": self.copywriting.content or "默认内容",
             "hashtags": self.copywriting.hashtags or ["#小红书", "#推荐"],
             "image_url": self.image.image_url or "https://via.placeholder.com/800x600",
-            "image_prompt": self.image.prompt or "",
+            "image_prompt": image_prompt,
+            # 兼容历史读取逻辑中的旧字段名
+            "prompt": image_prompt,
         }
         
         if self.planning.product_recommendations:

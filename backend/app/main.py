@@ -62,8 +62,27 @@ async def generate_dialog_event_stream(user_input: str, session_id: str):
                 break
             continue
 
-    # 获取最终结果
-    final_result = await task
+    # 获取最终结果（任务异常时也返回可消费的结果，避免前端一直 loading）
+    try:
+        final_result = await task
+    except Exception as e:
+        error_text = f"生成失败: {str(e)}"
+        error_log_message = SSEMessage(
+            type="log",
+            data={
+                "from": "Orchestrator",
+                "message": error_text,
+                "timestamp": int(datetime.now().timestamp() * 1000),
+            },
+        )
+        yield {"event": "message", "data": error_log_message.model_dump_json()}
+        final_result = {
+            "title": "",
+            "content": "",
+            "hashtags": [],
+            "image_url": "",
+            "message": error_text,
+        }
 
     # 发送最终结果
     result_message = SSEMessage(type="result", data=final_result)

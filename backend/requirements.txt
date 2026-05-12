@@ -23,4 +23,4 @@ chromadb
 pandas
 bs4
 rank-bm25
-seleniumddgs
+selenium
