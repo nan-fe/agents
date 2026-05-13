@@ -4,11 +4,11 @@ FROM node:22-alpine
 # 设置工作目录
 WORKDIR /app
 
-# 安装 pnpm
-RUN npm install -g pnpm
+# 安装与 lockfile 生成环境一致的 pnpm 版本
+RUN npm install -g pnpm@10.30.3
 
-# 复制 package.json 和 pnpm-lock.yaml
-COPY package*.json pnpm-lock.yaml* ./
+# 复制 pnpm 安装所需文件
+COPY package.json pnpm-lock.yaml ./
 
 # 安装依赖（使用 pnpm）
 RUN pnpm install --frozen-lockfile
