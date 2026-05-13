@@ -2,6 +2,7 @@
   "name": "frontend-ts",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "pnpm@10.30.3",
   "dependencies": {
     "@ant-design/icons": "^6.1.1",
     "@types/jest": "^27.5.2",
