@@ -12,9 +12,9 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                        前端层 (React + TypeScript)               │
+│                    前端层 (React + TypeScript + Vite)             │
 │  ┌───────────────────────────────────────────────────────────┐   │
-│  │  UI Components  │  API Services  │  State Management     │   │
+│  │ UI Components │ API Services │ SSE Client │ Virtual List │   │
 │  └───────────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────┬───────────────────────────┘
                                       │ HTTP/SSE
@@ -67,8 +67,8 @@
 │  │  └──────────────┘  └──────────────┘  │  Registry (ACR)  │   │   │
 │  │                                      └──────────────────┘   │   │
 │  │  ┌──────────────┐  ┌──────────────┐  ┌──────────────────┐   │   │
-│  │  │  Build       │→│  Build Images│→│  Push to Aliyun  │   │   │
-│  │  │  Frontend    │  │  (Frontend)  │  │  Container       │   │   │
+│  │  │ Vite Build   │→│  Nginx Image │→│  Push to Aliyun  │   │   │
+│  │  │ dist Assets  │  │  (Frontend)  │  │  Container       │   │   │
 │  │  └──────────────┘  └──────────────┘  │  Registry (ACR)  │   │   │
 │  │                                      └──────────────────┘   │   │
 │  └──────────────────────────────────────────────────────────────┘   │
@@ -80,8 +80,8 @@
 │  │  Docker Compose Orchestration                                │   │
 │  │  ┌──────────────┐  ┌──────────────┐  ┌──────────────────┐   │   │
 │  │  │   Backend    │  │   Frontend   │  │   Nginx          │   │   │
-│  │  │   Container  │  │   Container  │  │   Reverse Proxy  │   │   │
-│  │  │   :8000      │  │   :80        │  │   :3000          │   │   │
+│  │  │   Container  │  │ Static dist  │  │ API Proxy       │   │   │
+│  │  │   :8000      │  │   :80        │  │ /dialog /session │   │   │
 │  │  └──────────────┘  └──────────────┘  └──────────────────┘   │   │
 │  └──────────────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────────────┘
@@ -136,8 +136,9 @@ frontend-ts/README.md
 | 层级 | 技术 | 版本 |
 |------|------|------|
 | 后端框架 | FastAPI | ^0.100 |
-| 前端框架 | React | ^18 |
+| 前端框架 | React | ^19 |
 | 前端语言 | TypeScript | ^5 |
+| 前端构建 | Vite | ^8 |
 | 样式框架 | Tailwind CSS | ^3 |
 | 大模型框架 | LangChain | ^0.1 |
 | 向量数据库 | ChromaDB | ^0.4 |
@@ -149,7 +150,7 @@ frontend-ts/README.md
 ### 环境要求
 
 - Python 3.8+
-- Node.js 18+
+- Node.js 22+（前端 Docker 构建使用 Node 22，满足 Vite 运行要求）
 - Docker & Docker Compose
 
 ### 配置环境变量
