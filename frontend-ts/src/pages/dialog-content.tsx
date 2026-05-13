@@ -1,20 +1,29 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   Layout,
   Input,
   Button,
+  Space,
   message,
-  List,
   Typography,
   Select,
   Card,
 } from 'antd';
-import { SendOutlined, HistoryOutlined } from '@ant-design/icons';
-import { generateDialogContent } from '../services/api';
+import {
+  SendOutlined,
+  HistoryOutlined,
+  StopOutlined,
+} from '@ant-design/icons';
+import {
+  createDialogGenerateRequest,
+  generateDialogContent,
+} from '../services/api';
+import { List, RowComponentProps, useListRef } from 'react-window';
 import AgentLogs from '../components/agent-logs';
 import ResultDisplay from '../components/result-display';
-import HistoryPanel, { HistoryItem } from '../components/history-panel';
+import { HistoryItem } from '../components/history-panel';
 import { LogType } from '../types';
+import { useSSEClient } from '../hooks/use-sse-client';
 
 const { Header, Content } = Layout;
 const { Text, Paragraph, Title } = Typography;
@@ -35,6 +44,61 @@ interface Version {
   imageUrl: string;
 }
 
+type StreamEvent =
+  | {
+      type: 'log';
+      data: {
+        from: string;
+        message: string;
+      };
+    }
+  | {
+      type: 'result';
+      data: any;
+    };
+
+interface MessageRowData {
+  messages: Message[];
+}
+
+const MESSAGE_BASE_HEIGHT = 56;
+const MESSAGE_LINE_HEIGHT = 24;
+const MESSAGE_CHARS_PER_LINE = 18;
+const MESSAGE_MAX_HEIGHT = 640;
+
+const estimateMessageRowHeight = (content: string) => {
+  const lineCount = content
+    .split('\n')
+    .reduce((total, line) => total + Math.max(1, Math.ceil(line.length / MESSAGE_CHARS_PER_LINE)), 0);
+
+  return MESSAGE_BASE_HEIGHT + lineCount * MESSAGE_LINE_HEIGHT;
+};
+
+const MessageRow = ({ index, style, messages }: RowComponentProps<MessageRowData>) => {
+  const messageItem = messages[index];
+
+  return (
+    <div style={{ ...style, boxSizing: 'border-box', paddingBottom: '8px' }}>
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          height: '100%',
+          boxSizing: 'border-box',
+          paddingBottom: '8px',
+          borderBottom: '1px solid #f0f0f0',
+        }}
+      >
+        <Text strong>{messageItem.type === 'user' ? '用户' : '系统'}</Text>
+        <Paragraph style={{ marginBottom: '4px' }}>{messageItem.content}</Paragraph>
+        <Text type="secondary" style={{ fontSize: '12px' }}>
+          {new Date(messageItem.timestamp).toLocaleString()}
+        </Text>
+      </div>
+    </div>
+  );
+};
+
 const DialogContent: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [versions, setVersions] = useState<Version[]>([]);
@@ -45,16 +109,25 @@ const DialogContent: React.FC = () => {
   // 从 sessionStorage 获取或生成会话 ID
   const getOrCreateSessionId = (): string => {
     const STORAGE_KEY = 'xhs_session_id';
-    
-    let storedId = sessionStorage.getItem(STORAGE_KEY);
-    
-    // 如果没有存储的会话 ID，生成新的
-    if (!storedId) {
-      storedId = `session_${Date.now()}`;
-      sessionStorage.setItem(STORAGE_KEY, storedId);
+    const sessionStorageId = sessionStorage.getItem(STORAGE_KEY);
+    const localStorageId = localStorage.getItem(STORAGE_KEY);
+    const stableId = sessionStorageId || localStorageId;
+
+    // 优先复用已有 ID，避免前端重渲染/重载导致会话漂移
+    if (stableId) {
+      if (!sessionStorageId) {
+        sessionStorage.setItem(STORAGE_KEY, stableId);
+      }
+      if (!localStorageId) {
+        localStorage.setItem(STORAGE_KEY, stableId);
+      }
+      return stableId;
     }
-    
-    return storedId;
+
+    const newId = `session_${Date.now()}`;
+    sessionStorage.setItem(STORAGE_KEY, newId);
+    localStorage.setItem(STORAGE_KEY, newId);
+    return newId;
   };
   
   const [currentSessionId] = useState<string>(getOrCreateSessionId());
@@ -63,8 +136,16 @@ const DialogContent: React.FC = () => {
   const [result, setResult] = useState<any>(null);
   const [finishTask, setFinishTask] = useState(false);
   const [history, setHistory] = useState<HistoryItem[]>([]);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const { connect, disconnect } = useSSEClient();
+  const virtualListRef = useListRef(null);
+  const messageViewportRef = useRef<HTMLDivElement>(null);
+  const [viewportHeight, setViewportHeight] = useState(MESSAGE_MAX_HEIGHT);
+  const messageRowHeights = useMemo(
+    () => messages.map((item) => estimateMessageRowHeight(item.content)),
+    [messages]
+  );
   const initialized = useRef(false);
+  const cancelByUserRef = useRef(false);
 
   useEffect(() => {
     if(initialized.current) return;
@@ -80,25 +161,41 @@ const DialogContent: React.FC = () => {
     setMessages((prev) => [...prev, systemMessage]);
   }, []);
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
+  useEffect(() => {
+    if (messages.length === 0) return;
+    virtualListRef.current?.scrollToRow({
+      align: 'end',
+      index: messages.length - 1,
+    });
+  }, [messages, virtualListRef]);
 
   useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
+    const container = messageViewportRef.current;
+    if (!container) return;
 
-  const handleSubmit = async () => {
-    if (!inputValue.trim()) return;
+    const syncHeight = () => {
+      setViewportHeight(container.clientHeight || MESSAGE_MAX_HEIGHT);
+    };
+
+    syncHeight();
+    const observer = new ResizeObserver(syncHeight);
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, []);
+
+  const runGeneration = async (prompt: string) => {
+    if (!prompt.trim()) return;
+    const currentInputValue = prompt.trim();
+    cancelByUserRef.current = false;
 
     // 清空之前的日志和结果
     setLogs([]);
+    setFinishTask(false);
 
-    // 添加用户消息
     const userMessage: Message = {
       id: `msg_${Date.now()}`,
       type: 'user',
-      content: inputValue,
+      content: currentInputValue,
       timestamp: Date.now(),
     };
     setMessages((prev) => [...prev, userMessage]);
@@ -106,28 +203,52 @@ const DialogContent: React.FC = () => {
     setLoading(true);
 
     try {
-      // 调用API生成内容
-      const resultData = await generateDialogContent({
-        user_input: inputValue,
-        session_id: currentSessionId,
-        log_callback: (from: string, message: string) => {
-          console.log(`${from}: ${message}`);
-          // 更新日志
-          setLogs((prev) => [
-            ...prev,
-            {
-              agent_name: from,
-              message: message,
-              timestamp: new Date().toISOString(),
-            },
-          ]);
+      let streamResult: any = null;
+      const appendLog = (from: string, text: string) => {
+        console.log(`${from}: ${text}`);
+        setLogs((prev) => [
+          ...prev,
+          {
+            agent_name: from,
+            message: text,
+            timestamp: new Date().toISOString(),
+          },
+        ]);
+      };
+
+      const fallbackResult = await connect<StreamEvent, any>({
+        createRequest: (signal) =>
+          createDialogGenerateRequest(currentInputValue, currentSessionId, signal),
+        parseMessage: (payload) => JSON.parse(payload) as StreamEvent,
+        onMessage: (event) => {
+          if (event.type === 'log') {
+            appendLog(event.data.from, event.data.message);
+          } else if (event.type === 'result') {
+            streamResult = event.data;
+          }
+        },
+        fallback: async (error) => {
+          console.warn('SSE 连接异常，已切换降级策略:', error);
+          message.warning('实时通道异常，正在切换降级模式...');
+          return generateDialogContent({
+            user_input: currentInputValue,
+            session_id: currentSessionId,
+            log_callback: appendLog,
+          });
         },
       });
+      const resultData = fallbackResult ?? streamResult;
+
+      if (!resultData) {
+        if (cancelByUserRef.current) {
+          return;
+        }
+        throw new Error('未获取到生成结果');
+      }
 
       // 更新结果状态
       setResult(resultData);
 
-      // 添加系统消息
       const systemMessage: Message = {
         id: `msg_${Date.now() + 1}`,
         type: 'system',
@@ -136,7 +257,6 @@ const DialogContent: React.FC = () => {
       };
       setMessages((prev) => [...prev, systemMessage]);
       setFinishTask(true);
-      // 更新版本列表
       const newVersion: Version = {
         id: versions.length,
         timestamp: Date.now(),
@@ -148,29 +268,32 @@ const DialogContent: React.FC = () => {
       setVersions((prev) => [...prev, newVersion]);
       setCurrentVersion(newVersion.id);
 
-      // 添加到历史记录
       const historyItem: HistoryItem = {
         id: currentSessionId,
-        userInput: inputValue,
+        userInput: currentInputValue,
         timestamp: Date.now(),
         title: resultData.title,
       };
       setHistory((prev) => [historyItem, ...prev]);
     } catch (error) {
-      message.error('生成内容失败，请重试');
+      if (!cancelByUserRef.current) {
+        message.error('生成内容失败，请重试');
+      }
       console.error('Error generating content:', error);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleSelectHistory = (item: HistoryItem) => {
-    message.info(`已选择历史记录: ${item.title || item.userInput}`);
+  const handleSubmit = async () => {
+    await runGeneration(inputValue);
   };
 
-  const handleDeleteHistory = (id: string) => {
-    setHistory((prev) => prev.filter((item) => item.id !== id));
-    message.success('历史记录已删除');
+  const handleStopGeneration = () => {
+    cancelByUserRef.current = true;
+    disconnect();
+    setLoading(false);
+    message.info('已停止当前生成任务');
   };
 
   const handleVersionSelect = (versionId: number) => {
@@ -222,32 +345,18 @@ const DialogContent: React.FC = () => {
             <Card
               title="聊天记录"
               className="w-[400px] flex flex-col flex-shrink-0"
-              style={{ overflowY: 'scroll' }}
+              style={{ height: '100%' }}
             >
-              <div className="flex-1 overscroll-y-auto mb-16 h-full pb-8">
+              <div ref={messageViewportRef} className="flex-1 min-h-0 mb-4">
                 <List
-                  dataSource={messages}
-                  renderItem={(message) => (
-                    <List.Item>
-                      <div
-                        style={{
-                          display: "flex",
-                          flexDirection: "column",
-                          marginBottom: "8px",
-                        }}
-                      >
-                        <Text strong>
-                          {message.type === "user" ? "用户" : "系统"}
-                        </Text>
-                        <Paragraph>{message.content}</Paragraph>
-                        <Text type="secondary" style={{ fontSize: '12px' }}>
-                          {new Date(message.timestamp).toLocaleString()}
-                        </Text>
-                      </div>
-                    </List.Item>
-                  )}
+                  rowComponent={MessageRow}
+                  rowCount={messages.length}
+                  rowHeight={(index) => messageRowHeights[index] ?? MESSAGE_BASE_HEIGHT}
+                  rowProps={{ messages }}
+                  overscanCount={2}
+                  style={{ height: viewportHeight, width: '100%' }}
+                  listRef={virtualListRef}
                 />
-                <div ref={messagesEndRef} />
               </div>
 
               <div className="flex">
@@ -258,14 +367,27 @@ const DialogContent: React.FC = () => {
                   onPressEnter={handleSubmit}
                   className="flex-1 mr-8"
                 />
-                <Button
-                  type="primary"
-                  icon={<SendOutlined />}
-                  onClick={handleSubmit}
-                  disabled={loading}
-                >
-                  发送
-                </Button>
+                <Space>
+                  {loading ? (
+                    <Button
+                      danger
+                      type="primary"
+                      icon={<StopOutlined />}
+                      onClick={handleStopGeneration}
+                    >
+                      停止生成
+                    </Button>
+                  ) : (
+                    <Button
+                      type="primary"
+                      icon={<SendOutlined />}
+                      onClick={handleSubmit}
+                      disabled={loading}
+                    >
+                      发送
+                    </Button>
+                  )}
+                </Space>
               </div>
             </Card>
 

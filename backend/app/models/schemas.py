@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional, List
 
 
@@ -53,7 +53,7 @@ class CopywritingResult(BaseModel):
 
     title: str
     content: str
-    hashtags: List[str]
+    hashtags: List[str] = Field(default_factory=list)
 
 
 class ImageResult(BaseModel):

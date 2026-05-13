@@ -3,7 +3,8 @@ from app.models.schemas import CopywritingResult, PlanningResult
 from langchain_core.prompts import PromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
 from app.config import settings
-from typing import Optional, Union, Dict
+from typing import Optional, Union, Dict, Any, List
+import re
 from app.utils.llm_factory import llm_factory
 
 
@@ -68,6 +69,63 @@ class CopywriterAgent(BaseAgent):
                 "format_instructions": self.parser.get_format_instructions()
             },
         )
+
+    def _normalize_hashtags(
+        self, hashtags_value: Any, content: str = "", topic: str = ""
+    ) -> List[str]:
+        """规整 hashtags，保证始终返回可用数组。"""
+        normalized: List[str] = []
+
+        if isinstance(hashtags_value, list):
+            normalized = [str(tag).strip() for tag in hashtags_value if str(tag).strip()]
+        elif isinstance(hashtags_value, str):
+            # 兼容模型把 hashtags 当成字符串返回的情况
+            normalized = [
+                item.strip()
+                for item in re.split(r"[,，\s]+", hashtags_value)
+                if item.strip()
+            ]
+
+        if not normalized and content:
+            extracted = re.findall(r"#([^\s#，,。；;！!?？]+)", content)
+            normalized = [f"#{tag.strip()}" for tag in extracted if tag.strip()]
+
+        # 自动补齐 # 前缀并去重
+        deduplicated: List[str] = []
+        seen = set()
+        for tag in normalized:
+            normalized_tag = tag if tag.startswith("#") else f"#{tag}"
+            if normalized_tag not in seen:
+                seen.add(normalized_tag)
+                deduplicated.append(normalized_tag)
+
+        # 当模型遗漏 hashtags 时，基于主题补齐默认标签，避免结构不完整
+        fallback_tags = [
+            f"#{topic.strip()}" if topic else "",
+            "#小红书种草",
+            "#好物推荐",
+        ]
+        for tag in fallback_tags:
+            if tag and tag not in seen:
+                deduplicated.append(tag)
+                seen.add(tag)
+
+        return deduplicated[:5]
+
+    def _normalize_copywriting_result(
+        self, raw_result: Union[CopywritingResult, Dict[str, Any]], topic: str
+    ) -> CopywritingResult:
+        """将模型返回规整为稳定的 CopywritingResult。"""
+        if isinstance(raw_result, CopywritingResult):
+            title = raw_result.title
+            content = raw_result.content
+            hashtags = self._normalize_hashtags(raw_result.hashtags, content, topic)
+            return CopywritingResult(title=title, content=content, hashtags=hashtags)
+
+        title = str(raw_result.get("title", "")).strip()
+        content = str(raw_result.get("content", "")).strip()
+        hashtags = self._normalize_hashtags(raw_result.get("hashtags"), content, topic)
+        return CopywritingResult(title=title, content=content, hashtags=hashtags)
 
     async def run(
         self,
@@ -135,10 +193,7 @@ class CopywriterAgent(BaseAgent):
             )
             print(f"生成小红书风格文案 result: {result}")
             await self.log(f"文案生成完成: {result}", log_callback)
-            if isinstance(result, CopywritingResult):
-                return result
-            else:
-                return CopywritingResult(**result)
+            return self._normalize_copywriting_result(result, topic)
         except Exception as e:
             await self.log(f"生成文案失败: {e}", log_callback)
             print(f"生成文案失败: {e}")

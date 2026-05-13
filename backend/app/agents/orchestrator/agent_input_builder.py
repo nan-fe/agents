@@ -14,10 +14,10 @@ class AgentInputBuilder:
         """构建文案 Agent 输入"""
         planning = self.context.planning
         return {
-            "topic": planning.topic,
-            "target_audience": planning.target_audience,
-            "core_selling_points": planning.core_selling_points,
-            "tone_style": planning.tone_style,
+            "topic": planning.topic or "",
+            "target_audience": planning.target_audience or [],
+            "core_selling_points": planning.core_selling_points or [],
+            "tone_style": planning.tone_style or "",
             "user_input": self.user_input,
             "product_context": self.context.rag_context,
         }
@@ -27,13 +27,13 @@ class AgentInputBuilder:
         planning = self.context.planning
         copywriting = self.context.copywriting
         return {
-            "image_requirements": planning.image_requirements,
-            "copywriting_content": copywriting.content,
-            "topic": planning.topic,
-            "target_audience": planning.target_audience,
-            "core_selling_points": planning.core_selling_points,
-            "tone_style": planning.tone_style,
-            "product_category": planning.product_category,
+            "image_requirements": planning.image_requirements or "",
+            "copywriting_content": copywriting.content or "",
+            "topic": planning.topic or "",
+            "target_audience": planning.target_audience or [],
+            "core_selling_points": planning.core_selling_points or [],
+            "tone_style": planning.tone_style or "",
+            "product_category": planning.product_category or "",
         }
 
     def build_reviewer_input(self) -> Dict[str, Any]:

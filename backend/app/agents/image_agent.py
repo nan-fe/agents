@@ -43,6 +43,14 @@ class ImageAgent(BaseAgent):
             # PlanningResult对象
             input_data_dict = input_data.model_dump()
 
+        target_audience = input_data_dict.get("target_audience") or []
+        if not isinstance(target_audience, list):
+            target_audience = [str(target_audience)]
+
+        core_selling_points = input_data_dict.get("core_selling_points") or []
+        if not isinstance(core_selling_points, list):
+            core_selling_points = [str(core_selling_points)]
+
         # 生成图片描述
         prompt = f"""
         你是一位资深电商摄影师和设计师，擅长根据商品类别和营销文案，构思出**极具真实感、像实拍照片**的商品图描述。
@@ -50,12 +58,12 @@ class ImageAgent(BaseAgent):
         
         请根据以下信息生成一张商品介绍的图片描述：
         
-        目标人群：{', '.join(input_data_dict.get('target_audience'))}
-        核心卖点：{', '.join(input_data_dict.get("core_selling_points"))}
-        语气风格：{input_data_dict.get("tone_style")}
-        文案内容：{input_data_dict.get("copywriting_content")}
-        文案主题：{input_data_dict.get("topic")}
-        商品类别：{input_data_dict.get("product_category")}
+        目标人群：{', '.join(target_audience)}
+        核心卖点：{', '.join(core_selling_points)}
+        语气风格：{input_data_dict.get("tone_style", "")}
+        文案内容：{input_data_dict.get("copywriting_content", "")}
+        文案主题：{input_data_dict.get("topic", "")}
+        商品类别：{input_data_dict.get("product_category", "")}
         历史数据：{input_data_dict.get("history", "")}
         
         【真实感强制要求】（必须严格遵守）：

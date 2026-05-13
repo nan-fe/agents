@@ -3,20 +3,34 @@
  */
 
 import { LogType } from "../types";
+import { parseSSEStream } from "../utils/sse-parser";
 
-// docker 模式下 API_BASE_URL = '' 本地启动需要加上http://localhost:8000 不然nginx 冲突导致流式生成不生效
-const API_BASE_URL = "";
-export type SSEType = {
-  prompt: string;
-  onLog: (value: LogType) => void;
-  onResult: (value: any) => void;
-  onError: (value: any) => void;
-};
+
+export const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL ??
+  (import.meta.env.DEV ? "http://localhost:8000" : "");
+
 
 export type DialogSSEType = {
   user_input: string;
   session_id: string;
   log_callback: (from: string, message: string) => void;
+};
+
+export const createDialogGenerateRequest = (
+  user_input: string,
+  session_id: string,
+  signal?: AbortSignal,
+) => {
+  return fetch(`${API_BASE_URL}/dialog/generate`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "text/event-stream",
+    },
+    body: JSON.stringify({ prompt: user_input, session_id }),
+    signal,
+  });
 };
 
 export const generateDialogContent = async (
@@ -25,60 +39,31 @@ export const generateDialogContent = async (
   const { user_input, session_id, log_callback } = param;
   try {
     // 使用fetch API创建SSE连接
-    const response = await fetch(`${API_BASE_URL}/dialog/generate`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "text/event-stream",
-      },
-      body: JSON.stringify({ prompt: user_input, session_id }),
-    });
+    const response = await createDialogGenerateRequest(user_input, session_id);
 
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
 
     const reader = response?.body?.getReader();
-    const decoder = new TextDecoder("utf-8");
-    let buffer = "";
     let finalResult: any = null;
 
     if (!reader) return null;
 
-    while (true) {
-      const { done, value } = await reader.read();
-
-      if (done) {
-        break;
-      }
-
-      buffer += decoder.decode(value, { stream: true });
-
-      // 处理SSE消息
-      const lines = buffer.split("\n");
-      buffer = lines.pop() || ""; // 保留最后不完整的行
-
-      for (const line of lines) {
-        if (line.startsWith("data:")) {
-          const dataStr = line.substring(5).trim();
-          if (dataStr) {
-            try {
-              const data = JSON.parse(dataStr);
-
-              if (data.type === "log") {
-                // 处理日志信息
-                log_callback?.(data.data.from, data.data.message);
-              } else if (data.type === "result") {
-                // 处理最终结果
-                finalResult = data.data;
-              }
-            } catch (error) {
-              console.error("解析SSE消息失败:", error);
-            }
-          }
+    await parseSSEStream({
+      reader,
+      parseMessage: (payload) => JSON.parse(payload),
+      onMessage: (data: any) => {
+        if (data.type === "log") {
+          log_callback?.(data.data.from, data.data.message);
+        } else if (data.type === "result") {
+          finalResult = data.data;
         }
-      }
-    }
+      },
+      onParseError: (error) => {
+        console.error("解析SSE消息失败:", error);
+      },
+    });
 
     return finalResult;
   } catch (error) {
