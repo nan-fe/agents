@@ -37,7 +37,7 @@ pnpm run start
 同时将 api.ts 里面的 API_PATH_URL 设置成 http://localhost:8080
 
 
-前端应用将在 `http://localhost:3000` 运行。
+前端应用将在 `http://localhost:5173` 运行。
 
 ## 构建生产版本
 
@@ -45,7 +45,7 @@ pnpm run start
 pnpm run build
 ```
 
-构建结果将输出到 `build` 目录。
+构建结果将输出到 `dist` 目录。
 
 ## 功能说明
 

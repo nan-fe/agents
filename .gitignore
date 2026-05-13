@@ -9,6 +9,8 @@ backend/env/
 frontend/node_modules/
 frontend/build/
 frontend/.env
+frontend-ts/node_modules/
+frontend-ts/dist/
 
 # 通用
 *.pyc
@@ -22,6 +24,7 @@ frontend/.env
 .env.development.local
 .env.test.local
 .env.production.local
+.pnpm-store/
 chroma*
 
 # 测试

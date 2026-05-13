@@ -1,5 +1,5 @@
-# 使用 Node.js 18 作为基础镜像
-FROM node:18-alpine
+# 使用 Node.js 22 作为基础镜像，满足 Vite 的运行要求
+FROM node:22-alpine
 
 # 设置工作目录
 WORKDIR /app
@@ -22,8 +22,8 @@ RUN pnpm run build
 # 使用 nginx 作为生产服务器
 FROM nginx:alpine
 
-# 复制构建产物到 nginx 静态目录
-COPY --from=0 /app/build /usr/share/nginx/html
+# 复制 Vite 构建产物到 nginx 静态目录
+COPY --from=0 /app/dist /usr/share/nginx/html
 
 # 复制 nginx 配置文件
 COPY nginx.conf /etc/nginx/conf.d/default.conf

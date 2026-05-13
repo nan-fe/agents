@@ -205,7 +205,7 @@ pnpm run start
 
 ### 访问服务
 
-- 前端：http://localhost:3000
+- 前端：http://localhost:5173
 
 **响应：** SSE (Server-Sent Events) 流式响应
 
@@ -215,6 +215,15 @@ pnpm run start
 # 运行后端测试
 cd backend/tests
 python3  test_xxxx.py
+```
+
+## 🔍 代码清理分析
+
+可以使用 `knip` 分析前端未使用的文件和导出：
+
+```bash
+cd frontend-ts
+npx knip
 ```
 
 ## 📊 评估

@@ -7,14 +7,9 @@ import { parseSSEStream } from "../utils/sse-parser";
 
 
 export const API_BASE_URL =
-  process.env.REACT_APP_API_BASE_URL ??
-  (process.env.NODE_ENV === "development" ? "http://localhost:8000" : "");
-export type SSEType = {
-  prompt: string;
-  onLog: (value: LogType) => void;
-  onResult: (value: any) => void;
-  onError: (value: any) => void;
-};
+  import.meta.env.VITE_API_BASE_URL ??
+  (import.meta.env.DEV ? "http://localhost:8000" : "");
+
 
 export type DialogSSEType = {
   user_input: string;
