@@ -1,6 +1,6 @@
 # XHS Multi-Agent Creator
 
-一个基于多智能体架构的小红书内容创作平台，自动生成高质量的小红书文案和配图。
+一个基于多智能体架构的小红书内容创作平台，自动生成高质量的小红书文案和配图。访问 👉：http://47.100.107.192:3000/ 可以直接通过IP访问
 
 ## 📖 项目简介
 
@@ -86,7 +86,6 @@
 │  └──────────────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────────────┘
 ```
-访问 👉：http://47.100.107.192:3000/ （域名还在审核中）
 
 ### CI/CD 工作流
 
@@ -158,22 +157,20 @@ frontend-ts/README.md
 在 `backend/.env` 文件中配置以下环境变量：
 
 ```env
-# 硅基流动API配置
-SILICONFLOW_API_KEY=your_api_key
-SILICONFLOW_MODEL=deepseek-chat
-SILICONFLOW_BASE_URL=https://api.siliconflow.cn/v1
+API_KEY=xxxxx
+# Base URL
+MODEL_BASE_URL=xxxxx
 
-# 模型配置
-COPYWRITE_MODEL=deepseek-chat
-GENARATION_MODEL=deepseek-chat
-PLAN_MODEL=deepseek-chat
-INTENT_MODEL=deepseek-chat
-EMBEDING_MODEL=BAAI/bge-large-en-v1.5
-RANKER_MODEL=default
+# Model
+BASE_MODEL=deepseek-v4-flash
 
-# 图片生成配置
-IMAGE_MODEL=Kwai-Kolors/Kolors
-REPLICATE_API_KEY=your_replicate_key
+# Image Generation Model
+SILICONFLOW_API_KEY=xxxx
+SILICONFLOW_BASE_URL=xxx
+IMAGE_MODEL=xxxx
+
+EMBEDING_MODEL=xxxxx
+
 
 # LangSmith配置
 LANGCHAIN_TRACING_V2=true
@@ -236,7 +233,7 @@ npx knip
 
 | 序号 | 限制描述 | 状态 | 计划 |
 |------|----------|------|------|
-| 1 | 线上环境下首次访问页面时，Chroma 数据库构建时间较长，需要等待一定时间 | 待修复 | 预计下个 PR 修复 |
+| 1 | 线上环境下首次访问页面时，Chroma 数据库构建时间较长，需要等待一定时间 | 已修复 | 2026/5/10 |
 | 2 | RAG 补充商品信息的效果待验证 | 待验证 | 需要收集更多测试数据进行验证 |
 | 3 | 图片生成的相关性较弱 | 待优化 | 计划尝试其他图片生成模型进行比对 |
 | 4 | 评估代码目前只支持文案 Agent 和 RAG Agent | 待扩展 | 其他 Agent 的系统评估方案还待探索 |
