@@ -33,6 +33,18 @@ class Settings(BaseSettings):
     AGENT_TIMEOUT_REVIEWER_AGENT_SECONDS: float = 90.0
     AGENT_TIMEOUT_RAG_AGENT_SECONDS: float = 120.0
 
+    # LLM / 搜索 / 生图 HTTP 重试（策略化：仅可恢复错误 + 指数退避，见 retry_policy）
+    LLM_HTTP_RETRY_MAX_ATTEMPTS: int = 3
+    LLM_HTTP_RETRY_BASE_DELAY: float = 0.6
+    LLM_HTTP_RETRY_MAX_DELAY: float = 24.0
+    IMAGE_HTTP_RETRY_MAX_ATTEMPTS: int = 3
+    IMAGE_HTTP_RETRY_BASE_DELAY: float = 1.0
+    IMAGE_HTTP_RETRY_MAX_DELAY: float = 30.0
+    IMAGE_GEN_TOTAL_BUDGET_SECONDS: float = 260.0
+    SEARCH_HTTP_RETRY_MAX_ATTEMPTS: int = 3
+    SEARCH_HTTP_RETRY_BASE_DELAY: float = 0.5
+    SEARCH_HTTP_RETRY_MAX_DELAY: float = 12.0
+
     # LangSmith
     LANGCHAIN_TRACING_V2: bool = True
     # Optional: LangSmith API key to access deployed graph

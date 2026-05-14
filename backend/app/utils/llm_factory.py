@@ -3,6 +3,7 @@ from langchain_openai import ChatOpenAI
 from langchain_core.prompts import PromptTemplate
 from langchain_core.output_parsers import BaseOutputParser
 from app.utils.token_counter import token_counter
+from app.utils.retry_policy import retry_with_backoff
 from app.config import settings
 
 
@@ -127,8 +128,17 @@ class LLMFactory:
             chain = prompt_to_use | llm | parser
         else:
             chain = prompt_to_use | llm
-        
-        return await chain.ainvoke(chain_input)
+
+        async def _ainvoke_once():
+            return await chain.ainvoke(chain_input)
+
+        return await retry_with_backoff(
+            _ainvoke_once,
+            max_attempts=settings.LLM_HTTP_RETRY_MAX_ATTEMPTS,
+            base_delay=settings.LLM_HTTP_RETRY_BASE_DELAY,
+            max_delay=settings.LLM_HTTP_RETRY_MAX_DELAY,
+            operation_name="langchain_ainvoke",
+        )
 
 
 llm_factory = LLMFactory()

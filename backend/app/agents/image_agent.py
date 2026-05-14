@@ -1,23 +1,94 @@
-from app.agents.base_agent import BaseAgent
-from app.models.schemas import ImageResult, ImageAgentInput
-from app.config import settings
-from openai import AsyncOpenAI
+import time
+from typing import Optional, Tuple
+
 import replicate
-from typing import Optional
+from openai import AsyncOpenAI
+
+from app.agents.base_agent import BaseAgent
+from app.config import settings
+from app.models.schemas import ImageResult, ImageAgentInput
+from app.utils.retry_policy import is_transient_exception, retry_with_backoff
 
 
 class ImageAgent(BaseAgent):
-    """图片Agent"""
+    """图片Agent：主备模型 + 可恢复错误重试 + 总时间预算内降级（缩短 prompt / 降分辨率）。"""
 
     def __init__(self):
         """初始化图片Agent"""
         super().__init__("Image Designer", "小红书配图设计师")
         self.image_model = settings.IMAGE_MODEL
         self.client = AsyncOpenAI(
-            api_key=settings.SILICONFLOW_API_KEY, base_url=settings.SILICONFLOW_BASE_URL
+            api_key=settings.SILICONFLOW_API_KEY,
+            base_url=settings.SILICONFLOW_BASE_URL,
         )
         if self.image_model == "stable-diffusion" and settings.REPLICATE_API_KEY:
             replicate.api_key = settings.REPLICATE_API_KEY
+
+    @staticmethod
+    def _compact_prompt_for_retry(prompt: str, max_chars: int = 1600) -> str:
+        """重试轮次缩短上下文，降低 token/超时概率。"""
+        if len(prompt) <= max_chars:
+            return prompt
+        half = max_chars // 2
+        return (
+            prompt[:half]
+            + "\n...(已压缩描述以重试生图)\n"
+            + prompt[-half:]
+        )
+
+    @staticmethod
+    def _parse_size(size: str) -> Tuple[int, int]:
+        try:
+            w, h = size.lower().split("x")
+            return int(w), int(h)
+        except Exception:
+            return 1024, 1024
+
+    async def _siliconflow_generate(self, prompt: str, size: str) -> str:
+        async def once():
+            response = await self.client.images.generate(
+                model=self.image_model,
+                prompt=prompt,
+                size=size,
+                quality="standard",
+                n=1,
+            )
+            return response.data[0].url
+
+        return await retry_with_backoff(
+            once,
+            max_attempts=settings.IMAGE_HTTP_RETRY_MAX_ATTEMPTS,
+            base_delay=settings.IMAGE_HTTP_RETRY_BASE_DELAY,
+            max_delay=settings.IMAGE_HTTP_RETRY_MAX_DELAY,
+            operation_name="siliconflow_images_generate",
+            is_retryable=is_transient_exception,
+        )
+
+    async def _replicate_generate(self, prompt: str, width: int, height: int) -> str:
+        async def once():
+            if not (hasattr(replicate, "run") and settings.REPLICATE_API_KEY):
+                raise RuntimeError("replicate_not_configured")
+            output = await replicate.run(
+                "stability-ai/stable-diffusion:27b93a2413e7f36cd83da926f3656280b2931564ff050bf9575f1fdf9bcd7478",
+                input={
+                    "prompt": prompt,
+                    "width": width,
+                    "height": height,
+                    "num_outputs": 1,
+                },
+            )
+            if not output:
+                raise RuntimeError("replicate_empty_output")
+            return output[0]
+
+        return await retry_with_backoff(
+            once,
+            max_attempts=2,
+            base_delay=settings.IMAGE_HTTP_RETRY_BASE_DELAY,
+            max_delay=settings.IMAGE_HTTP_RETRY_MAX_DELAY,
+            operation_name="replicate_stable_diffusion",
+            is_retryable=is_transient_exception,
+        )
 
     async def run(
         self,
@@ -25,22 +96,11 @@ class ImageAgent(BaseAgent):
         log_callback: Optional[callable] = None,
         history: str = "",
     ) -> ImageResult:
-        """运行图片Agent
-
-        Args:
-            input_data: 策划结果
-            log_callback: 日志回调函数
-
-        Returns:
-            图片结果
-        """
+        """运行图片Agent"""
         await self.log(f"根据策划方案生成图片描述: {input_data}", log_callback)
-        # 处理不同类型的输入
         if isinstance(input_data, dict):
             input_data_dict = input_data
-
         else:
-            # PlanningResult对象
             input_data_dict = input_data.model_dump()
 
         target_audience = input_data_dict.get("target_audience") or []
@@ -51,7 +111,6 @@ class ImageAgent(BaseAgent):
         if not isinstance(core_selling_points, list):
             core_selling_points = [str(core_selling_points)]
 
-        # 生成图片描述
         prompt = f"""
         你是一位资深电商摄影师和设计师，擅长根据商品类别和营销文案，构思出**极具真实感、像实拍照片**的商品图描述。
         请根据以下信息，生成一段用于图像生成模型（如Midjourney、DALL-E）的图片描述，要求图片看起来像是**真实拍摄**，而不是AI生成或渲染图。
@@ -78,55 +137,39 @@ class ImageAgent(BaseAgent):
         """
 
         await self.log("生成图片描述...", log_callback)
+        await self.log(f"调用图片生成API（主模型 + 预算内降级）", log_callback)
 
-        # 这里简化处理，直接使用策划结果中的图片需求作为提示词
-        # 实际项目中可以调用OpenAI生成更详细的描述
-        size = "1024x1024"
-        await self.log(f"调用图片生成API，提示词: {prompt}", log_callback)
+        deadline = time.monotonic() + settings.IMAGE_GEN_TOTAL_BUDGET_SECONDS
+        prompt_variants = [prompt, self._compact_prompt_for_retry(prompt)]
+        size_variants = ["1024x1024", "512x512"]
+        last_error: Optional[Exception] = None
 
-        # 调用图片生成服务
-        try:
-            # 首先尝试使用指定的模型通过OpenAI/SiliconFlow API生成图片
-            response = await self.client.images.generate(
-                model=self.image_model,
-                prompt=prompt,
-                size=size,
-                quality="standard",
-                n=1,
-            )
-            image_url = response.data[0].url
-        except Exception as e:
-            # 如果OpenAI/SiliconFlow API失败，尝试使用Stable Diffusion
-            print(f"使用{self.image_model}生成图片失败: {e}")
+        for i, ptext in enumerate(prompt_variants):
+            if time.monotonic() > deadline:
+                break
+            size = size_variants[min(i, len(size_variants) - 1)]
             try:
-                if hasattr(replicate, "run") and settings.REPLICATE_API_KEY:
-                    # 使用Stable Diffusion作为备选
-                    output = await replicate.run(
-                        "stability-ai/stable-diffusion:27b93a2413e7f36cd83da926f3656280b2931564ff050bf9575f1fdf9bcd7478",
-                        input={
-                            "prompt": prompt,
-                            "width": int(size.split("x")[0]),
-                            "height": int(size.split("x")[1]),
-                            "num_outputs": 1,
-                        },
-                    )
-                    image_url = (
-                        output[0]
-                        if output
-                        else "https://via.placeholder.com/1024x1024?text=Image+Generation+Failed"
-                    )
-                else:
-                    # 没有备选方案，返回失败图片
-                    image_url = "https://via.placeholder.com/1024x1024?text=Image+Generation+Failed"
-            except Exception as replicate_error:
-                print(f"使用Stable Diffusion生成图片失败: {replicate_error}")
-                # 返回默认图片URL
-                image_url = (
-                    "https://via.placeholder.com/1024x1024?text=Image+Generation+Failed"
-                )
+                image_url = await self._siliconflow_generate(ptext, size)
+                image_result = ImageResult(image_url=image_url, prompt=ptext)
+                await self.log(f"图片生成完成: {image_result}", log_callback)
+                return image_result
+            except Exception as e:
+                last_error = e
+                print(f"使用{self.image_model}生成图片失败 (variant={i}, size={size}): {e}")
+                await self.log(f"主模型生图失败，尝试降级: {e}", log_callback)
 
-        # image_url='https://bizyair-prod.oss-cn-shanghai.aliyuncs.com/outputs/2697b788-7795-4f36-8f7e-c1ea20bd61b8_6e9dfbbfb65c2b4d99bdbc0d2f76ce3b_ComfyUI_21ec1493_00001_.png'
-        image_result = ImageResult(image_url=image_url, prompt=prompt)
+        if time.monotonic() <= deadline and hasattr(replicate, "run") and settings.REPLICATE_API_KEY:
+            ptext = prompt_variants[-1]
+            w, h = self._parse_size("512x512")
+            try:
+                image_url = await self._replicate_generate(ptext, w, h)
+                image_result = ImageResult(image_url=image_url, prompt=ptext)
+                await self.log(f"Replicate 备用生图完成: {image_result}", log_callback)
+                return image_result
+            except Exception as e:
+                last_error = e
+                print(f"使用Stable Diffusion生成图片失败: {e}")
 
-        await self.log(f"图片生成完成: {image_result}", log_callback)
-        return image_result
+        err = last_error or RuntimeError("image pipeline exhausted")
+        await self.log(f"图片生成最终失败: {err}", log_callback)
+        raise RuntimeError(f"图片生成失败: {err}") from err

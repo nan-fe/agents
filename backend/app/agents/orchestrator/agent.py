@@ -5,6 +5,7 @@ from app.agents.reviewer_agent import ReviewerAgent
 from app.agents.product_rag_system.agent import ProductRagAgent
 from app.services.orchestrator_llm_service import OrchestratorLLMService
 from app.config import settings
+from app.utils.retry_policy import classify_agent_failure
 from .execution_context import ExecutionContext
 from .agent_input_builder import AgentInputBuilder
 from .agent_executor import AgentExecutor
@@ -251,13 +252,26 @@ class DialogOrchestratorAgent:
             # 构建输入
             agent_input = builder.build(agent_name)
 
-            # 执行 Agent
-            result = await self.agent_executor.execute(
-                agent_name,
-                agent_input,
-                log_callback,
-                history=context.get_history_data(),
-            )
+            # 执行 Agent（ImageAgent 失败时部分成功：保留文案等，带 image_error_code）
+            try:
+                result = await self.agent_executor.execute(
+                    agent_name,
+                    agent_input,
+                    log_callback,
+                    history=context.get_history_data(),
+                )
+            except Exception as e:
+                if agent_name == "ImageAgent":
+                    code = classify_agent_failure(e)
+                    context.partial_errors["ImageAgent"] = code
+                    if log_callback:
+                        await log_callback(
+                            "Orchestrator",
+                            f"ImageAgent 失败（{code}），跳过生图并继续后续流程: {e}",
+                        )
+                    context.set_image(image_url="", prompt="")
+                    continue
+                raise
 
             # 映射结果到上下文
             if result is not None:

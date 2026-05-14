@@ -1,40 +1,9 @@
 import logging
-import asyncio
-from typing import Callable, Any
 
 # 配置日志
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
-
-logger = logging.getLogger(__name__)
-
-
-async def retry_async(
-    func: Callable, max_retries: int = 3, delay: float = 1.0, **kwargs
-) -> Any:
-    """异步重试装饰器
-
-    Args:
-        func: 异步函数
-        max_retries: 最大重试次数
-        delay: 重试延迟（秒）
-        **kwargs: 函数参数
-
-    Returns:
-        函数返回值
-    """
-    retries = 0
-    while retries < max_retries:
-        try:
-            return await func(**kwargs)
-        except Exception as e:
-            retries += 1
-            logger.warning(f"尝试 {retries}/{max_retries} 失败: {e}")
-            if retries < max_retries:
-                await asyncio.sleep(delay)
-            else:
-                raise
 
 
 def parse_agent_output(output: str, expected_keys: list) -> dict:

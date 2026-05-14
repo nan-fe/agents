@@ -17,7 +17,7 @@ from .embeddings import EmbeddingDatabase
 from .retrievers.retriever import HybridRetriever
 from .retrievers.ranker import Ranker
 from .answer_generator import AnswerGenerator
-from app.utils.search_tool import search_duckduckgo_langchain
+from app.utils.search_tool import search_duckduckgo_langchain_async
 
 class ProductRagAgent:
     """产品RAG Agent - 整合所有模块"""
@@ -156,7 +156,7 @@ class ProductRagAgent:
             if log_cb:
                 await log_cb("RagAgent", "本地向量库未找到相关商品，使用网络搜索")
             
-            search_result = search_duckduckgo_langchain(query, site="taobao.com")
+            search_result = await search_duckduckgo_langchain_async(query, site="taobao.com")
             print(f"[RagAgent] 网络搜索完成，结果长度: {len(search_result) if search_result else 0}")
             
             if search_result:

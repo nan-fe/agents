@@ -7,6 +7,10 @@ from langchain_community.tools import DuckDuckGoSearchRun
 import requests
 from bs4 import BeautifulSoup
 import json
+import asyncio
+
+from app.config import settings
+from app.utils.retry_policy import retry_with_backoff
 
 try:
     from ddgs import DDGS  # type: ignore
@@ -312,6 +316,14 @@ def search_taobao_first_item_detail_by_category(
     return None
 
 
+def _search_duckduckgo_langchain_impl(query: str, site: str = "taobao.com") -> str:
+    """同步搜索实现；抛异常时由调用方决定是否重试。"""
+    search = DuckDuckGoSearchRun()
+    full_query = f"{query} site:{site}"
+    result = search.run(full_query)
+    return result if result is not None else ""
+
+
 def search_duckduckgo_langchain(query: str, site: str = "taobao.com"):
     """
     使用 LangChain 的 DuckDuckGoSearchRun 搜索特定网站
@@ -324,11 +336,25 @@ def search_duckduckgo_langchain(query: str, site: str = "taobao.com"):
         搜索结果文本
     """
     try:
-        search = DuckDuckGoSearchRun()
-        full_query = f"{query} site:{site}"
-        result = search.run(full_query)
-        return result
-    except:
+        return _search_duckduckgo_langchain_impl(query, site)
+    except Exception:
+        return ""
+
+
+async def search_duckduckgo_langchain_async(query: str, site: str = "taobao.com") -> str:
+    """异步包装 + 可恢复错误重试（指数退避）；最终失败返回空串。"""
+    async def once():
+        return await asyncio.to_thread(_search_duckduckgo_langchain_impl, query, site)
+
+    try:
+        return await retry_with_backoff(
+            once,
+            max_attempts=settings.SEARCH_HTTP_RETRY_MAX_ATTEMPTS,
+            base_delay=settings.SEARCH_HTTP_RETRY_BASE_DELAY,
+            max_delay=settings.SEARCH_HTTP_RETRY_MAX_DELAY,
+            operation_name="duckduckgo_langchain",
+        )
+    except Exception:
         return ""
 
 
