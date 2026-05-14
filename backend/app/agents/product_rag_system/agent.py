@@ -5,7 +5,11 @@ Product RAG Agent
 - 混合检索+排序
 - 质量评估&决策（如果需要网络搜索-则调用DuckDuckGo搜索）
 - 答案生成
+
+向量索引与启动解耦：索引在 ensure_index_ready 中完成（可线程池执行），
+便于应用先监听端口、再通过 /health/ready 做就绪探针。
 """
+import asyncio
 from typing import Optional, Callable
 
 from .product_database import ProductDatabase
@@ -29,16 +33,13 @@ class ProductRagAgent:
         # 1. 初始化产品数据库
         self.products_db = ProductDatabase(data_path)
         
-        # 2. 初始化嵌入数据库
+        # 2. 初始化嵌入数据库（向量索引延后到 ensure_index_ready，避免阻塞进程启动）
         self.embedding_db = EmbeddingDatabase()
-        
-        # 索引商品数据
-        self.embedding_db.index_documents(
-            ids=self.products_db.get_ids(),
-            documents=self.products_db.get_documents(),
-            metadatas=self.products_db.get_metadata()
-        )
-        
+
+        self._index_lock: Optional[asyncio.Lock] = None
+        self._index_state: str = "pending"  # pending | ready | failed
+        self._index_error: Optional[str] = None
+
         # 3. 初始化检索器和重排器
         self.retriever = HybridRetriever(self.embedding_db, self.products_db)
         self.ranker = Ranker()
@@ -47,6 +48,42 @@ class ProductRagAgent:
         self.answer_generator = AnswerGenerator()
         
         self.log_callback = log_callback
+
+    def is_rag_index_ready(self) -> bool:
+        """供就绪探针：向量索引已成功构建（或库中已有数据并跳过构建）。"""
+        return self._index_state == "ready"
+
+    def _build_index_sync(self) -> None:
+        """同步构建向量索引（在线程池中执行）。"""
+        self.embedding_db.index_documents(
+            ids=self.products_db.get_ids(),
+            documents=self.products_db.get_documents(),
+            metadatas=self.products_db.get_metadata(),
+        )
+
+    async def ensure_index_ready(self) -> None:
+        """确保 Chroma 索引已就绪；并发安全，可重复调用。"""
+        if self._index_lock is None:
+            self._index_lock = asyncio.Lock()
+
+        if self._index_state == "ready":
+            return
+        if self._index_state == "failed":
+            raise RuntimeError(self._index_error or "RAG 索引构建失败")
+
+        async with self._index_lock:
+            if self._index_state == "ready":
+                return
+            if self._index_state == "failed":
+                raise RuntimeError(self._index_error or "RAG 索引构建失败")
+            try:
+                await asyncio.to_thread(self._build_index_sync)
+            except Exception as e:
+                self._index_state = "failed"
+                self._index_error = str(e)
+                raise
+            self._index_state = "ready"
+            self._index_error = None
     
     def retrieve_and_rank(self, query: str, top_k: int = 3) -> list:
         """
@@ -80,6 +117,8 @@ class ProductRagAgent:
             包含查询、检索结果和答案的字典
         """
         log_cb = log_callback or self.log_callback
+
+        await self.ensure_index_ready()
         
         print(f"[RagAgent] 开始处理查询: {query}")
         if log_cb:

@@ -4,6 +4,7 @@ from app.agents.image_agent import ImageAgent
 from app.agents.reviewer_agent import ReviewerAgent
 from app.agents.product_rag_system.agent import ProductRagAgent
 from app.services.orchestrator_llm_service import OrchestratorLLMService
+from app.config import settings
 from .execution_context import ExecutionContext
 from .agent_input_builder import AgentInputBuilder
 from .agent_executor import AgentExecutor
@@ -13,6 +14,7 @@ from langchain_core.chat_history import BaseChatMessageHistory
 from langchain_core.messages import BaseMessage, HumanMessage
 from collections import deque
 from dotenv import load_dotenv
+import asyncio
 
 load_dotenv()
 
@@ -113,8 +115,11 @@ class DialogOrchestratorAgent:
         await log_callback("Orchestrator", "开始智能任务编排...")
 
         # 分析用户意图
-        intent = await self.llm_service.analyze_intent(
-            user_input, session_history.messages
+        intent = await asyncio.wait_for(
+            self.llm_service.analyze_intent(
+                user_input, session_history.messages
+            ),
+            timeout=settings.AGENT_TIMEOUT_INTENT_SECONDS,
         )
         await log_callback("Orchestrator", f"用户意图分析: {intent}")
 
@@ -140,8 +145,11 @@ class DialogOrchestratorAgent:
         )
 
         # LLM 动态路由决策
-        routing_decision = await self.llm_service.route_task(
-            user_input, context.get_planning(), intent
+        routing_decision = await asyncio.wait_for(
+            self.llm_service.route_task(
+                user_input, context.get_planning(), intent
+            ),
+            timeout=settings.AGENT_TIMEOUT_ROUTING_SECONDS,
         )
         await log_callback(
             "Orchestrator",
@@ -177,8 +185,11 @@ class DialogOrchestratorAgent:
         """准备执行上下文"""
         # 是否需要新规划
         if intent == "new_task":
-            planning_result = await self.planner_agent.run(
-                user_input, log_callback, history=""
+            planning_result = await asyncio.wait_for(
+                self.planner_agent.run(
+                    user_input, log_callback, history=""
+                ),
+                timeout=settings.AGENT_TIMEOUT_PLANNER_AGENT_SECONDS,
             )
             await log_callback(
                 "Orchestrator", f"策划完成，主题: {planning_result.topic}"
@@ -192,8 +203,11 @@ class DialogOrchestratorAgent:
                 context.load_from_dict({"planning": last_plan})
             else:
                 # 历史缺失（如服务重启/SSE重连后命中新进程）时，降级重新规划，避免下游输入为空
-                planning_result = await self.planner_agent.run(
-                    user_input, log_callback, history=""
+                planning_result = await asyncio.wait_for(
+                    self.planner_agent.run(
+                        user_input, log_callback, history=""
+                    ),
+                    timeout=settings.AGENT_TIMEOUT_PLANNER_AGENT_SECONDS,
                 )
                 context.set_planning(planning_result)
                 await log_callback("Orchestrator", "未找到历史规划，已自动重建规划")

@@ -24,6 +24,15 @@ class Settings(BaseSettings):
     APP_NAME: str = "XHS Multi-Agent Creator"
     DEBUG: bool = True
 
+    # Agent / 编排 LLM 调用分级超时（秒），避免慢节点拖死整条 SSE
+    AGENT_TIMEOUT_INTENT_SECONDS: float = 45.0
+    AGENT_TIMEOUT_ROUTING_SECONDS: float = 45.0
+    AGENT_TIMEOUT_PLANNER_AGENT_SECONDS: float = 120.0
+    AGENT_TIMEOUT_COPYWRITER_AGENT_SECONDS: float = 180.0
+    AGENT_TIMEOUT_IMAGE_AGENT_SECONDS: float = 300.0
+    AGENT_TIMEOUT_REVIEWER_AGENT_SECONDS: float = 90.0
+    AGENT_TIMEOUT_RAG_AGENT_SECONDS: float = 120.0
+
     # LangSmith
     LANGCHAIN_TRACING_V2: bool = True
     # Optional: LangSmith API key to access deployed graph
