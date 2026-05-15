@@ -3,6 +3,7 @@ from langchain_openai import ChatOpenAI
 from langchain_core.prompts import PromptTemplate
 from langchain_core.output_parsers import BaseOutputParser
 from app.utils.token_counter import token_counter
+from app.utils.retry_policy import retry_with_backoff
 from app.config import settings
 
 
@@ -76,6 +77,7 @@ class LLMFactory:
         temperature: float = 0.7,
         history: str = "",
         safety_buffer: int = 200,
+        http_retry_max_attempts: Optional[int] = None,
         **kwargs,
     ) -> Any:
         """使用动态max_tokens执行chain
@@ -88,6 +90,8 @@ class LLMFactory:
             temperature: 温度参数
             history: 历史数据文本
             safety_buffer: 安全缓冲token数
+            http_retry_max_attempts: HTTP 层重试次数；None 则用全局 LLM_HTTP_RETRY_MAX_ATTEMPTS。
+                意图/路由等外层另有 asyncio.wait_for 时，应设为 1，避免退避 sleep 撑爆外层超时。
             **kwargs: 其他传递给ChatOpenAI的参数
 
         Returns:
@@ -127,8 +131,24 @@ class LLMFactory:
             chain = prompt_to_use | llm | parser
         else:
             chain = prompt_to_use | llm
-        
-        return await chain.ainvoke(chain_input)
+
+        async def _ainvoke_once():
+            return await chain.ainvoke(chain_input)
+
+        attempts = (
+            http_retry_max_attempts
+            if http_retry_max_attempts is not None
+            else settings.LLM_HTTP_RETRY_MAX_ATTEMPTS
+        )
+        attempts = max(1, int(attempts))
+
+        return await retry_with_backoff(
+            _ainvoke_once,
+            max_attempts=attempts,
+            base_delay=settings.LLM_HTTP_RETRY_BASE_DELAY,
+            max_delay=settings.LLM_HTTP_RETRY_MAX_DELAY,
+            operation_name="langchain_ainvoke",
+        )
 
 
 llm_factory = LLMFactory()

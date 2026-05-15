@@ -81,6 +81,7 @@ class ExecutionContext:
         self.review = ReviewContext()
         self.rag_context: Optional[Any] = None
         self._last_result: Optional[Dict[str, Any]] = None
+        self.partial_errors: Dict[str, str] = {}
 
     def load_from_dict(self, data: Dict[str, Any]) -> None:
         """从字典加载上下文"""
@@ -185,17 +186,33 @@ class ExecutionContext:
     def build_final_result(self) -> Dict[str, Any]:
         """构建最终结果"""
         image_prompt = self.image.prompt or ""
-        final = {
+        img_err = self.partial_errors.get("ImageAgent")
+
+        if self.image.image_url:
+            image_url_val = self.image.image_url
+        elif img_err:
+            image_url_val = ""
+        else:
+            image_url_val = "https://via.placeholder.com/800x600"
+
+        final: Dict[str, Any] = {
             "title": self.copywriting.title or "默认标题",
             "content": self.copywriting.content or "默认内容",
             "hashtags": self.copywriting.hashtags or ["#小红书", "#推荐"],
-            "image_url": self.image.image_url or "https://via.placeholder.com/800x600",
+            "image_url": image_url_val,
             "image_prompt": image_prompt,
             # 兼容历史读取逻辑中的旧字段名
             "prompt": image_prompt,
         }
-        
+
+        if img_err:
+            final["image_error_code"] = img_err
+        if self.partial_errors:
+            final["partial_errors"] = dict(self.partial_errors)
+            msgs = [f"{k}:{v}" for k, v in self.partial_errors.items()]
+            final["message"] = "部分步骤失败：" + "; ".join(msgs)
+
         if self.planning.product_recommendations:
             final["product_recommendations"] = self.planning.product_recommendations
-        
+
         return final

@@ -2,11 +2,20 @@ import re
 import time
 from urllib.parse import urlparse, parse_qs
 # from duckduckgo_search import DDGS
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from langchain_community.tools import DuckDuckGoSearchRun
 import requests
 from bs4 import BeautifulSoup
 import json
+import asyncio
+
+from app.config import settings
+from app.utils.retry_policy import retry_with_backoff
+
+try:
+    from ddgs import DDGS  # type: ignore
+except ImportError:
+    from duckduckgo_search import DDGS
 
 # from selenium import webdriver
 # from selenium.webdriver.chrome.options import Options
@@ -187,6 +196,134 @@ import json
 #         return []
 
 
+_TAOBAO_ITEM_ID_RE = re.compile(r"[?&]id=(\d+)")
+
+
+def _extract_taobao_item_id(url: str) -> Optional[str]:
+    parsed = urlparse(url)
+    q = parse_qs(parsed.query)
+    if "id" in q and q["id"]:
+        return q["id"][0]
+    m = _TAOBAO_ITEM_ID_RE.search(url)
+    return m.group(1) if m else None
+
+
+def is_taobao_item_detail_url(url: str) -> bool:
+    """是否为淘宝 C 店或天猫商品详情页链接（含 item.htm 与 numeric id）。"""
+    if not url:
+        return False
+    u = url.lower()
+    if "id=" not in u:
+        return False
+    if "item.taobao.com" in u and "item.htm" in u:
+        return True
+    if "detail.tmall.com" in u and "item.htm" in u:
+        return True
+    return False
+
+
+def canonical_taobao_item_url(url: str) -> str:
+    """去掉多余 query，规范为 item.taobao.com 或 detail.tmall.com 的 item.htm?id=。"""
+    item_id = _extract_taobao_item_id(url)
+    if not item_id:
+        return url
+    parsed = urlparse(url)
+    host = (
+        "detail.tmall.com"
+        if "tmall.com" in parsed.netloc.lower()
+        else "item.taobao.com"
+    )
+    return f"https://{host}/item.htm?id={item_id}"
+
+
+def retrieval_copy_matches_category(
+    category: str,
+    title: str,
+    summary: str,
+    *,
+    min_char_overlap_ratio: float = 0.45,
+) -> bool:
+    """
+    判断检索得到的标题+摘要是否与商品类别一致（启发式，用于过滤 DDG 偏题结果）。
+
+    1. 类别词完整出现在 title 或 summary 中 → True；
+    2. 否则：类别中非空白字符在合并文案中的出现比例 ≥ min_char_overlap_ratio → True。
+    """
+    cat = (category or "").strip()
+    if not cat:
+        return False
+    blob = f"{title}\n{summary}".strip()
+    if not blob:
+        return False
+    if cat in blob:
+        return True
+    chars = [ch for ch in cat if not ch.isspace()]
+    if not chars:
+        return False
+    present = sum(1 for ch in chars if ch in blob)
+    return present / len(chars) >= min_char_overlap_ratio
+
+
+def search_taobao_first_item_detail_by_category(
+    category: str, max_results_per_query: int = 12
+) -> Optional[Dict[str, Any]]:
+    """
+    按商品类别做外部检索，返回**与该类别文案一致**的一条淘宝系商品详情（非首个 URL 即收）。
+
+    数据来源为 DuckDuckGo 文本结果中的 ``item.taobao.com`` / ``detail.tmall.com`` 商品链；
+    在每条结果的标题、摘要上做 ``retrieval_copy_matches_category`` 过滤，取第一条通过的条目。
+    若扫描完仍无匹配，返回 ``None``。
+
+    Returns:
+        ``category``、``item_id``、``detail_url``、``title``、``summary``（检索摘要）、
+        ``matched_from_query``（调试用）；无合适商品时为 ``None``。
+    """
+    category = (category or "").strip()
+    if not category:
+        return None
+
+    queries = [
+        f"{category} site:item.taobao.com",
+        f"{category} site:detail.tmall.com",
+    ]
+    for q in queries:
+        try:
+            with DDGS() as ddgs:
+                gen = ddgs.text(q, max_results=max_results_per_query)
+                if not gen:
+                    continue
+                for r in gen:
+                    href = (r.get("href") or "").strip()
+                    if not is_taobao_item_detail_url(href):
+                        continue
+                    title = (r.get("title") or "").strip()
+                    summary = (r.get("body") or "").strip()
+                    if not retrieval_copy_matches_category(category, title, summary):
+                        continue
+                    detail_url = canonical_taobao_item_url(href)
+                    item_id = _extract_taobao_item_id(detail_url) or ""
+                    return {
+                        "category": category,
+                        "item_id": item_id,
+                        "detail_url": detail_url,
+                        "title": title,
+                        "summary": summary,
+                        "matched_from_query": q,
+                    }
+        except Exception as e:
+            print(f"search_taobao_first_item_detail_by_category DDG 失败: {e}")
+            continue
+    return None
+
+
+def _search_duckduckgo_langchain_impl(query: str, site: str = "taobao.com") -> str:
+    """同步搜索实现；抛异常时由调用方决定是否重试。"""
+    search = DuckDuckGoSearchRun()
+    full_query = f"{query} site:{site}"
+    result = search.run(full_query)
+    return result if result is not None else ""
+
+
 def search_duckduckgo_langchain(query: str, site: str = "taobao.com"):
     """
     使用 LangChain 的 DuckDuckGoSearchRun 搜索特定网站
@@ -199,11 +336,25 @@ def search_duckduckgo_langchain(query: str, site: str = "taobao.com"):
         搜索结果文本
     """
     try:
-        search = DuckDuckGoSearchRun()
-        full_query = f"{query} site:{site}"
-        result = search.run(full_query)
-        return result
-    except:
+        return _search_duckduckgo_langchain_impl(query, site)
+    except Exception:
+        return ""
+
+
+async def search_duckduckgo_langchain_async(query: str, site: str = "taobao.com") -> str:
+    """异步包装 + 可恢复错误重试（指数退避）；最终失败返回空串。"""
+    async def once():
+        return await asyncio.to_thread(_search_duckduckgo_langchain_impl, query, site)
+
+    try:
+        return await retry_with_backoff(
+            once,
+            max_attempts=settings.SEARCH_HTTP_RETRY_MAX_ATTEMPTS,
+            base_delay=settings.SEARCH_HTTP_RETRY_BASE_DELAY,
+            max_delay=settings.SEARCH_HTTP_RETRY_MAX_DELAY,
+            operation_name="duckduckgo_langchain",
+        )
+    except Exception:
         return ""
 
 

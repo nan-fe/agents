@@ -1,5 +1,19 @@
 """Agent 执行器"""
-from typing import Any, Callable, Optional
+import asyncio
+from typing import Any, Callable, Dict, Optional
+
+from app.config import settings
+
+
+def _agent_timeout_seconds(agent_name: str) -> float:
+    mapping: Dict[str, float] = {
+        "PlannerAgent": settings.AGENT_TIMEOUT_PLANNER_AGENT_SECONDS,
+        "CopywriterAgent": settings.AGENT_TIMEOUT_COPYWRITER_AGENT_SECONDS,
+        "ImageAgent": settings.AGENT_TIMEOUT_IMAGE_AGENT_SECONDS,
+        "ReviewerAgent": settings.AGENT_TIMEOUT_REVIEWER_AGENT_SECONDS,
+        "RagAgent": settings.AGENT_TIMEOUT_RAG_AGENT_SECONDS,
+    }
+    return mapping.get(agent_name, 120.0)
 
 
 class AgentExecutor:
@@ -35,14 +49,22 @@ class AgentExecutor:
             return None
 
         agent = self.agent_map[agent_name]
+        timeout = _agent_timeout_seconds(agent_name)
         try:
             await self._log(log_callback, f"执行 {agent_name}, input: {agent_input}")
             
-            # 根据 agent 类型调用不同的方法
-            result = await self._call_agent(agent, agent_name, agent_input, history)
+            # 根据 agent 类型调用不同的方法（分级超时，避免单节点拖死整条 SSE）
+            result = await asyncio.wait_for(
+                self._call_agent(agent, agent_name, agent_input, history),
+                timeout=timeout,
+            )
             
             await self._log(log_callback, f"{agent_name} 执行成功")
             return result
+        except asyncio.TimeoutError:
+            msg = f"{agent_name} 执行超时（>{timeout}s）"
+            await self._log(log_callback, msg)
+            raise TimeoutError(msg) from None
         except Exception as e:
             await self._log(log_callback, f"{agent_name} 执行失败: {str(e)}")
             raise

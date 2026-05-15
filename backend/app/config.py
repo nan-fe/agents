@@ -24,6 +24,30 @@ class Settings(BaseSettings):
     APP_NAME: str = "XHS Multi-Agent Creator"
     DEBUG: bool = True
 
+    # Agent / 编排 LLM 调用分级超时（秒），避免慢节点拖死整条 SSE
+    AGENT_TIMEOUT_INTENT_SECONDS: float = 20.0
+    AGENT_TIMEOUT_ROUTING_SECONDS: float = 20.0
+    AGENT_TIMEOUT_PLANNER_AGENT_SECONDS: float = 120.0
+    AGENT_TIMEOUT_COPYWRITER_AGENT_SECONDS: float = 180.0
+    AGENT_TIMEOUT_IMAGE_AGENT_SECONDS: float = 300.0
+    AGENT_TIMEOUT_REVIEWER_AGENT_SECONDS: float = 90.0
+    AGENT_TIMEOUT_RAG_AGENT_SECONDS: float = 120.0
+
+    # 意图/路由等外层有 wait_for 的编排 LLM：默认不重试，避免退避 sleep 先于外层超时触发「生成失败」
+    LLM_ORCHESTRATION_HTTP_RETRY_MAX_ATTEMPTS: int = 1
+
+    # LLM / 搜索 / 生图 HTTP 重试（策略化：仅可恢复错误 + 指数退避，见 retry_policy）
+    LLM_HTTP_RETRY_MAX_ATTEMPTS: int = 3
+    LLM_HTTP_RETRY_BASE_DELAY: float = 0.6
+    LLM_HTTP_RETRY_MAX_DELAY: float = 24.0
+    IMAGE_HTTP_RETRY_MAX_ATTEMPTS: int = 3
+    IMAGE_HTTP_RETRY_BASE_DELAY: float = 1.0
+    IMAGE_HTTP_RETRY_MAX_DELAY: float = 30.0
+    IMAGE_GEN_TOTAL_BUDGET_SECONDS: float = 260.0
+    SEARCH_HTTP_RETRY_MAX_ATTEMPTS: int = 3
+    SEARCH_HTTP_RETRY_BASE_DELAY: float = 0.5
+    SEARCH_HTTP_RETRY_MAX_DELAY: float = 12.0
+
     # LangSmith
     LANGCHAIN_TRACING_V2: bool = True
     # Optional: LangSmith API key to access deployed graph

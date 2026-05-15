@@ -29,15 +29,15 @@ const ResultDisplay = (params: { result?: any }) => {
           ))}
         </div>
       </div>
-      <div className="bg-white rounded-lg shadow-md p-4">
-        {result.image_url && (
+      {result.image_url && (
+        <div className="bg-white rounded-lg shadow-md p-4">
           <img
             src={result.image_url}
             alt="生成的图片"
             className="w-full h-auto rounded-lg max-h-96 object-contain"
           />
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 };

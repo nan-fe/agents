@@ -3,7 +3,12 @@ from app.agents.copywriter_agent import CopywriterAgent
 from app.agents.image_agent import ImageAgent
 from app.agents.reviewer_agent import ReviewerAgent
 from app.agents.product_rag_system.agent import ProductRagAgent
-from app.services.orchestrator_llm_service import OrchestratorLLMService
+from app.services.orchestrator_llm_service import (
+    OrchestratorLLMService,
+    IntentAnalysisTimeoutError,
+)
+from app.config import settings
+from app.utils.retry_policy import classify_agent_failure
 from .execution_context import ExecutionContext
 from .agent_input_builder import AgentInputBuilder
 from .agent_executor import AgentExecutor
@@ -13,6 +18,7 @@ from langchain_core.chat_history import BaseChatMessageHistory
 from langchain_core.messages import BaseMessage, HumanMessage
 from collections import deque
 from dotenv import load_dotenv
+import asyncio
 
 load_dotenv()
 
@@ -112,10 +118,13 @@ class DialogOrchestratorAgent:
 
         await log_callback("Orchestrator", "开始智能任务编排...")
 
-        # 分析用户意图
-        intent = await self.llm_service.analyze_intent(
-            user_input, session_history.messages
-        )
+        try:
+            intent = await self.llm_service.analyze_intent(
+                user_input, session_history.messages
+            )
+        except IntentAnalysisTimeoutError as e:
+            await log_callback("Orchestrator", str(e))
+            return e.to_early_exit()
         await log_callback("Orchestrator", f"用户意图分析: {intent}")
 
         # 处理问答意图
@@ -139,7 +148,6 @@ class DialogOrchestratorAgent:
             context, session_history, intent, user_input, log_callback
         )
 
-        # LLM 动态路由决策
         routing_decision = await self.llm_service.route_task(
             user_input, context.get_planning(), intent
         )
@@ -177,8 +185,11 @@ class DialogOrchestratorAgent:
         """准备执行上下文"""
         # 是否需要新规划
         if intent == "new_task":
-            planning_result = await self.planner_agent.run(
-                user_input, log_callback, history=""
+            planning_result = await asyncio.wait_for(
+                self.planner_agent.run(
+                    user_input, log_callback, history=""
+                ),
+                timeout=settings.AGENT_TIMEOUT_PLANNER_AGENT_SECONDS,
             )
             await log_callback(
                 "Orchestrator", f"策划完成，主题: {planning_result.topic}"
@@ -192,8 +203,11 @@ class DialogOrchestratorAgent:
                 context.load_from_dict({"planning": last_plan})
             else:
                 # 历史缺失（如服务重启/SSE重连后命中新进程）时，降级重新规划，避免下游输入为空
-                planning_result = await self.planner_agent.run(
-                    user_input, log_callback, history=""
+                planning_result = await asyncio.wait_for(
+                    self.planner_agent.run(
+                        user_input, log_callback, history=""
+                    ),
+                    timeout=settings.AGENT_TIMEOUT_PLANNER_AGENT_SECONDS,
                 )
                 context.set_planning(planning_result)
                 await log_callback("Orchestrator", "未找到历史规划，已自动重建规划")
@@ -237,13 +251,26 @@ class DialogOrchestratorAgent:
             # 构建输入
             agent_input = builder.build(agent_name)
 
-            # 执行 Agent
-            result = await self.agent_executor.execute(
-                agent_name,
-                agent_input,
-                log_callback,
-                history=context.get_history_data(),
-            )
+            # 执行 Agent（ImageAgent 失败时部分成功：保留文案等，带 image_error_code）
+            try:
+                result = await self.agent_executor.execute(
+                    agent_name,
+                    agent_input,
+                    log_callback,
+                    history=context.get_history_data(),
+                )
+            except Exception as e:
+                if agent_name == "ImageAgent":
+                    code = classify_agent_failure(e)
+                    context.partial_errors["ImageAgent"] = code
+                    if log_callback:
+                        await log_callback(
+                            "Orchestrator",
+                            f"ImageAgent 失败（{code}），跳过生图并继续后续流程: {e}",
+                        )
+                    context.set_image(image_url="", prompt="")
+                    continue
+                raise
 
             # 映射结果到上下文
             if result is not None:
