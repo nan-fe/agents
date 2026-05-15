@@ -126,7 +126,19 @@ async def generate_dialog_event_stream(
         except asyncio.CancelledError:
             return
         except Exception as e:
-            error_text = f"生成失败: {str(e)}"
+            if isinstance(e, TimeoutError):
+                error_text = (
+                    "生成失败：执行超时（常见于规划、模型调用等环节超过等待上限），请稍后重试。"
+                )
+            else:
+                detail = (str(e) or "").strip()
+                if not detail and getattr(e, "args", None):
+                    detail = " ".join(
+                        str(a) for a in e.args if a is not None and str(a).strip()
+                    ).strip()
+                if not detail:
+                    detail = type(e).__name__
+                error_text = f"生成失败: {detail}"
             error_log_message = SSEMessage(
                 type="log",
                 data={
@@ -143,6 +155,8 @@ async def generate_dialog_event_stream(
                 "image_url": "",
                 "message": error_text,
             }
+            if isinstance(e, TimeoutError):
+                final_result["error_code"] = "TIMEOUT"
 
         result_message = SSEMessage(type="result", data=final_result)
         yield {"event": "message", "data": result_message.model_dump_json()}

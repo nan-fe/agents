@@ -3,7 +3,10 @@ from app.agents.copywriter_agent import CopywriterAgent
 from app.agents.image_agent import ImageAgent
 from app.agents.reviewer_agent import ReviewerAgent
 from app.agents.product_rag_system.agent import ProductRagAgent
-from app.services.orchestrator_llm_service import OrchestratorLLMService
+from app.services.orchestrator_llm_service import (
+    OrchestratorLLMService,
+    IntentAnalysisTimeoutError,
+)
 from app.config import settings
 from app.utils.retry_policy import classify_agent_failure
 from .execution_context import ExecutionContext
@@ -115,13 +118,13 @@ class DialogOrchestratorAgent:
 
         await log_callback("Orchestrator", "开始智能任务编排...")
 
-        # 分析用户意图
-        intent = await asyncio.wait_for(
-            self.llm_service.analyze_intent(
+        try:
+            intent = await self.llm_service.analyze_intent(
                 user_input, session_history.messages
-            ),
-            timeout=settings.AGENT_TIMEOUT_INTENT_SECONDS,
-        )
+            )
+        except IntentAnalysisTimeoutError as e:
+            await log_callback("Orchestrator", str(e))
+            return e.to_early_exit()
         await log_callback("Orchestrator", f"用户意图分析: {intent}")
 
         # 处理问答意图
@@ -145,12 +148,8 @@ class DialogOrchestratorAgent:
             context, session_history, intent, user_input, log_callback
         )
 
-        # LLM 动态路由决策
-        routing_decision = await asyncio.wait_for(
-            self.llm_service.route_task(
-                user_input, context.get_planning(), intent
-            ),
-            timeout=settings.AGENT_TIMEOUT_ROUTING_SECONDS,
+        routing_decision = await self.llm_service.route_task(
+            user_input, context.get_planning(), intent
         )
         await log_callback(
             "Orchestrator",

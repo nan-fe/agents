@@ -25,13 +25,16 @@ class Settings(BaseSettings):
     DEBUG: bool = True
 
     # Agent / 编排 LLM 调用分级超时（秒），避免慢节点拖死整条 SSE
-    AGENT_TIMEOUT_INTENT_SECONDS: float = 45.0
-    AGENT_TIMEOUT_ROUTING_SECONDS: float = 45.0
+    AGENT_TIMEOUT_INTENT_SECONDS: float = 20.0
+    AGENT_TIMEOUT_ROUTING_SECONDS: float = 20.0
     AGENT_TIMEOUT_PLANNER_AGENT_SECONDS: float = 120.0
     AGENT_TIMEOUT_COPYWRITER_AGENT_SECONDS: float = 180.0
     AGENT_TIMEOUT_IMAGE_AGENT_SECONDS: float = 300.0
     AGENT_TIMEOUT_REVIEWER_AGENT_SECONDS: float = 90.0
     AGENT_TIMEOUT_RAG_AGENT_SECONDS: float = 120.0
+
+    # 意图/路由等外层有 wait_for 的编排 LLM：默认不重试，避免退避 sleep 先于外层超时触发「生成失败」
+    LLM_ORCHESTRATION_HTTP_RETRY_MAX_ATTEMPTS: int = 1
 
     # LLM / 搜索 / 生图 HTTP 重试（策略化：仅可恢复错误 + 指数退避，见 retry_policy）
     LLM_HTTP_RETRY_MAX_ATTEMPTS: int = 3
