@@ -9,6 +9,7 @@ from langchain_core.prompts import PromptTemplate
 from pydantic import BaseModel
 
 from app.config import settings
+from app.security.prompt_rules import INTENT_SECURITY_PROMPT, ROUTING_SECURITY_PROMPT
 from app.utils.llm_factory import llm_factory
 
 
@@ -73,7 +74,9 @@ class OrchestratorLLMService:
     def __init__(self):
         self.routing_prompt = PromptTemplate(
             template="""你是一个智能任务路由器，负责分析任务并决定调用哪些Agent。
-
+"""
+            + ROUTING_SECURITY_PROMPT
+            + """
 可用的Agent：
 1. RagAgent - 商品信息 RagAgent，检索本地数据库中相似的商品，拿到商品信息
 2. CopywriterAgent - 文案 Agent，负责生成或者修改小红书风格文案
@@ -116,7 +119,9 @@ class OrchestratorLLMService:
 
         self.intent_prompt = PromptTemplate(
             template="""你是一个意图分析专家，负责分析用户的输入意图。
-
+"""
+            + INTENT_SECURITY_PROMPT
+            + """
 对话历史：{chat_history}
 用户当前输入：{user_input}
 

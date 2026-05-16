@@ -17,12 +17,12 @@ import {
 import {
   createDialogGenerateRequest,
   generateDialogContent,
+  type UserInput,
 } from '../services/api';
 import { List, RowComponentProps, useListRef } from 'react-window';
 import AgentLogs from '../components/agent-logs';
 import ResultDisplay from '../components/result-display';
 import { HistoryItem } from '../components/history-panel';
-import { LogType } from '../types';
 import { useSSEClient } from '../hooks/use-sse-client';
 
 const { Header, Content } = Layout;
@@ -56,6 +56,12 @@ type StreamEvent =
       type: 'result';
       data: any;
     };
+
+type LogType = {
+  agent_name: string;
+  message: string;
+  timestamp: string;
+};
 
 interface MessageRowData {
   messages: Message[];
@@ -218,7 +224,13 @@ const DialogContent: React.FC = () => {
 
       const fallbackResult = await connect<StreamEvent, any>({
         createRequest: (signal) =>
-          createDialogGenerateRequest(currentInputValue, currentSessionId, signal),
+          createDialogGenerateRequest(
+            {
+              prompt: currentInputValue,
+              session_id: currentSessionId,
+            } satisfies UserInput,
+            signal
+          ),
         parseMessage: (payload) => JSON.parse(payload) as StreamEvent,
         onMessage: (event) => {
           if (event.type === 'log') {
@@ -231,8 +243,10 @@ const DialogContent: React.FC = () => {
           console.warn('SSE 连接异常，已切换降级策略:', error);
           message.warning('实时通道异常，正在切换降级模式...');
           return generateDialogContent({
-            user_input: currentInputValue,
-            session_id: currentSessionId,
+            request: {
+              prompt: currentInputValue,
+              session_id: currentSessionId,
+            },
             log_callback: appendLog,
           });
         },

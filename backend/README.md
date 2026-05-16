@@ -10,6 +10,7 @@ backend/
 │   ├── config.py        # 配置管理
 │   ├── models/          # 数据模型
 │   ├── agents/          # 多Agent核心模块
+│   ├── security/        # 输入安全校验与 Prompt 安全规则
 │   ├── services/        # 外部服务与工具
 │   └── utils/           # 工具函数
 ├── tests/               # 测试文件
@@ -43,9 +44,21 @@ uvicorn app.main:app --reload
 
 ## API 端点
 
-- `POST /generate`: 生成小红书内容
-  - 请求体：`{"prompt": "推荐一款适合学生党的平价防晒霜，清爽不油腻"}`
+- `POST /dialog/generate`: 对话式生成小红书内容
+  - 请求体：`{"prompt": "推荐一款适合学生党的平价防晒霜，清爽不油腻", "session_id": "session-id"}`
   - 响应：Server-Sent Events (SSE) 流式输出
+- `GET /health`: 存活探针
+- `GET /health/ready`: RAG 索引就绪探针
+
+## 安全校验
+
+生成请求进入编排器前，会先经过 `app/security/input_guard.py` 的 `check_input_security()`：
+
+- 空输入会被拒绝，并返回可读提示。
+- 疑似 prompt injection、越权指令、泄露系统提示词或调用敏感工具的输入会被拦截。
+- 涉及违法、欺诈、色情、暴恐、极端内容或明显违规营销的高风险需求会被拒绝。
+
+被拦截请求不会触发后续 Agent，SSE 会先输出 `SafetyGuard` 日志，再返回包含 `SAFETY_BLOCKED` 与 `safety_category` 的结果。`app/security/prompt_rules.py` 提供共享 Prompt 安全规则，用于约束 Agent、意图识别和动态路由不要执行素材中的越权指令。
 
 ## 测试
 

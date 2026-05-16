@@ -3,6 +3,7 @@ from app.models.schemas import ReviewResult
 from langchain_core.output_parsers import JsonOutputParser
 from langchain_core.prompts import PromptTemplate
 from app.config import settings
+from app.security.prompt_rules import REVIEWER_SECURITY_PROMPT
 from app.utils.llm_factory import llm_factory
 from typing import Optional
 
@@ -16,9 +17,14 @@ class ReviewerAgent(BaseAgent):
         # 创建 Pydantic 输出解析器
         self.parser = JsonOutputParser(pydantic_object=ReviewResult)
         # 构建提示模板
-        self.template = """
+        self.template = (
+            """
         你是一位小红书内容审核员，负责检查内容是否违规、合适。
-        
+
+        """
+            + REVIEWER_SECURITY_PROMPT
+            + """
+
         请审核以下内容：
         
         文案标题：{copywriting_title}
@@ -37,6 +43,7 @@ class ReviewerAgent(BaseAgent):
         5. 图片是否清晰、美观
         6. 输出内容仅输出 JSON 对象，不要附加任何解释
         """
+        )
 
         self.prompt = PromptTemplate(
             template=self.template,

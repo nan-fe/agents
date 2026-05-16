@@ -12,9 +12,10 @@ frontend-ts/
 │   │   └── dialog-content.tsx     # 对话页面
 │   ├── services/
 │   │   └── api.ts                 # API调用服务
+│   ├── api/
+│   │   └── schema.d.ts            # OpenAPI 生成的 API 类型
 │   ├── utils/
 │   │   └── helper.ts              # 工具函数
-│   └── types.ts                   # TypeScript类型定义
 ├── public/                        # 静态资源
 ├── package.json                   # 依赖配置
 ├── tailwind.config.js             # Tailwind配置
@@ -34,10 +35,31 @@ pnpm run start
 ```
 ### 本地运行注意事项
 需要将 nginx 文件注释
-同时将 api.ts 里面的 API_PATH_URL 设置成 http://localhost:8080
+如需覆盖后端地址，可在环境变量中设置 `VITE_API_BASE_URL`，默认开发环境为 `http://localhost:8000`
 
 
 前端应用将在 `http://localhost:5173` 运行。
+
+## API 类型 SSOT
+
+前端 API 类型以后端 FastAPI 的 OpenAPI schema 为唯一事实源，不再维护手写 `types.ts`。
+
+生成步骤：
+
+```bash
+# 先确保后端已启动，并能访问 http://localhost:8000/openapi.json
+pnpm run gen:api
+```
+
+生成文件为 `src/api/schema.d.ts`，由 `openapi-typescript` 维护，不要手动修改。业务代码通过 `components["schemas"]` 派生类型：
+
+```ts
+import type { components } from "../api/schema";
+
+export type UserInput = components["schemas"]["UserInput"];
+```
+
+后端请求模型或路由变更后，需要重新执行 `pnpm run gen:api`，再运行前端类型检查或构建验证。
 
 ## 构建生产版本
 
