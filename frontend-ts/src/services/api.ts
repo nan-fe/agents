@@ -2,7 +2,7 @@
  * API服务 - 封装SSE连接
  */
 
-import { LogType } from "../types";
+import type { components } from "../api/schema";
 import { parseSSEStream } from "../utils/sse-parser";
 
 
@@ -10,16 +10,15 @@ export const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL ??
   (import.meta.env.DEV ? "http://localhost:8000" : "");
 
+export type UserInput = components["schemas"]["UserInput"];
 
 export type DialogSSEType = {
-  user_input: string;
-  session_id: string;
+  request: UserInput;
   log_callback: (from: string, message: string) => void;
 };
 
 export const createDialogGenerateRequest = (
-  user_input: string,
-  session_id: string,
+  request: UserInput,
   signal?: AbortSignal,
 ) => {
   return fetch(`${API_BASE_URL}/dialog/generate`, {
@@ -28,7 +27,7 @@ export const createDialogGenerateRequest = (
       "Content-Type": "application/json",
       Accept: "text/event-stream",
     },
-    body: JSON.stringify({ prompt: user_input, session_id }),
+    body: JSON.stringify(request),
     signal,
   });
 };
@@ -36,10 +35,10 @@ export const createDialogGenerateRequest = (
 export const generateDialogContent = async (
   param: DialogSSEType,
 ): Promise<any> => {
-  const { user_input, session_id, log_callback } = param;
+  const { request, log_callback } = param;
   try {
     // 使用fetch API创建SSE连接
-    const response = await createDialogGenerateRequest(user_input, session_id);
+    const response = await createDialogGenerateRequest(request);
 
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);

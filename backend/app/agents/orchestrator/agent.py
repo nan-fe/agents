@@ -8,6 +8,7 @@ from app.services.orchestrator_llm_service import (
     IntentAnalysisTimeoutError,
 )
 from app.config import settings
+from app.security.input_guard import check_input_security, safety_rejection_payload
 from app.utils.retry_policy import classify_agent_failure
 from .execution_context import ExecutionContext
 from .agent_input_builder import AgentInputBuilder
@@ -112,6 +113,13 @@ class DialogOrchestratorAgent:
         session_id = (session_id or "").strip()
         if not session_id:
             raise ValueError("session_id 不能为空")
+
+        safety_result = await check_input_security(user_input)
+        if not safety_result.allowed:
+            if log_callback:
+                await log_callback("SafetyGuard", safety_result.reason)
+            return safety_rejection_payload(safety_result)
+
         # 获取会话历史
         session_history = self.get_session_history(session_id)
         session_history.add_message(HumanMessage(content=user_input))

@@ -3,6 +3,7 @@
 """
 from langchain_core.prompts import PromptTemplate
 from app.config import settings
+from app.security.prompt_rules import COMMON_SECURITY_PROMPT
 from app.utils.llm_factory import llm_factory
 from typing import List, Dict, Optional
 
@@ -14,7 +15,9 @@ class AnswerGenerator:
         # 初始化商品推荐提示模板
         self.product_prompt = PromptTemplate(
             template="""你是一个淘宝购物助手。请根据用户问题和检索到的商品信息，给出推荐建议。
-
+"""
+            + COMMON_SECURITY_PROMPT
+            + """
 用户问题：{query}
 
 商品信息：
@@ -27,7 +30,9 @@ class AnswerGenerator:
         # 初始化搜索结果提示模板
         self.search_prompt = PromptTemplate(
             template="""你是一个淘宝购物助手。请根据用户问题和网络搜索结果，给出推荐建议。
-
+"""
+            + COMMON_SECURITY_PROMPT
+            + """
 用户问题：{query}
 
 搜索结果：

@@ -1,7 +1,12 @@
 import { useState, useEffect } from 'react';
 import { Card, Collapse } from 'antd';
-import { LogType } from '../types';
 import { formatTimestamp } from '../utils/helper';
+
+type LogType = {
+  agent_name: string;
+  message: string;
+  timestamp: string;
+};
 
 interface IAgentLog {
   logs: LogType[];

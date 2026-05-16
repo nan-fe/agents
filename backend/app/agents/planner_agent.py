@@ -4,6 +4,7 @@ from typing import Optional
 from langchain_core.prompts import PromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
 from app.config import settings
+from app.security.prompt_rules import COMMON_SECURITY_PROMPT
 from app.utils.llm_factory import llm_factory
 
 
@@ -15,9 +16,14 @@ class PlannerAgent(BaseAgent):
         super().__init__("Planner", "小红书资深运营")
         self.parser = JsonOutputParser(pydantic_object=PlanningResult)
         # 构建提示模板
-        template = """
+        template = (
+            """
         你是一位小红书资深运营，擅长分析用户需求并转化为创作要点。
-        
+
+        """
+            + COMMON_SECURITY_PROMPT
+            + """
+
         用户输入：{input_data}
         
         历史数据：{history}
@@ -35,6 +41,7 @@ class PlannerAgent(BaseAgent):
         8. 请逐步思考每一步的规划
         9. 如果有历史数据，则按照历史信息，结合用户输入的意见重新调整
         """
+        )
 
         self.prompt = PromptTemplate(
             template=template,

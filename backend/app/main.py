@@ -11,6 +11,7 @@ from sse_starlette.sse import EventSourceResponse
 from app.agents.orchestrator.agent import DialogOrchestratorAgent
 from app.config import settings
 from app.models.schemas import UserInput, SSEMessage
+from app.security.input_guard import check_input_security, safety_rejection_payload
 
 logger = logging.getLogger(__name__)
 
@@ -88,6 +89,20 @@ async def generate_dialog_event_stream(
         await event_queue.put(
             {"event": "message", "data": log_message.model_dump_json()}
         )
+
+    safety_result = await check_input_security(user_input)
+    if not safety_result.allowed:
+        await log_callback("SafetyGuard", safety_result.reason)
+        while not event_queue.empty():
+            event = await event_queue.get()
+            yield event
+            event_queue.task_done()
+
+        result_message = SSEMessage(
+            type="result", data=safety_rejection_payload(safety_result)
+        )
+        yield {"event": "message", "data": result_message.model_dump_json()}
+        return
 
     task = asyncio.create_task(
         orchestrator.run(user_input, session_id, log_callback)

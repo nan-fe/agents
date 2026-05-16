@@ -3,6 +3,7 @@ from app.models.schemas import CopywritingResult, PlanningResult
 from langchain_core.prompts import PromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
 from app.config import settings
+from app.security.prompt_rules import COMMON_SECURITY_PROMPT
 from typing import Optional, Union, Dict, Any, List
 import re
 from app.utils.llm_factory import llm_factory
@@ -17,9 +18,14 @@ class CopywriterAgent(BaseAgent):
         self.parser = JsonOutputParser(pydantic_object=CopywritingResult)
 
         # 构建提示模板
-        template = """
+        template = (
+            """
         你是一位小红书爆款文案写手，擅长创作符合小红书风格的文案。
-        
+
+        """
+            + COMMON_SECURITY_PROMPT
+            + """
+
         请根据以下信息生成一篇小红书风格的完整文案：
         
         目标人群：{target_audience}
@@ -54,6 +60,7 @@ class CopywriterAgent(BaseAgent):
         
         注意：仅输出JSON对象，不要附加任何解释或额外文字。
         """
+        )
 
         self.prompt = PromptTemplate(
             template=template,
