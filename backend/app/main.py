@@ -3,15 +3,22 @@ import logging
 from contextlib import asynccontextmanager
 from datetime import datetime
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sse_starlette.sse import EventSourceResponse
 
 from app.agents.orchestrator.agent import DialogOrchestratorAgent
 from app.config import settings
-from app.models.schemas import UserInput, SSEMessage
+from app.models.schemas import (
+    ShareCreateRequest,
+    ShareCreateResponse,
+    ShareSnapshot,
+    UserInput,
+    SSEMessage,
+)
 from app.security.input_guard import check_input_security, safety_rejection_payload
+from app.services.share_service import share_store
 
 logger = logging.getLogger(__name__)
 
@@ -201,6 +208,24 @@ async def generateDialog(request: Request, user_input: UserInput):
             "Content-Type": "text/event-stream",
         },
     )
+
+
+@app.post("/shares", response_model=ShareCreateResponse)
+async def create_share(payload: ShareCreateRequest):
+    """保存生成结果快照，用于公开分享页读取。"""
+
+    snapshot = share_store.create_share(payload)
+    return ShareCreateResponse(share_id=snapshot.id, share=snapshot)
+
+
+@app.get("/shares/{share_id}", response_model=ShareSnapshot)
+async def get_share(share_id: str):
+    """读取公开分享快照。"""
+
+    snapshot = share_store.get_share(share_id)
+    if snapshot is None:
+        raise HTTPException(status_code=404, detail="Share not found")
+    return snapshot
 
 
 @app.get("/")

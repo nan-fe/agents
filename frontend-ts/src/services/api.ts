@@ -10,7 +10,32 @@ export const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL ??
   (import.meta.env.DEV ? "http://localhost:8000" : "");
 
+export const SHARE_BASE_URL =
+  import.meta.env.VITE_SHARE_BASE_URL ??
+  (import.meta.env.DEV
+    ? "http://localhost:3000"
+    : typeof window !== "undefined"
+      ? window.location.origin
+      : "");
+
 export type UserInput = components["schemas"]["UserInput"];
+
+export type ShareResult = {
+  title?: string;
+  content?: string;
+  hashtags?: string[];
+  image_url?: string;
+  message?: string;
+};
+
+export type ShareCreateResponse = {
+  share_id: string;
+  share: ShareResult & {
+    id: string;
+    created_at: string;
+    expires_at?: string | null;
+  };
+};
 
 export type DialogSSEType = {
   request: UserInput;
@@ -69,6 +94,35 @@ export const generateDialogContent = async (
     console.error("SSE连接错误:", error);
     throw error;
   }
+};
+
+export const buildShareUrl = (shareId: string): string => {
+  const baseUrl = SHARE_BASE_URL.replace(/\/$/, "");
+  return `${baseUrl}/share/${encodeURIComponent(shareId)}`;
+};
+
+export const createShare = async (
+  result: ShareResult,
+): Promise<ShareCreateResponse> => {
+  const response = await fetch(`${API_BASE_URL}/shares`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      title: result.title ?? "",
+      content: result.content ?? "",
+      hashtags: Array.isArray(result.hashtags) ? result.hashtags : [],
+      image_url: result.image_url ?? null,
+      message: result.message ?? null,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+
+  return response.json();
 };
 
 export const rollbackToVersion = async (

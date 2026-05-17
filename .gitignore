@@ -4,6 +4,7 @@ backend/.env
 backend/.venv/
 backend/venv/
 backend/env/
+backend/app/data/shares.json
 
 # 前端
 frontend/node_modules/
@@ -11,6 +12,9 @@ frontend/build/
 frontend/.env
 frontend-ts/node_modules/
 frontend-ts/dist/
+frontend-share/node_modules/
+frontend-share/.next/
+frontend-share/out/
 
 # 通用
 *.pyc

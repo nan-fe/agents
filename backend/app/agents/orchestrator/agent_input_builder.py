@@ -50,7 +50,8 @@ class AgentInputBuilder:
 
     def build_rag_input(self) -> Any:
         """构建 RAG Agent 输入"""
-        return self.user_input
+        product_category = (self.context.planning.product_category or "").strip()
+        return product_category or self.user_input
 
     def build_planner_input(self) -> str:
         """构建规划 Agent 输入"""

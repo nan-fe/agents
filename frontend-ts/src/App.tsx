@@ -23,8 +23,8 @@ const App: React.FC = () => {
   const [activeMenu, setActiveMenu] = useState(String(PageMenu.DIALOG_CONTENT));
 
   return (
-    <Layout className="w-full h-full">
-      <Sider trigger={null} collapsible>
+    <Layout className="min-h-screen w-full">
+      <Sider breakpoint="lg" collapsedWidth={0} trigger={null} collapsible>
         <div className="demo-logo-vertical" />
         <Menu
           theme="dark"
@@ -46,8 +46,9 @@ const App: React.FC = () => {
         />
       </Sider>
       <Content
+        className="min-w-0"
         style={{
-          padding: 24,
+          padding: 16,
           minHeight: 280,
           background: colorBgContainer,
           borderRadius: borderRadiusLG,

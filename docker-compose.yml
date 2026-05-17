@@ -6,10 +6,12 @@ services:
       - "8000:8000"
     environment:
       - PYTHONUNBUFFERED=1
+      - SHARE_STORE_PATH=/data/shares/shares.json
     env_file:
       - ./backend/.env
     volumes:
       - ./backend:/app
+      - ./data/shares:/data/shares
     networks:
       - app-network
     restart: unless-stopped
@@ -19,6 +21,20 @@ services:
     container_name: agents-frontend
     ports:
       - "3000:80"
+    depends_on:
+      - backend
+    networks:
+      - app-network
+    restart: unless-stopped
+
+  frontend-share:
+    image: crpi-qeygpng4u8e2ezh6.cn-shanghai.personal.cr.aliyuncs.com/nan-fe/agents:frontend-share
+    container_name: agents-frontend-share
+    ports:
+      - "3001:3000"
+    environment:
+      - API_BASE_URL=http://backend:8000
+      - NEXT_PUBLIC_API_BASE_URL=http://backend:8000
     depends_on:
       - backend
     networks:
