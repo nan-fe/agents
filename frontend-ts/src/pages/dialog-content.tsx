@@ -332,11 +332,11 @@ const DialogContent: React.FC = () => {
   };
 
   return (
-    <Layout style={{ height: 'auto' }}>
+    <Layout className="min-h-full">
       <Header
         style={{
           backgroundColor: '#fff',
-          padding: '0 24px',
+          padding: '0 16px',
           boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
         }}
       >
@@ -344,9 +344,9 @@ const DialogContent: React.FC = () => {
           内容创作助手
         </Title>
       </Header>
-      <Layout>
-        <Content className="w-full flex">
-          <div className="flex w-full" style={{ height: 'calc(100vh - 160px)' }}>
+      <Layout className="min-h-0">
+        <Content className="flex w-full min-w-0">
+          <div className="flex w-full min-w-0 flex-col gap-4 lg:h-[calc(100vh-160px)] lg:flex-row">
             {/* 历史记录面板 */}
             {/* <HistoryPanel
               history={history}
@@ -358,8 +358,15 @@ const DialogContent: React.FC = () => {
             {/* 聊天窗口 */}
             <Card
               title="聊天记录"
-              className="w-[400px] flex flex-col flex-shrink-0"
-              style={{ height: '100%' }}
+              className="flex min-h-[360px] w-full flex-col lg:h-full lg:w-[min(420px,36vw)] lg:flex-shrink-0"
+              styles={{
+                body: {
+                  display: 'flex',
+                  flex: 1,
+                  minHeight: 0,
+                  flexDirection: 'column',
+                },
+              }}
             >
               <div ref={messageViewportRef} className="flex-1 min-h-0 mb-4">
                 <List
@@ -373,13 +380,13 @@ const DialogContent: React.FC = () => {
                 />
               </div>
 
-              <div className="flex">
+              <div className="flex flex-col gap-2 sm:flex-row">
                 <Input
                   value={inputValue}
                   onChange={(e) => setInputValue(e.target.value)}
                   placeholder="请输入您的需求..."
                   onPressEnter={handleSubmit}
-                  className="flex-1 mr-8"
+                  className="flex-1"
                 />
                 <Space>
                   {loading ? (
@@ -406,7 +413,7 @@ const DialogContent: React.FC = () => {
             </Card>
 
             {/* 右侧内容区 */}
-            <div className="flex-1 flex-col overflow-x-hidden">
+            <div className="flex min-w-0 flex-1 flex-col overflow-x-hidden lg:h-full lg:overflow-y-auto">
               {/* 版本选择器 */}
               <Card title="文案版本" extra={<HistoryOutlined />}>
                 <Select

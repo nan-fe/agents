@@ -71,6 +71,11 @@
 │  │  │ dist Assets  │  │  (Frontend)  │  │  Container       │   │   │
 │  │  └──────────────┘  └──────────────┘  │  Registry (ACR)  │   │   │
 │  │                                      └──────────────────┘   │   │
+│  │  ┌──────────────┐  ┌──────────────┐  ┌──────────────────┐   │   │
+│  │  │ Next Build   │→│ Standalone   │→│ Push to Aliyun   │   │   │
+│  │  │ Share Pages  │  │  Image       │  │ Container        │   │   │
+│  │  └──────────────┘  └──────────────┘  │ Registry (ACR)   │   │   │
+│  │                                      └──────────────────┘   │   │
 │  └──────────────────────────────────────────────────────────────┘   │
 └────────────────────────────────────────┬────────────────────────────┘
                                          │ SSH Deploy
@@ -79,9 +84,9 @@
 │  ┌──────────────────────────────────────────────────────────────┐   │
 │  │  Docker Compose Orchestration                                │   │
 │  │  ┌──────────────┐  ┌──────────────┐  ┌──────────────────┐   │   │
-│  │  │   Backend    │  │   Frontend   │  │   Nginx          │   │   │
-│  │  │   Container  │  │ Static dist  │  │ API Proxy       │   │   │
-│  │  │   :8000      │  │   :80        │  │ /dialog /session │   │   │
+│  │  │   Backend    │  │   Frontend   │  │ Frontend Share   │   │   │
+│  │  │   :8000      │  │   :3000      │  │     :3001        │   │   │
+│  │  │ Share Store  │  │ Nginx Proxy  │  │ Next Standalone  │   │   │
 │  │  └──────────────┘  └──────────────┘  └──────────────────┘   │   │
 │  └──────────────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────────────┘
@@ -96,7 +101,8 @@
 | **镜像仓库** | 阿里云 ACR | 容器镜像存储（上海区域） |
 | **CD 部署** | GitHub Actions + SSH | 自动部署到阿里云服务器 |
 | **容器编排** | Docker Compose | 多容器服务管理 |
-| **反向代理** | Nginx | 前端静态资源服务和反向代理 |
+| **反向代理** | Nginx | 主前端静态资源服务，并代理 `/dialog`、`/session`、`/shares` 到后端 |
+| **分享页服务** | Next.js standalone | 独立容器承载公开分享页 |
 
 
 ## 🚀 核心能力
@@ -139,12 +145,19 @@ backend/README.md
 frontend-ts/README.md
 ```
 
+### 分享页结构 (`frontend-share/`)
+
+```
+frontend-share/README.md
+```
+
 ## 🔧 技术栈
 
 | 层级 | 技术 | 版本 |
 |------|------|------|
 | 后端框架 | FastAPI | ^0.100 |
 | 前端框架 | React | ^19 |
+| 分享页框架 | Next.js | latest |
 | 前端语言 | TypeScript | ^5 |
 | 前端构建 | Vite | ^8 |
 | 样式框架 | Tailwind CSS | ^3 |
@@ -180,11 +193,27 @@ IMAGE_MODEL=xxxx
 
 EMBEDING_MODEL=xxxxx
 
+# Public share
+# 后端分享快照默认写入 backend/app/data/shares.json，生产环境建议配置持久化路径
+SHARE_STORE_PATH=/data/xhs-multi-agent/shares.json
 
 # LangSmith配置
 LANGCHAIN_TRACING_V2=true
 LANGCHAIN_API_KEY=your_langchain_key
 LANGCHAIN_PROJECT=XHS-Multi-Agent
+```
+
+在 `frontend-ts` 中配置分享页公开地址：
+
+```env
+VITE_SHARE_BASE_URL=https://share.example.com
+```
+
+在 `frontend-share` 中配置后端 API 地址：
+
+```env
+API_BASE_URL=https://api.example.com
+NEXT_PUBLIC_API_BASE_URL=https://api.example.com
 ```
 
 ### 启动服务
@@ -204,16 +233,41 @@ pip install -r requirements.txt
 pnpm run start
 
 # 启动前端
-cd frontend-ts
+cd ../frontend-ts
 pnpm install
 pnpm run start
+
+# 启动公开分享页
+cd ../frontend-share
+pnpm install
+pnpm dev
 ```
 
 ### 访问服务
 
 - 前端：http://localhost:5173
+- 分享页：http://localhost:3000/share/[shareId]
+- Docker Compose 主前端：http://localhost:3000
+- Docker Compose 分享页：http://localhost:3001/share/[shareId]
 
 **响应：** SSE (Server-Sent Events) 流式响应
+
+### 分享功能部署
+
+分享功能已接入现有 Docker Compose 和 GitHub Actions 部署链路：
+
+- 后端 `POST /shares` 保存生成结果快照，`GET /shares/{share_id}` 供公开分享页读取。
+- 主创作端 `frontend-ts` 使用 `VITE_SHARE_BASE_URL` 生成分享链接，例如 `https://share.example.com/share/abc123`。
+- 主前端 Nginx 已代理 `/shares` 到后端，支持生产环境从结果页创建分享快照。
+- 独立分享页 `frontend-share` 使用 Next.js standalone 镜像部署，在 `docker-compose.yml` 中默认映射到 `3001:3000`。
+- GitHub Actions 会构建并推送 `agents:frontend-share` 镜像，部署阶段通过 `docker compose pull && docker compose up -d` 拉起。
+
+生产部署时请确认：
+
+- GitHub Repository Variable `VITE_SHARE_BASE_URL` 指向分享页公开域名，供 `frontend-ts` 镜像构建时注入。
+- `frontend-share` 的 `API_BASE_URL` 指向服务端可访问的后端地址；Compose 默认使用 `http://backend:8000`。
+- 后端允许分享页域名跨域访问分享接口。
+- `SHARE_STORE_PATH` 或默认分享数据目录已挂载持久化卷；Compose 默认挂载 `./data/shares:/data/shares`，避免重新部署后已有分享链接失效。
 
 ## 🧪 测试
 

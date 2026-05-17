@@ -16,6 +16,10 @@ RUN pnpm install --frozen-lockfile
 # 复制项目代码
 COPY . .
 
+# 构建时注入公开分享页地址；未配置时前端会回退到当前站点 origin
+ARG VITE_SHARE_BASE_URL=""
+ENV VITE_SHARE_BASE_URL=$VITE_SHARE_BASE_URL
+
 # 构建项目
 RUN pnpm run build
 

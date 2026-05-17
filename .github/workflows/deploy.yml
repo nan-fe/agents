@@ -50,6 +50,21 @@ jobs:
           tags: |
             ${{ env.REGISTRY }}/${{ env.NAMESPACE }}/${{ env.IMAGE_NAME }}:frontend
             ${{ env.REGISTRY }}/${{ env.NAMESPACE }}/${{ env.IMAGE_NAME }}:${{ github.sha }}-frontend
+          build-args: |
+            VITE_SHARE_BASE_URL=${{ vars.VITE_SHARE_BASE_URL }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # ---------- 构建和推送分享页镜像 ----------
+      - name: Build and push Frontend Share
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend-share
+          file: ./frontend-share/Dockerfile
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.NAMESPACE }}/${{ env.IMAGE_NAME }}:frontend-share
+            ${{ env.REGISTRY }}/${{ env.NAMESPACE }}/${{ env.IMAGE_NAME }}:${{ github.sha }}-frontend-share
           cache-from: type=gha
           cache-to: type=gha,mode=max
 

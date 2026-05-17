@@ -7,7 +7,6 @@ from openai import AsyncOpenAI
 from app.agents.base_agent import BaseAgent
 from app.config import settings
 from app.models.schemas import ImageResult, ImageAgentInput
-from app.security.prompt_rules import COMMON_SECURITY_PROMPT
 from app.utils.retry_policy import is_transient_exception, retry_with_backoff
 
 
@@ -114,7 +113,6 @@ class ImageAgent(BaseAgent):
 
         prompt = f"""
         你是一位资深电商摄影师和设计师，擅长根据商品类别和营销文案，构思出**极具真实感、像实拍照片**的商品图描述。
-        {COMMON_SECURITY_PROMPT}
 
         请根据以下信息，生成一段用于图像生成模型（如Midjourney、DALL-E）的图片描述，要求图片看起来像是**真实拍摄**，而不是AI生成或渲染图。
         

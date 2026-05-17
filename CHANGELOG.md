@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+### Changed 2026-05-17
+
+- **公开分享功能**
+  - 新增后端 `/shares`、`/shares/{share_id}` 快照接口，用于保存和读取生成结果的公开分享内容
+  - `frontend-ts` 结果展示区支持生成分享链接，并通过 `VITE_SHARE_BASE_URL` 拼接公开分享页地址
+  - 新增独立 Next.js 应用 `frontend-share`，提供 `/share/[shareId]` 公开分享页、社交预览 metadata、复制链接、复制文案和社交平台跳转
+  - 分享快照默认写入 `backend/app/data/shares.json`，生产部署可通过 `SHARE_STORE_PATH` 配置持久化路径
+  - `frontend-share` 开启 Next.js standalone 输出，新增容器镜像、Docker Compose 服务和 GitHub Actions 构建推送步骤
+  - 主前端 Nginx 新增 `/shares` 代理，支持生产环境创建分享快照；`frontend-ts` Docker 构建支持注入 `VITE_SHARE_BASE_URL`
+
 ### Changed 2026-05-16
 
 - **前端 API 类型 SSOT**

@@ -1,3 +1,4 @@
+from datetime import datetime
 from pydantic import BaseModel, Field
 from typing import Optional, List
 
@@ -79,6 +80,31 @@ class FinalResult(BaseModel):
     hashtags: List[str]
     image_url: str
     product_recommendations: Optional[List[ProductRecommendation]] = None
+
+
+class ShareCreateRequest(BaseModel):
+    """创建公开分享快照的请求"""
+
+    title: str = ""
+    content: str = ""
+    hashtags: List[str] = Field(default_factory=list)
+    image_url: Optional[str] = None
+    message: Optional[str] = None
+
+
+class ShareSnapshot(ShareCreateRequest):
+    """公开分享快照"""
+
+    id: str
+    created_at: datetime
+    expires_at: Optional[datetime] = None
+
+
+class ShareCreateResponse(BaseModel):
+    """创建分享后的响应"""
+
+    share_id: str
+    share: ShareSnapshot
 
 
 class SSEMessage(BaseModel):
