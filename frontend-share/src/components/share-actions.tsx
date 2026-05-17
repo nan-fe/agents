@@ -44,10 +44,6 @@ const ShareActions = ({
         .join('\n\n'),
     [content, hashtags, title]
   );
-  const feishuShareText = useMemo(
-    () => [shareText, currentUrl].filter(Boolean).join('\n\n'),
-    [currentUrl, shareText]
-  );
 
   useEffect(() => {
     setCurrentUrl(window.location.href);

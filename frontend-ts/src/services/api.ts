@@ -10,13 +10,25 @@ export const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL ??
   (import.meta.env.DEV ? "http://localhost:8000" : "");
 
-export const SHARE_BASE_URL =
-  import.meta.env.VITE_SHARE_BASE_URL ??
-  (import.meta.env.DEV
-    ? "http://localhost:3000"
-    : typeof window !== "undefined"
-      ? window.location.origin
-      : "");
+const DEFAULT_SHARE_PORT = "3001";
+
+const getShareBaseUrl = () => {
+  if (import.meta.env.VITE_SHARE_BASE_URL) {
+    return import.meta.env.VITE_SHARE_BASE_URL;
+  }
+
+  if (import.meta.env.DEV) {
+    return "http://localhost:3000";
+  }
+
+  if (typeof window === "undefined") {
+    return "";
+  }
+
+  return `${window.location.protocol}//${window.location.hostname}:${DEFAULT_SHARE_PORT}`;
+};
+
+export const SHARE_BASE_URL = getShareBaseUrl();
 
 export type UserInput = components["schemas"]["UserInput"];
 

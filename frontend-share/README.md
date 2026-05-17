@@ -4,6 +4,7 @@
 
 ## 功能
 
+- 自动生成 `/robots.txt`，默认允许爬虫索引全部公开路由
 - 公开访问 `/share/[shareId]` 展示已生成的小红书图文内容
 - 生成 Open Graph / Twitter metadata，便于社交平台预览
 - 支持复制分享链接、复制文案、分享到 X 和微博
@@ -37,6 +38,7 @@ pnpm dev
 | --- | --- | --- |
 | `API_BASE_URL` | 服务端渲染时请求后端 `/shares/{shareId}` 的地址，生产环境推荐配置 | `http://localhost:8000` |
 | `NEXT_PUBLIC_API_BASE_URL` | 浏览器可见的后端 API 地址，未配置 `API_BASE_URL` 时作为回退 | `http://localhost:8000` |
+| `NEXT_PUBLIC_SITE_URL` | 分享站点公网根地址（不带尾部 `/`）。配置后 `/robots.txt` 会增加 `Host` 声明，便于爬虫识别站点主域名 | （未配置则省略 Host） |
 
 示例：
 
