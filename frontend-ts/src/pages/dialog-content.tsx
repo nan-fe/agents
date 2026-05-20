@@ -23,6 +23,7 @@ import { List, RowComponentProps, useListRef } from 'react-window';
 import AgentLogs from '../components/agent-logs';
 import ResultDisplay from '../components/result-display';
 import { HistoryItem } from '../components/history-panel';
+import { useBatchedState } from '../hooks/use-batched-state';
 import { useSSEClient } from '../hooks/use-sse-client';
 
 const { Header, Content } = Layout;
@@ -138,7 +139,12 @@ const DialogContent: React.FC = () => {
   
   const [currentSessionId] = useState<string>(getOrCreateSessionId());
   
-  const [logs, setLogs] = useState<LogType[]>([]);
+  const {
+    state: logs,
+    batchUpdate: batchLogUpdate,
+    flushNow: flushLogs,
+    resetState: resetLogs,
+  } = useBatchedState<LogType[]>([]);
   const [result, setResult] = useState<any>(null);
   const [finishTask, setFinishTask] = useState(false);
   const [history, setHistory] = useState<HistoryItem[]>([]);
@@ -195,7 +201,7 @@ const DialogContent: React.FC = () => {
     cancelByUserRef.current = false;
 
     // 清空之前的日志和结果
-    setLogs([]);
+    resetLogs([]);
     setFinishTask(false);
 
     const userMessage: Message = {
@@ -212,7 +218,7 @@ const DialogContent: React.FC = () => {
       let streamResult: any = null;
       const appendLog = (from: string, text: string) => {
         console.log(`${from}: ${text}`);
-        setLogs((prev) => [
+        batchLogUpdate((prev) => [
           ...prev,
           {
             agent_name: from,
@@ -295,6 +301,7 @@ const DialogContent: React.FC = () => {
       }
       console.error('Error generating content:', error);
     } finally {
+      flushLogs();
       setLoading(false);
     }
   };
