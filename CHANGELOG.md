@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+### Changed 2026-05-20
+
+- **前端 SSE 日志渲染优化**
+  - 新增 `useBatchedState` hook：将高频 state 更新先入队，按约 50ms 节流后在 `requestAnimationFrame` 中合并应用，降低 SSE 流式推送 Agent 日志时的重复渲染
+
 ### Changed 2026-05-17
 
 - **公开分享功能**

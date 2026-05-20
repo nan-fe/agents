@@ -95,7 +95,7 @@ export const useSSEClient = () => {
 
           setStatus("streaming");
           onOpen?.();
-
+     
           const reader = response.body.getReader();
           await parseSSEStream({
             reader,
