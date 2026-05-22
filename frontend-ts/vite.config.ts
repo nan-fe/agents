@@ -24,6 +24,7 @@ export default defineConfig(async ({ command }): Promise<UserConfig> => {
   }
 
   return {
+    base: '/studio/',
     plugins,
     build: {
       target: "baseline-widely-available",
@@ -41,6 +42,7 @@ export default defineConfig(async ({ command }): Promise<UserConfig> => {
       proxy: {
         "/dialog": "http://localhost:8000",
         "/session": "http://localhost:8000",
+        "/shares": "http://localhost:8000",
       },
     },
   };

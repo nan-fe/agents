@@ -2,8 +2,8 @@ import type { Metadata } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: '小红书内容分享',
-  description: '查看 AI 生成的小红书图文内容',
+  title: 'XHS Multi-Agent Creator',
+  description: '基于多智能体的小红书内容创作平台',
 };
 
 const RootLayout = ({

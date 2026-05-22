@@ -245,10 +245,13 @@ pnpm dev
 
 ### 访问服务
 
-- 前端：http://localhost:5173
-- 分享页：http://localhost:3000/share/[shareId]
-- Docker Compose 主前端：http://localhost:3000
-- Docker Compose 分享页：http://localhost:3001/share/[shareId]
+- 门户 / 分享 / 创作台入口（`frontend-share`）：http://localhost:3000
+- 门户首页：http://localhost:3000/
+- 登录页：http://localhost:3000/login
+- 创作台（需登录）：http://localhost:3000/studio
+- 分享详情：http://localhost:3000/share/[shareId]
+- 本地直连 Vite 创作端（开发调试）：http://localhost:5173/studio/
+- 后端 API：http://localhost:8000
 
 **响应：** SSE (Server-Sent Events) 流式响应
 
