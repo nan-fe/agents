@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import {
   Layout,
   Input,
@@ -24,7 +24,7 @@ import AgentLogs from '../components/agent-logs';
 import ResultDisplay from '../components/result-display';
 import { HistoryItem } from '../components/history-panel';
 import { useBatchedState } from '../hooks/use-batched-state';
-import { useSSEClient } from '../hooks/use-sse-client';
+import { useSSEClient, type SSEConnectOptions } from '../hooks/use-sse-client';
 
 const { Header, Content } = Layout;
 const { Text, Paragraph, Title } = Typography;
@@ -72,6 +72,174 @@ const MESSAGE_BASE_HEIGHT = 56;
 const MESSAGE_LINE_HEIGHT = 24;
 const MESSAGE_CHARS_PER_LINE = 18;
 const MESSAGE_MAX_HEIGHT = 640;
+const SESSION_STORAGE_KEY = 'xhs_session_id';
+
+const WELCOME_MESSAGE_CONTENT =
+  '哈喽～我是你的内容创作助手 小H，你可以输入内容描述（例如：推荐一款适合学生党的平价防晒霜，清爽不油腻）我将生成一段图文给你发小红书';
+
+const createWelcomeMessage = (): Message => ({
+  id: 'msg_welcome',
+  type: 'system',
+  content: WELCOME_MESSAGE_CONTENT,
+  timestamp: Date.now(),
+});
+
+const getOrCreateSessionId = (): string => {
+  const sessionStorageId = sessionStorage.getItem(SESSION_STORAGE_KEY);
+  const localStorageId = localStorage.getItem(SESSION_STORAGE_KEY);
+  const stableId = sessionStorageId || localStorageId;
+
+  if (stableId) {
+    if (!sessionStorageId) {
+      sessionStorage.setItem(SESSION_STORAGE_KEY, stableId);
+    }
+    if (!localStorageId) {
+      localStorage.setItem(SESSION_STORAGE_KEY, stableId);
+    }
+    return stableId;
+  }
+
+  const newId = `session_${Date.now()}`;
+  sessionStorage.setItem(SESSION_STORAGE_KEY, newId);
+  localStorage.setItem(SESSION_STORAGE_KEY, newId);
+  return newId;
+};
+
+const createInitialMessages = (): Message[] => [createWelcomeMessage()];
+
+type DialogResultData = {
+  content: string;
+  title: string;
+  hashtags: string[];
+  image_url: string;
+};
+
+type GenerationSuccess = {
+  kind: 'success';
+  resultData: DialogResultData;
+  userPrompt: string;
+  sessionId: string;
+  versionCount: number;
+};
+
+type GenerationOutcome =
+  | GenerationSuccess
+  | { kind: 'cancelled' }
+  | { kind: 'error'; error: string };
+
+type GenerationDeps = {
+  connect: <TMessage, TResult>(
+    options: SSEConnectOptions<TMessage, TResult>,
+  ) => Promise<TResult | null>;
+  batchLogUpdate: (updater: (prev: LogType[]) => LogType[]) => void;
+  flushLogs: () => void;
+};
+
+type GenerationPayload = {
+  prompt: string;
+  sessionId: string;
+  versionCount: number;
+  getCancelled: () => boolean;
+  deps: GenerationDeps;
+  onSuccess: (outcome: GenerationSuccess) => void;
+};
+
+const runDialogGeneration = async (
+  payload: GenerationPayload,
+): Promise<GenerationOutcome> => {
+  const { prompt, sessionId, versionCount, getCancelled, deps } = payload;
+  let streamResult: DialogResultData | null = null;
+
+  const appendLog = (from: string, text: string) => {
+    console.log(`${from}: ${text}`);
+    deps.batchLogUpdate((prev) => [
+      ...prev,
+      {
+        agent_name: from,
+        message: text,
+        timestamp: new Date().toISOString(),
+      },
+    ]);
+  };
+
+  try {
+    const fallbackResult = await deps.connect<StreamEvent, DialogResultData>({
+      createRequest: (signal) =>
+        createDialogGenerateRequest(
+          {
+            prompt,
+            session_id: sessionId,
+          } satisfies UserInput,
+          signal,
+        ),
+      parseMessage: (rawPayload) => JSON.parse(rawPayload) as StreamEvent,
+      onMessage: (event) => {
+        if (event.type === 'log') {
+          appendLog(event.data.from, event.data.message);
+        } else if (event.type === 'result') {
+          streamResult = event.data;
+        }
+      },
+      fallback: async (error) => {
+        console.warn('SSE 连接异常，已切换降级策略:', error);
+        message.warning('实时通道异常，正在切换降级模式...');
+        return generateDialogContent({
+          request: {
+            prompt,
+            session_id: sessionId,
+          },
+          log_callback: appendLog,
+        });
+      },
+    });
+    const resultData = fallbackResult ?? streamResult;
+
+    if (!resultData) {
+      deps.flushLogs();
+      if (getCancelled()) {
+        return { kind: 'cancelled' };
+      }
+      return { kind: 'error', error: '未获取到生成结果' };
+    }
+
+    deps.flushLogs();
+    return {
+      kind: 'success',
+      resultData,
+      userPrompt: prompt,
+      sessionId,
+      versionCount,
+    };
+  } catch (error) {
+    console.error('Error generating content:', error);
+    deps.flushLogs();
+    if (getCancelled()) {
+      return { kind: 'cancelled' };
+    }
+    return {
+      kind: 'error',
+      error: error instanceof Error ? error.message : '生成内容失败',
+    };
+  }
+};
+
+// SSE 流式生成不适合包在 useActionState 里（会延迟中间 state 提交），用模块级 async 执行。
+const executeDialogGeneration = async (
+  payload: GenerationPayload,
+  onSettled: () => void,
+): Promise<void> => {
+  try {
+    const outcome = await runDialogGeneration(payload);
+
+    if (outcome.kind === 'success') {
+      payload.onSuccess(outcome);
+    } else if (outcome.kind === 'error') {
+      message.error('生成内容失败，请重试');
+    }
+  } finally {
+    onSettled();
+  }
+};
 
 const estimateMessageRowHeight = (content: string) => {
   const lineCount = content
@@ -85,20 +253,11 @@ const MessageRow = ({ index, style, messages }: RowComponentProps<MessageRowData
   const messageItem = messages[index];
 
   return (
-    <div style={{ ...style, boxSizing: 'border-box', paddingBottom: '8px' }}>
-      <div
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          height: '100%',
-          boxSizing: 'border-box',
-          paddingBottom: '8px',
-          borderBottom: '1px solid #f0f0f0',
-        }}
-      >
+    <div style={style} className="box-border pb-2">
+      <div className="flex h-full flex-col box-border border-b border-gray-100 pb-2">
         <Text strong>{messageItem.type === 'user' ? '用户' : '系统'}</Text>
-        <Paragraph style={{ marginBottom: '4px' }}>{messageItem.content}</Paragraph>
-        <Text type="secondary" style={{ fontSize: '12px' }}>
+        <Paragraph className="!mb-1">{messageItem.content}</Paragraph>
+        <Text type="secondary" className="text-xs">
           {new Date(messageItem.timestamp).toLocaleString()}
         </Text>
       </div>
@@ -106,38 +265,14 @@ const MessageRow = ({ index, style, messages }: RowComponentProps<MessageRowData
   );
 };
 
-const DialogContent: React.FC = () => {
-  const [messages, setMessages] = useState<Message[]>([]);
+const DialogContent = () => {
+  const [messages, setMessages] = useState(createInitialMessages);
   const [versions, setVersions] = useState<Version[]>([]);
   const [currentVersion, setCurrentVersion] = useState<number>(-1);
   const [inputValue, setInputValue] = useState<string>('');
-  const [loading, setLoading] = useState<boolean>(false);
-  
-  // 从 sessionStorage 获取或生成会话 ID
-  const getOrCreateSessionId = (): string => {
-    const STORAGE_KEY = 'xhs_session_id';
-    const sessionStorageId = sessionStorage.getItem(STORAGE_KEY);
-    const localStorageId = localStorage.getItem(STORAGE_KEY);
-    const stableId = sessionStorageId || localStorageId;
-
-    // 优先复用已有 ID，避免前端重渲染/重载导致会话漂移
-    if (stableId) {
-      if (!sessionStorageId) {
-        sessionStorage.setItem(STORAGE_KEY, stableId);
-      }
-      if (!localStorageId) {
-        localStorage.setItem(STORAGE_KEY, stableId);
-      }
-      return stableId;
-    }
-
-    const newId = `session_${Date.now()}`;
-    sessionStorage.setItem(STORAGE_KEY, newId);
-    localStorage.setItem(STORAGE_KEY, newId);
-    return newId;
-  };
-  
-  const [currentSessionId] = useState<string>(getOrCreateSessionId());
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [generationEpoch, setGenerationEpoch] = useState(0);
+  const [currentSessionId] = useState(getOrCreateSessionId);
   
   const {
     state: logs,
@@ -154,24 +289,10 @@ const DialogContent: React.FC = () => {
   const [viewportHeight, setViewportHeight] = useState(MESSAGE_MAX_HEIGHT);
   const messageRowHeights = useMemo(
     () => messages.map((item) => estimateMessageRowHeight(item.content)),
-    [messages]
+    [messages],
   );
-  const initialized = useRef(false);
-  const cancelByUserRef = useRef(false);
 
-  useEffect(() => {
-    if(initialized.current) return;
-    // 添加系统消息
-    const systemMessage: Message = {
-      id: `msg_${Date.now() + 1}`,
-      type: 'system',
-      content:
-        '哈喽～我是你的内容创作助手 小H，你可以输入内容描述（例如：推荐一款适合学生党的平价防晒霜，清爽不油腻）我将生成一段图文给你发小红书',
-      timestamp: Date.now(),
-    };
-    initialized.current = true;
-    setMessages((prev) => [...prev, systemMessage]);
-  }, []);
+  const cancelByUserRef = useRef(false);
 
   useEffect(() => {
     if (messages.length === 0) return;
@@ -195,125 +316,81 @@ const DialogContent: React.FC = () => {
     return () => observer.disconnect();
   }, []);
 
-  const runGeneration = async (prompt: string) => {
-    if (!prompt.trim()) return;
-    const currentInputValue = prompt.trim();
-    cancelByUserRef.current = false;
+  const applyGenerationSuccess = (outcome: GenerationSuccess) => {
+    const { resultData, userPrompt, sessionId, versionCount } = outcome;
 
-    // 清空之前的日志和结果
+    setResult(resultData);
+
+    const systemMessage: Message = {
+      id: `msg_${Date.now() + 1}`,
+      type: 'system',
+      content: '已生成内容，请查看下方文案区域',
+      timestamp: Date.now(),
+    };
+    setMessages((prev) => [...prev, systemMessage]);
+    setFinishTask(true);
+
+    const newVersion: Version = {
+      id: versionCount,
+      timestamp: Date.now(),
+      content: resultData.content,
+      title: resultData.title,
+      hashtags: resultData.hashtags,
+      imageUrl: resultData.image_url,
+    };
+    setVersions((prev) => [...prev, newVersion]);
+    setCurrentVersion(newVersion.id);
+
+    const historyItem: HistoryItem = {
+      id: sessionId,
+      userInput: userPrompt,
+      timestamp: Date.now(),
+      title: resultData.title,
+    };
+    setHistory((prev) => [historyItem, ...prev]);
+  };
+
+  const startGeneration = (prompt: string) => {
+    const trimmedPrompt = prompt.trim();
+    if (!trimmedPrompt) {
+      return;
+    }
+
+    cancelByUserRef.current = false;
     resetLogs([]);
     setFinishTask(false);
 
     const userMessage: Message = {
       id: `msg_${Date.now()}`,
       type: 'user',
-      content: currentInputValue,
+      content: trimmedPrompt,
       timestamp: Date.now(),
     };
     setMessages((prev) => [...prev, userMessage]);
     setInputValue('');
-    setLoading(true);
+    setIsGenerating(true);
+    setGenerationEpoch((epoch) => epoch + 1);
 
-    try {
-      let streamResult: any = null;
-      const appendLog = (from: string, text: string) => {
-        console.log(`${from}: ${text}`);
-        batchLogUpdate((prev) => [
-          ...prev,
-          {
-            agent_name: from,
-            message: text,
-            timestamp: new Date().toISOString(),
-          },
-        ]);
-      };
-
-      const fallbackResult = await connect<StreamEvent, any>({
-        createRequest: (signal) =>
-          createDialogGenerateRequest(
-            {
-              prompt: currentInputValue,
-              session_id: currentSessionId,
-            } satisfies UserInput,
-            signal
-          ),
-        parseMessage: (payload) => JSON.parse(payload) as StreamEvent,
-        onMessage: (event) => {
-          if (event.type === 'log') {
-            appendLog(event.data.from, event.data.message);
-          } else if (event.type === 'result') {
-            streamResult = event.data;
-          }
-        },
-        fallback: async (error) => {
-          console.warn('SSE 连接异常，已切换降级策略:', error);
-          message.warning('实时通道异常，正在切换降级模式...');
-          return generateDialogContent({
-            request: {
-              prompt: currentInputValue,
-              session_id: currentSessionId,
-            },
-            log_callback: appendLog,
-          });
-        },
-      });
-      const resultData = fallbackResult ?? streamResult;
-
-      if (!resultData) {
-        if (cancelByUserRef.current) {
-          return;
-        }
-        throw new Error('未获取到生成结果');
-      }
-
-      // 更新结果状态
-      setResult(resultData);
-
-      const systemMessage: Message = {
-        id: `msg_${Date.now() + 1}`,
-        type: 'system',
-        content: '已生成内容，请查看下方文案区域',
-        timestamp: Date.now(),
-      };
-      setMessages((prev) => [...prev, systemMessage]);
-      setFinishTask(true);
-      const newVersion: Version = {
-        id: versions.length,
-        timestamp: Date.now(),
-        content: resultData.content,
-        title: resultData.title,
-        hashtags: resultData.hashtags,
-        imageUrl: resultData.image_url,
-      };
-      setVersions((prev) => [...prev, newVersion]);
-      setCurrentVersion(newVersion.id);
-
-      const historyItem: HistoryItem = {
-        id: currentSessionId,
-        userInput: currentInputValue,
-        timestamp: Date.now(),
-        title: resultData.title,
-      };
-      setHistory((prev) => [historyItem, ...prev]);
-    } catch (error) {
-      if (!cancelByUserRef.current) {
-        message.error('生成内容失败，请重试');
-      }
-      console.error('Error generating content:', error);
-    } finally {
-      flushLogs();
-      setLoading(false);
-    }
+    void executeDialogGeneration(
+      {
+        prompt: trimmedPrompt,
+        sessionId: currentSessionId,
+        versionCount: versions.length,
+        getCancelled: () => cancelByUserRef.current,
+        deps: { connect, batchLogUpdate, flushLogs },
+        onSuccess: applyGenerationSuccess,
+      },
+      () => setIsGenerating(false),
+    );
   };
 
-  const handleSubmit = async () => {
-    await runGeneration(inputValue);
+  const handleSubmit = () => {
+    startGeneration(inputValue);
   };
 
   const handleStopGeneration = () => {
     cancelByUserRef.current = true;
     disconnect();
-    setLoading(false);
     message.info('已停止当前生成任务');
   };
 
@@ -340,14 +417,8 @@ const DialogContent: React.FC = () => {
 
   return (
     <Layout className="min-h-full">
-      <Header
-        style={{
-          backgroundColor: '#fff',
-          padding: '0 16px',
-          boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-        }}
-      >
-        <Title level={4} style={{ margin: '16px 0' }}>
+      <Header className="bg-white px-4 shadow-md">
+        <Title level={4} className="!my-4">
           内容创作助手
         </Title>
       </Header>
@@ -365,15 +436,7 @@ const DialogContent: React.FC = () => {
             {/* 聊天窗口 */}
             <Card
               title="聊天记录"
-              className="flex min-h-[360px] w-full flex-col lg:h-full lg:w-[min(420px,36vw)] lg:flex-shrink-0"
-              styles={{
-                body: {
-                  display: 'flex',
-                  flex: 1,
-                  minHeight: 0,
-                  flexDirection: 'column',
-                },
-              }}
+              className="flex min-h-[360px] w-full flex-col lg:h-full lg:w-[min(420px,36vw)] lg:flex-shrink-0 [&_.ant-card-body]:flex [&_.ant-card-body]:min-h-0 [&_.ant-card-body]:flex-1 [&_.ant-card-body]:flex-col"
             >
               <div ref={messageViewportRef} className="flex-1 min-h-0 mb-4">
                 <List
@@ -396,7 +459,7 @@ const DialogContent: React.FC = () => {
                   className="flex-1"
                 />
                 <Space>
-                  {loading ? (
+                  {isGenerating ? (
                     <Button
                       danger
                       type="primary"
@@ -410,7 +473,7 @@ const DialogContent: React.FC = () => {
                       type="primary"
                       icon={<SendOutlined />}
                       onClick={handleSubmit}
-                      disabled={loading}
+                      disabled={isGenerating}
                     >
                       发送
                     </Button>
@@ -426,7 +489,7 @@ const DialogContent: React.FC = () => {
                 <Select
                   value={currentVersion}
                   onChange={handleVersionSelect}
-                  style={{ width: '100%' }}
+                  className="w-full"
                   placeholder="选择版本"
                 >
                   {versions.map((version) => (
@@ -447,9 +510,10 @@ const DialogContent: React.FC = () => {
 
               {/* Agent 日志 */}
               <AgentLogs
+                key={`${generationEpoch}-${finishTask}`}
                 logs={logs}
                 isCollapse={finishTask}
-                isLoading={loading}
+                isLoading={isGenerating}
               />
             </div>
           </div>

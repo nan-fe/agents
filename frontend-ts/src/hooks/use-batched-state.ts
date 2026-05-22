@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-export const BATCH_RENDER_DELAY_MS = 50;
+export const BATCH_RENDER_DELAY_MS = 32;
 
 type StateUpdater<T> = (prev: T) => T;
 
@@ -9,6 +9,7 @@ export const useBatchedState = <T,>(initialValue: T) => {
   const pendingUpdatersRef = useRef<StateUpdater<T>[]>([]);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const rafRef = useRef<number | null>(null);
+  const applyPendingRef = useRef<() => void>(() => {});
 
   const applyPendingInAnimationFrame = useCallback(() => {
     rafRef.current = requestAnimationFrame(() => {
@@ -25,11 +26,15 @@ export const useBatchedState = <T,>(initialValue: T) => {
       if (pendingUpdatersRef.current.length > 0) {
         timeoutRef.current = setTimeout(() => {
           timeoutRef.current = null;
-          applyPendingInAnimationFrame();
+          applyPendingRef.current();
         }, BATCH_RENDER_DELAY_MS);
       }
     });
   }, []);
+
+  useEffect(() => {
+    applyPendingRef.current = applyPendingInAnimationFrame;
+  }, [applyPendingInAnimationFrame]);
 
   const scheduleFlush = useCallback(() => {
     if (timeoutRef.current !== null || rafRef.current !== null) {
@@ -38,9 +43,9 @@ export const useBatchedState = <T,>(initialValue: T) => {
 
     timeoutRef.current = setTimeout(() => {
       timeoutRef.current = null;
-      applyPendingInAnimationFrame();
+      applyPendingRef.current();
     }, BATCH_RENDER_DELAY_MS);
-  }, [applyPendingInAnimationFrame]);
+  }, []);
 
   const batchUpdate = useCallback(
     (updater: StateUpdater<T>) => {

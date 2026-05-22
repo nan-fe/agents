@@ -15,6 +15,7 @@
     "react-dom": "latest"
   },
   "devDependencies": {
+    "babel-plugin-react-compiler": "latest",
     "@tailwindcss/postcss": "latest",
     "@types/node": "latest",
     "@types/react": "latest",

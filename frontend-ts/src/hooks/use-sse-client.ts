@@ -78,74 +78,108 @@ export const useSSEClient = () => {
         const controller = new AbortController();
         abortControllerRef.current = controller;
 
+        setStatus(attempt === 0 ? "connecting" : "reconnecting");
+        if (attempt > 0) {
+          setRetryCount(attempt);
+        }
+
+        let response: Response | null = null;
         try {
-          setStatus(attempt === 0 ? "connecting" : "reconnecting");
-          if (attempt > 0) {
-            setRetryCount(attempt);
-          }
-
-          const response = await createRequest(controller.signal);
-          if (!response.ok) {
-            throw new Error(`SSE request failed with status ${response.status}`);
-          }
-
-          if (!response.body) {
-            throw new Error("SSE response body is empty");
-          }
-
-          setStatus("streaming");
-          onOpen?.();
-     
-          const reader = response.body.getReader();
-          await parseSSEStream({
-            reader,
-            parseMessage,
-            onMessage,
-          });
-
-          onComplete?.();
-          setStatus("completed");
-          abortControllerRef.current = null;
-          return null;
-        } catch (streamError) {
+          response = await createRequest(controller.signal);
+        } catch (requestError) {
           if (controller.signal.aborted) {
             abortControllerRef.current = null;
             return null;
           }
+          latestError = toError(requestError);
+        }
 
-          latestError = toError(streamError);
-          setError(latestError);
+        if (controller.signal.aborted) {
+          abortControllerRef.current = null;
+          return null;
+        }
 
-          if (attempt === maxRetries) {
-            break;
+        if (response && !response.ok) {
+          latestError = new Error(
+            `SSE request failed with status ${response.status}`,
+          );
+          response = null;
+        }
+
+        if (response && !response.body) {
+          latestError = new Error("SSE response body is empty");
+          response = null;
+        }
+
+        if (response?.body) {
+          setStatus("streaming");
+          onOpen?.();
+
+          const reader = response.body.getReader();
+          let streamFailed = false;
+
+          try {
+            await parseSSEStream({
+              reader,
+              parseMessage,
+              onMessage,
+            });
+          } catch (streamError) {
+            if (controller.signal.aborted) {
+              abortControllerRef.current = null;
+              return null;
+            }
+            latestError = toError(streamError);
+            streamFailed = true;
           }
 
-          const delay = Math.min(
-            retryMaxDelayMs,
-            retryBaseDelayMs * 2 ** attempt,
-          );
-          await wait(delay);
-          attempt += 1;
+          if (!streamFailed) {
+            onComplete?.();
+            setStatus("completed");
+            abortControllerRef.current = null;
+            return null;
+          }
         }
+
+        if (controller.signal.aborted) {
+          abortControllerRef.current = null;
+          return null;
+        }
+
+        if (latestError) {
+          setError(latestError);
+        }
+
+        if (attempt === maxRetries) {
+          break;
+        }
+
+        const delay = Math.min(
+          retryMaxDelayMs,
+          retryBaseDelayMs * 2 ** attempt,
+        );
+        await wait(delay);
+        attempt += 1;
       }
 
       abortControllerRef.current = null;
 
       if (fallback) {
+        setStatus("degraded");
         try {
-          setStatus("degraded");
           return await fallback(latestError);
         } catch (fallbackError) {
           const finalError = toError(fallbackError);
           setError(finalError);
           setStatus("failed");
-          throw finalError;
+          return null;
         }
       }
 
       const finalError = latestError ?? new Error("SSE stream failed");
+      setError(finalError);
       setStatus("failed");
-      throw finalError;
+      return null;
     },
     [],
   );
