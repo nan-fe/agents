@@ -1,13 +1,7 @@
-export type ShareSnapshot = {
-  id: string;
-  title?: string;
-  content?: string;
-  hashtags?: string[];
-  image_url?: string | null;
-  message?: string | null;
-  created_at: string;
-  expires_at?: string | null;
-};
+import { demoShareSnapshot, isDemoShareId } from '@/lib/demo-share';
+import type { ShareSnapshot } from '@/lib/share-types';
+
+export type { ShareSnapshot } from '@/lib/share-types';
 
 const API_BASE_URL =
   process.env.API_BASE_URL ??
@@ -17,6 +11,10 @@ const API_BASE_URL =
 export const getShareSnapshot = async (
   shareId: string
 ): Promise<ShareSnapshot | null> => {
+  if (isDemoShareId(shareId)) {
+    return demoShareSnapshot;
+  }
+
   const response = await fetch(
     `${API_BASE_URL}/shares/${encodeURIComponent(shareId)}`,
     {

@@ -8,8 +8,9 @@ export const middleware = async (request: NextRequest) => {
   const pathname = nextUrl.pathname;
   const isStudio = pathname === '/studio' || pathname.startsWith('/studio/');
   const isLogin = pathname === '/login';
+  const isRegister = pathname === '/register';
 
-  if (!isStudio && !isLogin) {
+  if (!isStudio && !isLogin && !isRegister) {
     return NextResponse.next();
   }
 
@@ -25,7 +26,7 @@ export const middleware = async (request: NextRequest) => {
     return NextResponse.redirect(loginUrl);
   }
 
-  if (isLogin && isLoggedIn) {
+  if ((isLogin || isRegister) && isLoggedIn) {
     const returnUrl = nextUrl.searchParams.get('returnUrl') || '/studio';
     return NextResponse.redirect(new URL(returnUrl, nextUrl.origin));
   }
@@ -34,5 +35,5 @@ export const middleware = async (request: NextRequest) => {
 };
 
 export const config = {
-  matcher: ['/studio', '/studio/:path*', '/login'],
+  matcher: ['/studio', '/studio/:path*', '/login', '/register'],
 };

@@ -9,10 +9,10 @@ type ShareActionsProps = {
 };
 
 const buttonClass =
-  'rounded-full border border-pink-300 bg-white px-4 py-2.5 text-pink-700 transition hover:border-pink-500 hover:text-pink-800';
+  'rounded-full border border-slate-300 bg-white px-4 py-2.5 text-slate-700 transition hover:border-slate-400 hover:text-slate-900';
 
 const primaryButtonClass =
-  'rounded-full border border-pink-600 bg-pink-600 px-4 py-2.5 text-white transition hover:bg-pink-700';
+  'rounded-full border border-indigo-600 bg-indigo-600 px-4 py-2.5 text-white transition hover:bg-indigo-700';
 
 const copyText = async (text: string) => {
   if (navigator.clipboard?.writeText) {

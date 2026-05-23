@@ -2,7 +2,7 @@ import NextAuth from 'next-auth';
 import Credentials from 'next-auth/providers/credentials';
 
 import { authConfig } from '@/auth.config';
-import { findAuthUser } from '@/lib/auth-users';
+import { verifyUserCredentials } from '@/lib/user-service';
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,
@@ -22,14 +22,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           return null;
         }
 
-        const matchedUser = findAuthUser(username, password);
+        const matchedUser = await verifyUserCredentials(username, password);
         if (!matchedUser) {
           return null;
         }
 
         return {
-          id: matchedUser.username,
-          name: matchedUser.name ?? matchedUser.username,
+          id: matchedUser.id,
+          name: matchedUser.name,
           username: matchedUser.username,
         };
       },

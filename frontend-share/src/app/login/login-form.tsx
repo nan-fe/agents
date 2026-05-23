@@ -2,8 +2,6 @@
 
 import { useActionState } from 'react';
 import { signIn } from 'next-auth/react';
-import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
 
 type LoginState = {
   error: string | null;
@@ -56,7 +54,7 @@ const LoginForm = ({ returnUrl }: LoginFormProps) => {
         </label>
         <input
           autoComplete="username"
-          className="w-full rounded-xl border border-pink-200 px-4 py-3 outline-none ring-pink-200 transition focus:ring-2"
+          className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-gray-900 outline-none ring-indigo-200 transition focus:ring-2"
           id="username"
           name="username"
           placeholder="请输入账号"
@@ -70,7 +68,7 @@ const LoginForm = ({ returnUrl }: LoginFormProps) => {
         </label>
         <input
           autoComplete="current-password"
-          className="w-full rounded-xl border border-pink-200 px-4 py-3 outline-none ring-pink-200 transition focus:ring-2"
+          className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-gray-900 outline-none ring-indigo-200 transition focus:ring-2"
           id="password"
           name="password"
           placeholder="请输入密码"
@@ -84,7 +82,7 @@ const LoginForm = ({ returnUrl }: LoginFormProps) => {
         </p>
       ) : null}
       <button
-        className="w-full rounded-full bg-pink-600 px-5 py-3 font-medium text-white transition hover:bg-pink-700 disabled:cursor-not-allowed disabled:opacity-70"
+        className="w-full rounded-full bg-indigo-600 px-5 py-3 font-medium text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-70"
         disabled={isPending}
         type="submit"
       >
@@ -94,31 +92,4 @@ const LoginForm = ({ returnUrl }: LoginFormProps) => {
   );
 };
 
-const LoginPage = () => {
-  const searchParams = useSearchParams();
-  const returnUrl = searchParams.get('returnUrl') || '/studio';
-
-  return (
-    <main className="mx-auto flex min-h-screen w-full max-w-md items-center px-4 py-12">
-      <section className="w-full rounded-3xl border border-pink-200 bg-white p-8 shadow-sm">
-        <p className="mb-3 text-sm font-bold tracking-widest text-pink-600">
-          XHS MULTI-AGENT CREATOR
-        </p>
-        <h1 className="text-3xl font-bold text-gray-950">登录创作平台</h1>
-        <p className="mt-3 text-sm leading-7 text-gray-600">
-          登录后可进入多智能体写作台，开始生成小红书文案与配图。
-        </p>
-        <div className="mt-8">
-          <LoginForm returnUrl={returnUrl} />
-        </div>
-        <p className="mt-6 text-center text-sm text-gray-500">
-          <Link className="text-pink-600 hover:underline" href="/">
-            返回门户首页
-          </Link>
-        </p>
-      </section>
-    </main>
-  );
-};
-
-export default LoginPage;
+export default LoginForm;

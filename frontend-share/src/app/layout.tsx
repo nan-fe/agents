@@ -13,7 +13,7 @@ const RootLayout = ({
 }>) => {
   return (
     <html lang="zh-CN">
-      <body className="min-h-screen bg-pink-50 text-gray-800 antialiased">
+      <body className="min-h-screen bg-slate-50 text-gray-800 antialiased">
         {children}
       </body>
     </html>

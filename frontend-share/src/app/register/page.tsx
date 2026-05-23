@@ -1,14 +1,14 @@
 import Link from 'next/link';
 
-import LoginForm from './login-form';
+import RegisterForm from './register-form';
 
-type LoginPageProps = {
+type RegisterPageProps = {
   searchParams: Promise<{
     returnUrl?: string;
   }>;
 };
 
-const LoginPage = async ({ searchParams }: LoginPageProps) => {
+const RegisterPage = async ({ searchParams }: RegisterPageProps) => {
   const params = await searchParams;
   const returnUrl = params.returnUrl || '/studio';
 
@@ -18,17 +18,17 @@ const LoginPage = async ({ searchParams }: LoginPageProps) => {
         <p className="mb-3 text-sm font-bold tracking-widest text-indigo-600">
           XHS MULTI-AGENT CREATOR
         </p>
-        <h1 className="text-3xl font-bold text-gray-950">登录创作平台</h1>
+        <h1 className="text-3xl font-bold text-gray-950">注册账号</h1>
         <p className="mt-3 text-sm leading-7 text-gray-600">
-          登录后可进入多智能体写作台，开始生成小红书文案与配图。
+          创建账号后即可进入多智能体写作台，开始生成小红书文案与配图。
         </p>
         <div className="mt-8">
-          <LoginForm returnUrl={returnUrl} />
+          <RegisterForm returnUrl={returnUrl} />
         </div>
         <p className="mt-6 text-center text-sm text-gray-500">
-          还没有账号？
-          <Link className="ml-1 text-indigo-600 hover:underline" href="/register">
-            立即注册
+          已有账号？
+          <Link className="ml-1 text-indigo-600 hover:underline" href="/login">
+            去登录
           </Link>
           <span className="mx-1">·</span>
           <Link className="text-indigo-600 hover:underline" href="/">
@@ -40,4 +40,4 @@ const LoginPage = async ({ searchParams }: LoginPageProps) => {
   );
 };
 
-export default LoginPage;
+export default RegisterPage;

@@ -67,10 +67,10 @@ const SharePage = async ({ params }: SharePageProps) => {
 
   return (
     <main className="mx-auto w-full max-w-5xl px-4 py-12 sm:py-16">
-      <article className="overflow-hidden rounded-3xl border border-pink-200 bg-white/95">
+      <article className="overflow-hidden rounded-3xl border border-slate-200 bg-white/95">
         <div className="p-6 sm:p-8">
-          <p className="mb-3 text-sm font-bold tracking-widest text-pink-600">
-            AI GENERATED CONTENT
+          <p className="mb-3 text-sm font-bold tracking-widest text-indigo-600">
+            {shareId === 'demo' ? 'SHARE DEMO' : 'AI GENERATED CONTENT'}
           </p>
           <h1 className="text-3xl font-bold leading-tight text-gray-950 sm:text-5xl">
             {title}
@@ -82,7 +82,7 @@ const SharePage = async ({ params }: SharePageProps) => {
             <div className="mt-6 flex flex-wrap gap-2.5">
               {hashtags.map((tag) => (
                 <span
-                  className="rounded-full bg-pink-100 px-3 py-2 text-sm text-pink-700"
+                  className="rounded-full bg-slate-100 px-3 py-2 text-sm text-slate-700"
                   key={tag}
                 >
                   #{tag}
@@ -94,7 +94,7 @@ const SharePage = async ({ params }: SharePageProps) => {
         </div>
         {share.image_url && (
           <Image
-            className="h-auto max-h-[560px] w-full bg-pink-50 object-contain"
+            className="h-auto max-h-[560px] w-full bg-slate-50 object-contain"
             src={share.image_url}
             alt={title}
             width={1024}
@@ -104,7 +104,9 @@ const SharePage = async ({ params }: SharePageProps) => {
         )}
       </article>
       <p className="mt-5 text-center text-sm text-gray-500">
-        由 XHS Multi-Agent Creator 生成
+        {shareId === 'demo'
+          ? '这是分享页示例内容，登录创作台后可生成并分享真实结果'
+          : '由 XHS Multi-Agent Creator 生成'}
       </p>
     </main>
   );

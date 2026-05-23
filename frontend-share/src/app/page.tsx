@@ -24,8 +24,8 @@ const HomePage = async () => {
 
   return (
     <main className="mx-auto min-h-screen w-full max-w-6xl px-4 py-12">
-      <section className="rounded-3xl border border-pink-200 bg-white p-8 sm:p-12">
-        <p className="mb-3 text-sm font-bold tracking-widest text-pink-600">
+      <section className="rounded-3xl border border-slate-200 bg-white p-8 sm:p-12">
+        <p className="mb-3 text-sm font-bold tracking-widest text-indigo-600">
           XHS MULTI-AGENT CREATOR
         </p>
         <h1 className="max-w-3xl text-3xl font-bold leading-tight text-gray-950 sm:text-5xl">
@@ -38,21 +38,29 @@ const HomePage = async () => {
         <div className="mt-8 flex flex-wrap gap-3">
           {loggedInUser ? (
             <Link
-              className="rounded-full bg-pink-600 px-5 py-2.5 font-medium text-white transition hover:bg-pink-700"
+              className="rounded-full bg-indigo-600 px-5 py-2.5 font-medium text-white transition hover:bg-indigo-700"
               href="/studio"
             >
               进入创作台
             </Link>
           ) : (
-            <Link
-              className="rounded-full bg-pink-600 px-5 py-2.5 font-medium text-white transition hover:bg-pink-700"
-              href="/login"
-            >
-              登录并开始创作
-            </Link>
+            <>
+              <Link
+                className="rounded-full bg-indigo-600 px-5 py-2.5 font-medium text-white transition hover:bg-indigo-700"
+                href="/register"
+              >
+                注册并开始创作
+              </Link>
+              <Link
+                className="rounded-full border border-slate-200 px-5 py-2.5 text-slate-700 transition hover:border-slate-300"
+                href="/login"
+              >
+                登录
+              </Link>
+            </>
           )}
           <Link
-            className="rounded-full border border-pink-200 px-5 py-2.5 text-pink-700 transition hover:border-pink-300"
+            className="rounded-full border border-slate-200 px-5 py-2.5 text-slate-700 transition hover:border-slate-300"
             href="/share/demo"
           >
             查看分享页示例
@@ -68,7 +76,7 @@ const HomePage = async () => {
       <section className="mt-8 grid gap-4 md:grid-cols-3">
         {features.map((feature) => (
           <article
-            className="rounded-3xl border border-pink-100 bg-white p-6"
+            className="rounded-3xl border border-slate-100 bg-white p-6"
             key={feature.title}
           >
             <h2 className="text-lg font-semibold text-gray-950">{feature.title}</h2>
