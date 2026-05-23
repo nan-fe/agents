@@ -149,6 +149,8 @@ docker compose pull
 docker compose up -d
 ```
 
+`postgres` 使用与业务镜像相同的阿里云 ACR：`agents:postgres`（CI 在 GitHub 上从官方 `postgres:16-alpine` 同步推送，服务器无需访问 docker.io）。
+
 ## 文件说明
 
 | 文件 | 职责 |
