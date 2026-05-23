@@ -72,6 +72,9 @@ jobs:
           tags: |
             ${{ env.REGISTRY }}/${{ env.NAMESPACE }}/${{ env.IMAGE_NAME }}:frontend-share
             ${{ env.REGISTRY }}/${{ env.NAMESPACE }}/${{ env.IMAGE_NAME }}:${{ github.sha }}-frontend-share
+          build-args: |
+            STUDIO_UPSTREAM_URL=http://frontend:80
+            API_UPSTREAM_URL=http://backend:8000
           cache-from: type=gha
           cache-to: type=gha,mode=max
 

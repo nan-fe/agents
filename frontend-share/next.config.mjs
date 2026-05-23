@@ -1,7 +1,12 @@
 /** @type {import('next').NextConfig} */
+const isProductionBuild = process.env.NODE_ENV === 'production';
+
 const studioUpstream =
-  process.env.STUDIO_UPSTREAM_URL ?? 'http://localhost:5173';
-const apiUpstream = process.env.API_UPSTREAM_URL ?? 'http://localhost:8000';
+  process.env.STUDIO_UPSTREAM_URL ??
+  (isProductionBuild ? 'http://frontend:80' : 'http://localhost:5173');
+const apiUpstream =
+  process.env.API_UPSTREAM_URL ??
+  (isProductionBuild ? 'http://backend:8000' : 'http://localhost:8000');
 
 const nextConfig = {
   output: 'standalone',

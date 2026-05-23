@@ -18,7 +18,12 @@ RUN apk add --no-cache openssl
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
+ARG STUDIO_UPSTREAM_URL=http://frontend:80
+ARG API_UPSTREAM_URL=http://backend:8000
+ENV NODE_ENV=production
 ENV DATABASE_URL="postgresql://postgres:postgres@postgres:5432/xhs_auth"
+ENV STUDIO_UPSTREAM_URL=${STUDIO_UPSTREAM_URL}
+ENV API_UPSTREAM_URL=${API_UPSTREAM_URL}
 RUN pnpm run build
 
 FROM node:22-alpine AS runner
