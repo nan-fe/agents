@@ -34,10 +34,8 @@ RUN apk add --no-cache openssl
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/prisma ./prisma
-COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
-COPY --from=builder /app/node_modules/@prisma/client ./node_modules/@prisma/client
-COPY --from=builder /app/node_modules/@prisma/engines ./node_modules/@prisma/engines
-COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
+# pnpm 将 @prisma/* 放在 .pnpm 中，需整体复制 node_modules（含 migrate 用的 prisma CLI）
+COPY --from=builder /app/node_modules ./node_modules
 
 EXPOSE 3000
 
