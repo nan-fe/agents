@@ -11,15 +11,20 @@ type SSEStatus =
   | "failed";
 
 export type SSEConnectOptions<TMessage, TResult> = {
-  createRequest: (signal: AbortSignal) => Promise<Response>;
-  onMessage: (message: TMessage) => void;
+  createRequest: (
+    signal: AbortSignal,
+    lastEventId: string | null,
+  ) => Promise<Response>;
+  onMessage: (message: TMessage, eventId?: string) => void;
   parseMessage?: (payload: string) => TMessage;
   onOpen?: () => void;
+  /** 每次发起连接/重连前触发，用于设置续传 checkpoint 或清空 ingest 状态 */
+  onReconnectAttempt?: (attempt: number, lastEventId: string | null) => void;
   onComplete?: () => void;
   maxRetries?: number;
   retryBaseDelayMs?: number;
   retryMaxDelayMs?: number;
-  fallback?: (error: unknown) => Promise<TResult>;
+  fallback?: (error: unknown, lastEventId: string | null) => Promise<TResult>;
 };
 
 const DEFAULT_MAX_RETRIES = 3;
@@ -59,6 +64,7 @@ export const useSSEClient = () => {
         onMessage,
         parseMessage = JSON.parse as (payload: string) => TMessage,
         onOpen,
+        onReconnectAttempt,
         onComplete,
         maxRetries = DEFAULT_MAX_RETRIES,
         retryBaseDelayMs = DEFAULT_RETRY_BASE_DELAY,
@@ -68,6 +74,7 @@ export const useSSEClient = () => {
 
       let attempt = 0;
       let latestError: Error | null = null;
+      let lastEventId: string | null = null;
 
       abortControllerRef.current?.abort();
       abortControllerRef.current = null;
@@ -82,10 +89,11 @@ export const useSSEClient = () => {
         if (attempt > 0) {
           setRetryCount(attempt);
         }
+        onReconnectAttempt?.(attempt, lastEventId);
 
         let response: Response | null = null;
         try {
-          response = await createRequest(controller.signal);
+          response = await createRequest(controller.signal, lastEventId);
         } catch (requestError) {
           if (controller.signal.aborted) {
             abortControllerRef.current = null;
@@ -122,7 +130,12 @@ export const useSSEClient = () => {
             await parseSSEStream({
               reader,
               parseMessage,
-              onMessage,
+              onMessage: (message, eventId) => {
+                if (eventId) {
+                  lastEventId = eventId;
+                }
+                onMessage(message, eventId);
+              },
             });
           } catch (streamError) {
             if (controller.signal.aborted) {
@@ -167,7 +180,7 @@ export const useSSEClient = () => {
       if (fallback) {
         setStatus("degraded");
         try {
-          return await fallback(latestError);
+          return await fallback(latestError, lastEventId);
         } catch (fallbackError) {
           const finalError = toError(fallbackError);
           setError(finalError);

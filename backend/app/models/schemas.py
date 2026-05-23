@@ -8,6 +8,7 @@ class UserInput(BaseModel):
 
     prompt: str
     session_id: str
+    last_event_id: Optional[str] = None
 
 
 class AgentLog(BaseModel):

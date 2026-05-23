@@ -23,7 +23,7 @@ export default defineConfig(async ({ command }): Promise<UserConfig> => {
     );
   }
 
-  return {
+    return {
     base: '/studio/',
     plugins,
     build: {

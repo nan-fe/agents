@@ -23,6 +23,13 @@ import asyncio
 
 load_dotenv()
 
+FRESH_TASK_INTENTS = frozenset({"new_task", "change_topic"})
+
+
+def is_fresh_task_intent(intent: str) -> bool:
+    """新任务 / 换题：执行时不复用上一轮 plan 与 result。"""
+    return intent in FRESH_TASK_INTENTS
+
 
 class WritingSessionHistory(BaseChatMessageHistory):
     """内存存储"""
@@ -191,8 +198,7 @@ class DialogOrchestratorAgent:
         log_callback: Optional[Callable] = None,
     ) -> None:
         """准备执行上下文"""
-        # 是否需要新规划
-        if intent == "new_task":
+        if is_fresh_task_intent(intent):
             planning_result = await asyncio.wait_for(
                 self.planner_agent.run(
                     user_input, log_callback, history=""
@@ -203,6 +209,9 @@ class DialogOrchestratorAgent:
                 "Orchestrator", f"策划完成，主题: {planning_result.topic}"
             )
             context.set_planning(planning_result)
+            await log_callback(
+                "Orchestrator", "新任务/换题：已重新规划，不加载历史文案与图片"
+            )
         else:
             last_plan = session_history.get_last_plan()
             print(f"使用历史规划：{last_plan}")
@@ -221,24 +230,25 @@ class DialogOrchestratorAgent:
                 await log_callback("Orchestrator", "未找到历史规划，已自动重建规划")
             await log_callback("Orchestrator", "使用历史计划")
 
-        # 加载历史结果到上下文
-        last_result = session_history.get_last_result()
-        print(f"使用历史结果：{last_result}")
-        if last_result:
-            context.load_from_dict({
-                "copywriting": {
-                    "title": last_result.get("title", ""),
-                    "content": last_result.get("content", ""),
-                    "hashtags": last_result.get("hashtags", []),
-                },
-                "image": {
-                    "image_url": last_result.get("image_url", ""),
-                    "prompt": last_result.get("prompt", last_result.get("image_prompt", "")),
-                },
-            })
+        if not is_fresh_task_intent(intent):
+            last_result = session_history.get_last_result()
+            print(f"使用历史结果：{last_result}")
+            if last_result:
+                context.load_from_dict({
+                    "copywriting": {
+                        "title": last_result.get("title", ""),
+                        "content": last_result.get("content", ""),
+                        "hashtags": last_result.get("hashtags", []),
+                    },
+                    "image": {
+                        "image_url": last_result.get("image_url", ""),
+                        "prompt": last_result.get("prompt", last_result.get("image_prompt", "")),
+                    },
+                })
 
-            context.set_last_result(last_result)
-            await log_callback("Orchestrator", "加载上次生成的文案信息")
+                context.set_last_result(last_result)
+                await log_callback("Orchestrator", "加载上次生成的文案信息")
+
 
     async def _execute_agent_pipeline(
         self,

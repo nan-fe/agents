@@ -25,6 +25,13 @@ import ResultDisplay from '../components/result-display';
 import { HistoryItem } from '../components/history-panel';
 import { useBatchedState } from '../hooks/use-batched-state';
 import { useSSEClient, type SSEConnectOptions } from '../hooks/use-sse-client';
+import {
+  isResumeFailedResult,
+  isResumeFailureLogEvent,
+  isResumeFailureStreamEvent,
+  type DialogStreamResult,
+} from '../utils/sse-resume';
+import { createStreamIngestor } from '../utils/sse-stream-ingest';
 
 const { Header, Content } = Layout;
 const { Text, Paragraph, Title } = Typography;
@@ -55,7 +62,7 @@ type StreamEvent =
     }
   | {
       type: 'result';
-      data: any;
+      data: DialogStreamResult;
     };
 
 type LogType = {
@@ -112,6 +119,8 @@ type DialogResultData = {
   title: string;
   hashtags: string[];
   image_url: string;
+  message?: string;
+  error_code?: string;
 };
 
 type GenerationSuccess = {
@@ -150,8 +159,9 @@ const runDialogGeneration = async (
   const { prompt, sessionId, versionCount, getCancelled, deps } = payload;
   let streamResult: DialogResultData | null = null;
 
-  const appendLog = (from: string, text: string) => {
-    console.log(`${from}: ${text}`);
+  const streamIngestor = createStreamIngestor();
+
+  const enqueueLog = (from: string, text: string) => {
     deps.batchLogUpdate((prev) => [
       ...prev,
       {
@@ -162,37 +172,69 @@ const runDialogGeneration = async (
     ]);
   };
 
+  const appendLog = (from: string, text: string) => {
+    console.log(`${from}: ${text}`);
+    enqueueLog(from, text);
+  };
+
   try {
     const fallbackResult = await deps.connect<StreamEvent, DialogResultData>({
-      createRequest: (signal) =>
+      createRequest: (signal, lastEventId) =>
         createDialogGenerateRequest(
           {
             prompt,
             session_id: sessionId,
+            ...(lastEventId ? { last_event_id: lastEventId } : {}),
           } satisfies UserInput,
           signal,
         ),
       parseMessage: (rawPayload) => JSON.parse(rawPayload) as StreamEvent,
-      onMessage: (event) => {
-        if (event.type === 'log') {
-          appendLog(event.data.from, event.data.message);
-        } else if (event.type === 'result') {
-          streamResult = event.data;
+      onReconnectAttempt: (attempt, lastEventId) => {
+        streamIngestor.setResumeAfterEventId(
+          attempt > 0 && lastEventId ? lastEventId : null,
+        );
+        if (attempt > 0) {
+          message.info('连接恢复，正在续传…');
         }
       },
-      fallback: async (error) => {
+      onMessage: (event, eventId) => {
+        if (isResumeFailureLogEvent(event) || isResumeFailureStreamEvent(event)) {
+          if (isResumeFailureStreamEvent(event)) {
+            streamResult = event.data as DialogResultData;
+          }
+          return;
+        }
+
+        streamIngestor.ingest(eventId, () => {
+          if (event.type === 'log') {
+            appendLog(event.data.from, event.data.message);
+          } else if (event.type === 'result') {
+            streamResult = event.data as DialogResultData;
+          }
+        });
+      },
+      fallback: async (error, lastEventId) => {
         console.warn('SSE 连接异常，已切换降级策略:', error);
         message.warning('实时通道异常，正在切换降级模式...');
         return generateDialogContent({
           request: {
             prompt,
             session_id: sessionId,
+            ...(lastEventId ? { last_event_id: lastEventId } : {}),
           },
           log_callback: appendLog,
+          streamIngestor,
         });
       },
     });
     const resultData = fallbackResult ?? streamResult;
+
+    if (isResumeFailedResult(resultData)) {
+      return {
+        kind: 'error',
+        error: resultData.message ?? '续传失败，请重新发起生成',
+      };
+    }
 
     if (!resultData) {
       deps.flushLogs();
@@ -234,7 +276,7 @@ const executeDialogGeneration = async (
     if (outcome.kind === 'success') {
       payload.onSuccess(outcome);
     } else if (outcome.kind === 'error') {
-      message.error('生成内容失败，请重试');
+      message.error(outcome.error);
     }
   } finally {
     onSettled();
