@@ -1,6 +1,7 @@
 services:
   postgres:
-    image: postgres:16-alpine
+    # 与 backend/frontend 同源：由 CI 从 docker.io 同步到阿里云 ACR，避免服务器直连 Docker Hub
+    image: crpi-qeygpng4u8e2ezh6.cn-shanghai.personal.cr.aliyuncs.com/nan-fe/agents:postgres
     container_name: agents-postgres
     environment:
       POSTGRES_USER: postgres

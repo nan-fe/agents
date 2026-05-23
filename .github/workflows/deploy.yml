@@ -27,6 +27,13 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      # ---------- 将 Postgres 同步到 ACR（国内服务器无法稳定访问 docker.io）----------
+      - name: Mirror Postgres to Aliyun ACR
+        run: |
+          docker pull postgres:16-alpine
+          docker tag postgres:16-alpine ${{ env.REGISTRY }}/${{ env.NAMESPACE }}/${{ env.IMAGE_NAME }}:postgres
+          docker push ${{ env.REGISTRY }}/${{ env.NAMESPACE }}/${{ env.IMAGE_NAME }}:postgres
+
       # ---------- 构建和推送后端镜像 ----------
       - name: Build and push Backend
         uses: docker/build-push-action@v6
