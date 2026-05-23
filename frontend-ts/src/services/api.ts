@@ -4,6 +4,7 @@
 
 import type { components } from "../api/schema";
 import { parseSSEStream } from "../utils/sse-parser";
+import type { StreamIngestor } from "../utils/sse-stream-ingest";
 
 
 export const API_BASE_URL =
@@ -52,6 +53,7 @@ export type ShareCreateResponse = {
 export type DialogSSEType = {
   request: UserInput;
   log_callback: (from: string, message: string) => void;
+  streamIngestor?: StreamIngestor;
 };
 
 export const createDialogGenerateRequest = (
@@ -72,7 +74,7 @@ export const createDialogGenerateRequest = (
 export const generateDialogContent = async (
   param: DialogSSEType,
 ): Promise<any> => {
-  const { request, log_callback } = param;
+  const { request, log_callback, streamIngestor } = param;
   try {
     // 使用fetch API创建SSE连接
     const response = await createDialogGenerateRequest(request);
@@ -89,12 +91,21 @@ export const generateDialogContent = async (
     await parseSSEStream({
       reader,
       parseMessage: (payload) => JSON.parse(payload),
-      onMessage: (data: any) => {
-        if (data.type === "log") {
-          log_callback?.(data.data.from, data.data.message);
-        } else if (data.type === "result") {
-          finalResult = data.data;
+      onMessage: (data: any, eventId) => {
+        const enqueue = () => {
+          if (data.type === "log") {
+            log_callback?.(data.data.from, data.data.message);
+          } else if (data.type === "result") {
+            finalResult = data.data;
+          }
+        };
+
+        if (streamIngestor) {
+          streamIngestor.ingest(eventId, enqueue);
+          return;
         }
+
+        enqueue();
       },
       onParseError: (error) => {
         console.error("解析SSE消息失败:", error);

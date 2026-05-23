@@ -1,8 +1,14 @@
 import { defineConfig, type PluginOption, type UserConfig } from "vite";
-import react from "@vitejs/plugin-react";
+import react, { reactCompilerPreset } from "@vitejs/plugin-react";
+import babel from "@rolldown/plugin-babel";
 
-export default defineConfig(async (): Promise<UserConfig> => {
-  const plugins: PluginOption[] = [react()];
+export default defineConfig(async ({ command }): Promise<UserConfig> => {
+  const plugins: PluginOption[] = [
+    react(),
+    babel({
+      presets: [reactCompilerPreset()],
+    }),
+  ];
 
   if (process.env.ANALYZE === "true") {
     const { visualizer } = await import("rollup-plugin-visualizer");
@@ -17,7 +23,8 @@ export default defineConfig(async (): Promise<UserConfig> => {
     );
   }
 
-  return {
+    return {
+    base: '/studio/',
     plugins,
     build: {
       target: "baseline-widely-available",
@@ -27,7 +34,7 @@ export default defineConfig(async (): Promise<UserConfig> => {
       assetsInlineLimit: 4096,
       cssCodeSplit: true,
       cssMinify: "lightningcss",
-      minify: "oxc",
+      minify: command === "build" ? "oxc" : false,
       reportCompressedSize: true,
       sourcemap: false,
     },
@@ -35,6 +42,7 @@ export default defineConfig(async (): Promise<UserConfig> => {
       proxy: {
         "/dialog": "http://localhost:8000",
         "/session": "http://localhost:8000",
+        "/shares": "http://localhost:8000",
       },
     },
   };

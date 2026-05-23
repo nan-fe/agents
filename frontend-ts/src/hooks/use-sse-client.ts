@@ -11,15 +11,20 @@ type SSEStatus =
   | "failed";
 
 export type SSEConnectOptions<TMessage, TResult> = {
-  createRequest: (signal: AbortSignal) => Promise<Response>;
-  onMessage: (message: TMessage) => void;
+  createRequest: (
+    signal: AbortSignal,
+    lastEventId: string | null,
+  ) => Promise<Response>;
+  onMessage: (message: TMessage, eventId?: string) => void;
   parseMessage?: (payload: string) => TMessage;
   onOpen?: () => void;
+  /** 每次发起连接/重连前触发，用于设置续传 checkpoint 或清空 ingest 状态 */
+  onReconnectAttempt?: (attempt: number, lastEventId: string | null) => void;
   onComplete?: () => void;
   maxRetries?: number;
   retryBaseDelayMs?: number;
   retryMaxDelayMs?: number;
-  fallback?: (error: unknown) => Promise<TResult>;
+  fallback?: (error: unknown, lastEventId: string | null) => Promise<TResult>;
 };
 
 const DEFAULT_MAX_RETRIES = 3;
@@ -59,6 +64,7 @@ export const useSSEClient = () => {
         onMessage,
         parseMessage = JSON.parse as (payload: string) => TMessage,
         onOpen,
+        onReconnectAttempt,
         onComplete,
         maxRetries = DEFAULT_MAX_RETRIES,
         retryBaseDelayMs = DEFAULT_RETRY_BASE_DELAY,
@@ -68,6 +74,7 @@ export const useSSEClient = () => {
 
       let attempt = 0;
       let latestError: Error | null = null;
+      let lastEventId: string | null = null;
 
       abortControllerRef.current?.abort();
       abortControllerRef.current = null;
@@ -78,74 +85,114 @@ export const useSSEClient = () => {
         const controller = new AbortController();
         abortControllerRef.current = controller;
 
+        setStatus(attempt === 0 ? "connecting" : "reconnecting");
+        if (attempt > 0) {
+          setRetryCount(attempt);
+        }
+        onReconnectAttempt?.(attempt, lastEventId);
+
+        let response: Response | null = null;
         try {
-          setStatus(attempt === 0 ? "connecting" : "reconnecting");
-          if (attempt > 0) {
-            setRetryCount(attempt);
-          }
-
-          const response = await createRequest(controller.signal);
-          if (!response.ok) {
-            throw new Error(`SSE request failed with status ${response.status}`);
-          }
-
-          if (!response.body) {
-            throw new Error("SSE response body is empty");
-          }
-
-          setStatus("streaming");
-          onOpen?.();
-     
-          const reader = response.body.getReader();
-          await parseSSEStream({
-            reader,
-            parseMessage,
-            onMessage,
-          });
-
-          onComplete?.();
-          setStatus("completed");
-          abortControllerRef.current = null;
-          return null;
-        } catch (streamError) {
+          response = await createRequest(controller.signal, lastEventId);
+        } catch (requestError) {
           if (controller.signal.aborted) {
             abortControllerRef.current = null;
             return null;
           }
+          latestError = toError(requestError);
+        }
 
-          latestError = toError(streamError);
-          setError(latestError);
+        if (controller.signal.aborted) {
+          abortControllerRef.current = null;
+          return null;
+        }
 
-          if (attempt === maxRetries) {
-            break;
+        if (response && !response.ok) {
+          latestError = new Error(
+            `SSE request failed with status ${response.status}`,
+          );
+          response = null;
+        }
+
+        if (response && !response.body) {
+          latestError = new Error("SSE response body is empty");
+          response = null;
+        }
+
+        if (response?.body) {
+          setStatus("streaming");
+          onOpen?.();
+
+          const reader = response.body.getReader();
+          let streamFailed = false;
+
+          try {
+            await parseSSEStream({
+              reader,
+              parseMessage,
+              onMessage: (message, eventId) => {
+                if (eventId) {
+                  lastEventId = eventId;
+                }
+                onMessage(message, eventId);
+              },
+            });
+          } catch (streamError) {
+            if (controller.signal.aborted) {
+              abortControllerRef.current = null;
+              return null;
+            }
+            latestError = toError(streamError);
+            streamFailed = true;
           }
 
-          const delay = Math.min(
-            retryMaxDelayMs,
-            retryBaseDelayMs * 2 ** attempt,
-          );
-          await wait(delay);
-          attempt += 1;
+          if (!streamFailed) {
+            onComplete?.();
+            setStatus("completed");
+            abortControllerRef.current = null;
+            return null;
+          }
         }
+
+        if (controller.signal.aborted) {
+          abortControllerRef.current = null;
+          return null;
+        }
+
+        if (latestError) {
+          setError(latestError);
+        }
+
+        if (attempt === maxRetries) {
+          break;
+        }
+
+        const delay = Math.min(
+          retryMaxDelayMs,
+          retryBaseDelayMs * 2 ** attempt,
+        );
+        await wait(delay);
+        attempt += 1;
       }
 
       abortControllerRef.current = null;
 
       if (fallback) {
+        setStatus("degraded");
         try {
-          setStatus("degraded");
-          return await fallback(latestError);
+          return await fallback(latestError, lastEventId);
         } catch (fallbackError) {
           const finalError = toError(fallbackError);
           setError(finalError);
           setStatus("failed");
-          throw finalError;
+          return null;
         }
       }
 
       const finalError = latestError ?? new Error("SSE stream failed");
+      setError(finalError);
       setStatus("failed");
-      throw finalError;
+      return null;
     },
     [],
   );

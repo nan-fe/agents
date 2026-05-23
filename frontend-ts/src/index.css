@@ -55,3 +55,14 @@ code {
     opacity: 1;
   }
 }
+
+@keyframes thinking-show {
+  to {
+    opacity: 1;
+  }
+}
+
+.thinking-indicator {
+  opacity: 0;
+  animation: thinking-show 0s 1s forwards;
+}

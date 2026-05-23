@@ -3,8 +3,8 @@ import Link from 'next/link';
 const NotFound = () => {
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-5xl items-center px-4 py-12">
-      <section className="w-full rounded-3xl border border-pink-200 bg-white p-8 text-center">
-        <p className="mb-3 text-sm font-bold tracking-widest text-pink-600">
+      <section className="w-full rounded-3xl border border-slate-200 bg-white p-8 text-center">
+        <p className="mb-3 text-sm font-bold tracking-widest text-indigo-600">
           SHARE NOT FOUND
         </p>
         <h1 className="text-3xl font-bold leading-tight text-gray-950 sm:text-5xl">
@@ -15,7 +15,7 @@ const NotFound = () => {
         </p>
         <div className="mt-7 flex flex-wrap justify-center gap-3">
           <Link
-            className="rounded-full border border-pink-600 bg-pink-600 px-5 py-2.5 text-white"
+            className="rounded-full border border-indigo-600 bg-indigo-600 px-5 py-2.5 text-white"
             href="/"
           >
             返回首页

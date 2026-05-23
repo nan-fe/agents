@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import { useActionState } from 'react';
 import { Button, Space, message } from 'antd';
 import ReactMarkdown from 'react-markdown';
 import {
@@ -6,6 +6,12 @@ import {
   createShare,
   type ShareResult,
 } from '../services/api';
+
+type ShareActionState = {
+  shareUrl: string;
+};
+
+const initialShareState: ShareActionState = { shareUrl: '' };
 
 const copyText = async (text: string) => {
   if (navigator.clipboard?.writeText) {
@@ -24,39 +30,37 @@ const copyText = async (text: string) => {
   document.body.removeChild(textArea);
 };
 
+const shareResultAction = async (
+  prevState: ShareActionState,
+  shareResult: ShareResult,
+): Promise<ShareActionState> => {
+  try {
+    const response = await createShare(shareResult);
+    const url = buildShareUrl(response.share_id);
+    await copyText(url);
+    message.success('分享链接已生成并复制');
+    return { shareUrl: url };
+  } catch (error) {
+    console.error('创建分享链接失败:', error);
+    message.error('创建分享链接失败，请稍后重试');
+    return prevState;
+  }
+};
+
 const ResultDisplay = (params: { result?: ShareResult }) => {
   const { result } = params;
-  const [shareUrl, setShareUrl] = useState('');
-  const [sharing, setSharing] = useState(false);
+  const [shareState, createShareLink, isSharing] = useActionState(
+    shareResultAction,
+    initialShareState,
+  );
   const title = result?.title || '生成结果';
   const content = result?.content || result?.message || '暂无可展示内容';
   const resultHashtags = result?.hashtags;
   const hashtags: string[] = Array.isArray(resultHashtags) ? resultHashtags : [];
-  const shareText = useMemo(
-    () => [title, content, hashtags.map((tag) => `#${tag}`).join(' ')].filter(Boolean).join('\n\n'),
-    [content, hashtags, title]
-  );
 
   if (!result) {
     return null;
   }
-
-  const handleCreateShare = async () => {
-    try {
-      setSharing(true);
-      const response = await createShare(result);
-      const url = buildShareUrl(response.share_id);
-      setShareUrl(url);
-      await copyText(url);
-      message.success('分享链接已生成并复制');
-    } catch (error) {
-      console.error('创建分享链接失败:', error);
-      message.error('创建分享链接失败，请稍后重试');
-    } finally {
-      setSharing(false);
-    }
-  };
-
 
   return (
     <div className="flex flex-col gap-6">
@@ -64,7 +68,11 @@ const ResultDisplay = (params: { result?: ShareResult }) => {
         <div className="flex flex-col gap-3 mb-4 sm:flex-row sm:items-start sm:justify-between">
           <h3 className="text-xl font-bold text-gray-800 m-0">{title}</h3>
           <Space wrap>
-            <Button type="primary" loading={sharing} onClick={handleCreateShare}>
+            <Button
+              type="primary"
+              loading={isSharing}
+              onClick={() => createShareLink(result)}
+            >
               生成分享链接
             </Button>
           </Space>
@@ -82,15 +90,15 @@ const ResultDisplay = (params: { result?: ShareResult }) => {
             </span>
           ))}
         </div>
-        {shareUrl && (
+        {shareState.shareUrl && (
           <div className="mt-4 rounded-md bg-pink-50 p-3 text-sm text-gray-700">
             <div className="mb-2 font-medium text-pink-600">分享链接已生成</div>
-            <div className="break-all">{shareUrl}</div>
+            <div className="break-all">{shareState.shareUrl}</div>
             <Space wrap className="mt-3">
-              <Button size="small" onClick={() => copyText(shareUrl)}>
+              <Button size="small" onClick={() => copyText(shareState.shareUrl)}>
                 复制链接
               </Button>
-              <Button size="small" type="link" href={shareUrl} target="_blank">
+              <Button size="small" type="link" href={shareState.shareUrl} target="_blank">
                 打开分享页
               </Button>
             </Space>

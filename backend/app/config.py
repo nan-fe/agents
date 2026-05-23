@@ -33,6 +33,9 @@ class Settings(BaseSettings):
     AGENT_TIMEOUT_REVIEWER_AGENT_SECONDS: float = 90.0
     AGENT_TIMEOUT_RAG_AGENT_SECONDS: float = 120.0
 
+    # SSE 断点续传缓冲：生成完成后保留时长（秒），超时后释放内存
+    DIALOG_STREAM_RETENTION_SECONDS: float = 1800.0
+
     # 意图/路由等外层有 wait_for 的编排 LLM：默认不重试，避免退避 sleep 先于外层超时触发「生成失败」
     LLM_ORCHESTRATION_HTTP_RETRY_MAX_ATTEMPTS: int = 1
 

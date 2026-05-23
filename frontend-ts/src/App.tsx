@@ -1,18 +1,24 @@
 import React, { useState } from 'react';
 import {
+  LogoutOutlined,
   UserOutlined,
   VideoCameraOutlined,
 } from '@ant-design/icons';
-import { Layout, Menu, theme } from 'antd';
+import { Button, Layout, Menu, theme } from 'antd';
 import DialogContent from './pages/dialog-content';
 
 import './App.css';
 
-const { Sider, Content } = Layout;
+const { Sider, Content, Header } = Layout;
 enum PageMenu {
   DIALOG_CONTENT = 1,
   PRODUCT_MARKETING,
 }
+
+const handleLogout = () => {
+  window.location.assign('/logout');
+};
+
 /**
  * TODO: 菜单后续会新增选品池，目前仅支持内容生成
  */
@@ -45,17 +51,24 @@ const App: React.FC = () => {
           ]}
         />
       </Sider>
-      <Content
-        className="min-w-0"
-        style={{
-          padding: 16,
-          minHeight: 280,
-          background: colorBgContainer,
-          borderRadius: borderRadiusLG,
-        }}
-      >
-        <DialogContent />
-      </Content>
+      <Layout>
+        <Header className="flex items-center justify-end border-b border-gray-200 bg-white px-4 !leading-normal">
+          <Button icon={<LogoutOutlined />} onClick={handleLogout}>
+            退出登录
+          </Button>
+        </Header>
+        <Content
+          className="min-w-0"
+          style={{
+            padding: 16,
+            minHeight: 280,
+            background: colorBgContainer,
+            borderRadius: borderRadiusLG,
+          }}
+        >
+          <DialogContent />
+        </Content>
+      </Layout>
     </Layout>
   );
 };

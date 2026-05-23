@@ -102,6 +102,8 @@ export interface components {
             prompt: string;
             /** Session Id */
             session_id: string;
+            /** Last Event Id */
+            last_event_id?: string | null;
         };
         /** ValidationError */
         ValidationError: {

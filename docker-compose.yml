@@ -1,4 +1,24 @@
 services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: agents-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: xhs_auth
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - app-network
+    restart: unless-stopped
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres -d xhs_auth']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   backend:
     image: crpi-qeygpng4u8e2ezh6.cn-shanghai.personal.cr.aliyuncs.com/nan-fe/agents:backend
     container_name: agents-backend
@@ -19,8 +39,6 @@ services:
   frontend:
     image: crpi-qeygpng4u8e2ezh6.cn-shanghai.personal.cr.aliyuncs.com/nan-fe/agents:frontend
     container_name: agents-frontend
-    ports:
-      - "3000:80"
     depends_on:
       - backend
     networks:
@@ -31,12 +49,21 @@ services:
     image: crpi-qeygpng4u8e2ezh6.cn-shanghai.personal.cr.aliyuncs.com/nan-fe/agents:frontend-share
     container_name: agents-frontend-share
     ports:
-      - "3001:3000"
+      - "3000:3000"
     environment:
       - API_BASE_URL=http://backend:8000
       - NEXT_PUBLIC_API_BASE_URL=http://backend:8000
+      - API_UPSTREAM_URL=http://backend:8000
+      - STUDIO_UPSTREAM_URL=http://frontend:80
+      - AUTH_SECRET=${AUTH_SECRET:-change-me-in-production}
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/xhs_auth
     depends_on:
-      - backend
+      postgres:
+        condition: service_healthy
+      backend:
+        condition: service_started
+      frontend:
+        condition: service_started
     networks:
       - app-network
     restart: unless-stopped
@@ -44,3 +71,6 @@ services:
 networks:
   app-network:
     driver: bridge
+
+volumes:
+  postgres_data:
