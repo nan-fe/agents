@@ -95,6 +95,8 @@ export const generateDialogContent = async (
         const enqueue = () => {
           if (data.type === "log") {
             log_callback?.(data.data.from, data.data.message);
+          } else if (data.type === "meta") {
+            // 展示名映射由后端在 log.from 中已解析；meta 供需要时扩展
           } else if (data.type === "result") {
             finalResult = data.data;
           }

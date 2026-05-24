@@ -97,7 +97,6 @@ class ImageAgent(BaseAgent):
         history: str = "",
     ) -> ImageResult:
         """运行图片Agent"""
-        await self.log(f"根据策划方案生成图片描述: {input_data}", log_callback)
         if isinstance(input_data, dict):
             input_data_dict = input_data
         else:
@@ -138,8 +137,6 @@ class ImageAgent(BaseAgent):
         """
 
         await self.log("生成图片描述...", log_callback)
-        await self.log(f"调用图片生成API（主模型 + 预算内降级）", log_callback)
-
         deadline = time.monotonic() + settings.IMAGE_GEN_TOTAL_BUDGET_SECONDS
         prompt_variants = [prompt, self._compact_prompt_for_retry(prompt)]
         size_variants = ["1024x1024", "512x512"]
@@ -152,12 +149,12 @@ class ImageAgent(BaseAgent):
             try:
                 image_url = await self._siliconflow_generate(ptext, size)
                 image_result = ImageResult(image_url=image_url, prompt=ptext)
-                await self.log(f"图片生成完成: {image_result}", log_callback)
+                await self.log("配图已生成", log_callback)
                 return image_result
             except Exception as e:
                 last_error = e
                 print(f"使用{self.image_model}生成图片失败 (variant={i}, size={size}): {e}")
-                await self.log(f"主模型生图失败，尝试降级: {e}", log_callback)
+                await self.log("主模型生图失败，正在尝试备用方案…", log_callback)
 
         if time.monotonic() <= deadline and hasattr(replicate, "run") and settings.REPLICATE_API_KEY:
             ptext = prompt_variants[-1]
@@ -165,12 +162,12 @@ class ImageAgent(BaseAgent):
             try:
                 image_url = await self._replicate_generate(ptext, w, h)
                 image_result = ImageResult(image_url=image_url, prompt=ptext)
-                await self.log(f"Replicate 备用生图完成: {image_result}", log_callback)
+                await self.log("备用方案配图已生成", log_callback)
                 return image_result
             except Exception as e:
                 last_error = e
                 print(f"使用Stable Diffusion生成图片失败: {e}")
 
         err = last_error or RuntimeError("image pipeline exhausted")
-        await self.log(f"图片生成最终失败: {err}", log_callback)
+        await self.log("配图生成失败", log_callback)
         raise RuntimeError(f"图片生成失败: {err}") from err

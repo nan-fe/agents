@@ -22,6 +22,12 @@ from app.security.input_guard import check_input_security, safety_rejection_payl
 from app.services.dialog_stream_store import DialogStream, dialog_stream_store
 from app.services.share_service import share_store
 from app.services.sse_resume import ResumePhase, resolve_resume_phase
+from app.utils.display_labels import (
+    agent_display_label,
+    display_label_maps,
+    intent_display_label,
+)
+from app.utils.retry_policy import classify_agent_failure
 
 logger = logging.getLogger(__name__)
 
@@ -81,15 +87,32 @@ async def health_ready():
     return JSONResponse(status_code=503, content=detail)
 
 
-def _build_log_message(agent_name: str, message: str) -> SSEMessage:
-    return SSEMessage(
-        type="log",
-        data={
-            "from": agent_name,
-            "message": message,
-            "timestamp": int(datetime.now().timestamp() * 1000),
-        },
-    )
+@app.get("/api/display-labels")
+async def get_display_labels():
+    """意图与 Agent 展示名映射，供前端静态拉取或调试。"""
+    return display_label_maps()
+
+
+def _build_log_message(
+    agent_key: str,
+    message: str,
+    *,
+    intent: Optional[str] = None,
+) -> SSEMessage:
+    data = {
+        "from": agent_display_label(agent_key),
+        "agent_key": agent_key,
+        "message": message,
+        "timestamp": int(datetime.now().timestamp() * 1000),
+    }
+    if intent is not None:
+        data["intent"] = intent
+        data["intent_label"] = intent_display_label(intent)
+    return SSEMessage(type="log", data=data)
+
+
+def _build_meta_message() -> SSEMessage:
+    return SSEMessage(type="meta", data=display_label_maps())
 
 
 def _sanitize_sse_payload(payload: dict) -> dict:
@@ -143,13 +166,25 @@ async def _run_dialog_generation(
     user_input: str,
     session_id: str,
 ) -> None:
-    async def log_callback(agent_name: str, message: str) -> None:
-        log_message = _build_log_message(agent_name, message)
+    async def log_callback(
+        agent_key: str,
+        message: str,
+        *,
+        intent: Optional[str] = None,
+    ) -> None:
+        log_message = _build_log_message(agent_key, message, intent=intent)
         await stream.append_event(
             {"event": "message", "data": log_message.model_dump_json()}
         )
 
     try:
+        await stream.append_event(
+            {
+                "event": "message",
+                "data": _build_meta_message().model_dump_json(),
+            }
+        )
+
         safety_result = await check_input_security(user_input)
         if not safety_result.allowed:
             await log_callback("SafetyGuard", safety_result.reason)
@@ -173,14 +208,14 @@ async def _run_dialog_generation(
                     "生成失败：执行超时（常见于规划、模型调用等环节超过等待上限），请稍后重试。"
                 )
             else:
-                detail = (str(e) or "").strip()
-                if not detail and getattr(e, "args", None):
-                    detail = " ".join(
-                        str(a) for a in e.args if a is not None and str(a).strip()
-                    ).strip()
-                if not detail:
-                    detail = type(e).__name__
-                error_text = f"生成失败: {detail}"
+                # detail = (str(e) or "").strip()
+                # if not detail and getattr(e, "args", None):
+                #     detail = " ".join(
+                #         str(a) for a in e.args if a is not None and str(a).strip()
+                #     ).strip()
+                # if not detail:
+                #     detail = type(e).__name__
+                error_text = f"生成失败: {classify_agent_failure(e)}"
             await log_callback("Orchestrator", error_text)
             final_result = {
                 "title": "",

@@ -79,7 +79,12 @@ class PlannerAgent(BaseAgent):
                 history=history,
             )
             print("plan", planning_result)
-            await self.log(f"策划方案生成完成: {planning_result}", log_callback)
+            topic = (
+                planning_result.get("topic", "默认主题")
+                if isinstance(planning_result, dict)
+                else planning_result.topic
+            )
+            await self.log(f"策划方案生成完成，主题：{topic}", log_callback)
 
             return PlanningResult(**planning_result)
         except Exception as e:

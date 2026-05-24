@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import Image from 'next/image';
 import { notFound } from 'next/navigation';
 import ShareActions from '../../../components/share-actions';
+import { DEMO_SHARE_ID } from '../../../lib/demo-share';
 import { getShareSnapshot } from '../../../lib/shares';
 
 type SharePageProps = {
@@ -9,6 +10,14 @@ type SharePageProps = {
     shareId: string;
   }>;
 };
+
+/** 路由段 ISR（须与 shares.ts 中 SHARE_PAGE_REVALIDATE_SECONDS 一致；Next 要求此处为数字字面量） */
+export const revalidate = 3600;
+
+/** 构建时未预生成的 shareId，首次请求时按需生成并进入 ISR 缓存 */
+export const dynamicParams = true;
+
+export const generateStaticParams = () => [{ shareId: DEMO_SHARE_ID }];
 
 const toDescription = (content: string) => {
   const normalized = content.replace(/\s+/g, ' ').trim();

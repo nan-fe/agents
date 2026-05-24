@@ -150,7 +150,6 @@ class CopywriterAgent(BaseAgent):
         Returns:
             文案结果
         """
-        await self.log(f"根据策划方案生成文案", log_callback)
 
         # 处理不同类型的输入
         if isinstance(planning_result, dict):
@@ -187,7 +186,7 @@ class CopywriterAgent(BaseAgent):
             "user_input": user_input,
         }
 
-        await self.log("生成小红书风格文案...", log_callback)
+        await self.log("生成符合平台特点的文案...", log_callback)
 
         try:
             result = await llm_factory.run_chain_with_dynamic_tokens(
@@ -198,9 +197,13 @@ class CopywriterAgent(BaseAgent):
                 temperature=0.7,
                 history=history,
             )
-            print(f"生成小红书风格文案 result: {result}")
-            await self.log(f"文案生成完成: {result}", log_callback)
-            return self._normalize_copywriting_result(result, topic)
+            print(f"生成符合平台特点的文案 result: {result}")
+            normalized = self._normalize_copywriting_result(result, topic)
+            await self.log(
+                f"文案生成完成：《{normalized.title}》（{len(normalized.content)} 字，{len(normalized.hashtags)} 个标签）",
+                log_callback,
+            )
+            return normalized
         except Exception as e:
             await self.log(f"生成文案失败: {e}", log_callback)
             print(f"生成文案失败: {e}")

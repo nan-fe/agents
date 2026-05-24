@@ -10,6 +10,8 @@ from app.services.orchestrator_llm_service import (
 from app.config import settings
 from app.security.input_guard import check_input_security, safety_rejection_payload
 from app.utils.retry_policy import classify_agent_failure
+from app.utils.display_labels import format_agent_pipeline, intent_display_label
+from app.utils.log_callback import emit_log
 from .execution_context import ExecutionContext
 from .agent_input_builder import AgentInputBuilder
 from .agent_executor import AgentExecutor
@@ -123,29 +125,36 @@ class DialogOrchestratorAgent:
 
         safety_result = await check_input_security(user_input)
         if not safety_result.allowed:
-            if log_callback:
-                await log_callback("SafetyGuard", safety_result.reason)
+            await emit_log(log_callback, "SafetyGuard", safety_result.reason)
             return safety_rejection_payload(safety_result)
 
         # 获取会话历史
         session_history = self.get_session_history(session_id)
         session_history.add_message(HumanMessage(content=user_input))
 
-        await log_callback("Orchestrator", "开始智能任务编排...")
+        await emit_log(log_callback, "Orchestrator", "开始智能任务编排...")
 
         try:
             intent = await self.llm_service.analyze_intent(
                 user_input, session_history.messages
             )
         except IntentAnalysisTimeoutError as e:
-            await log_callback("Orchestrator", str(e))
+            await emit_log(log_callback, "Orchestrator", str(e))
             return e.to_early_exit()
-        await log_callback("Orchestrator", f"用户意图分析: {intent}")
+        await emit_log(
+            log_callback,
+            "Orchestrator",
+            f"识别为「{intent_display_label(intent)}」",
+            intent=intent,
+        )
 
         # 处理问答意图
         if intent == "ask_question":
-            await log_callback(
-                "Orchestrator", "很抱歉，我无法回答您的问题，你可以换个问题，比如让我写商品的宣传文案"
+            await emit_log(
+                log_callback,
+                "Orchestrator",
+                "很抱歉，我无法回答您的问题，你可以换个问题，比如让我写商品的宣传文案",
+                intent=intent,
             )
             return {
                 "title": "",
@@ -166,9 +175,11 @@ class DialogOrchestratorAgent:
         routing_decision = await self.llm_service.route_task(
             user_input, context.get_planning(), intent
         )
-        await log_callback(
+        pipeline_labels = format_agent_pipeline(routing_decision.priority_order)
+        await emit_log(
+            log_callback,
             "Orchestrator",
-            f"路由决策: 调用 {routing_decision.agents_to_call}",
+            f"接下来：{' → '.join(pipeline_labels)}",
         )
 
         # 执行 Agent 流程
@@ -185,7 +196,7 @@ class DialogOrchestratorAgent:
         print(f"[DEBUG] save_history - last_plan: {session_history.get_last_plan()}")
         print(f"[DEBUG] save_history - last_result: {session_history.get_last_result()}")
 
-        await log_callback("Orchestrator", "多Agent协作完成，生成最终结果")
+        await emit_log(log_callback, "Orchestrator", "多 Agent 协作完成，正在整理结果")
 
         return final_result
 
@@ -205,21 +216,20 @@ class DialogOrchestratorAgent:
                 ),
                 timeout=settings.AGENT_TIMEOUT_PLANNER_AGENT_SECONDS,
             )
-            await log_callback(
-                "Orchestrator", f"策划完成，主题: {planning_result.topic}"
-            )
+
             context.set_planning(planning_result)
-            await log_callback(
-                "Orchestrator", "新任务/换题：已重新规划，不加载历史文案与图片"
+            await emit_log(
+                log_callback,
+                "Orchestrator",
+                "新任务/换题：已重新规划，不加载历史文案与图片",
             )
         else:
             last_plan = session_history.get_last_plan()
             print(f"使用历史规划：{last_plan}")
-            # 使用历史规划
             if last_plan:
                 context.load_from_dict({"planning": last_plan})
+                await emit_log(log_callback, "Orchestrator", "使用历史计划")
             else:
-                # 历史缺失（如服务重启/SSE重连后命中新进程）时，降级重新规划，避免下游输入为空
                 planning_result = await asyncio.wait_for(
                     self.planner_agent.run(
                         user_input, log_callback, history=""
@@ -227,8 +237,9 @@ class DialogOrchestratorAgent:
                     timeout=settings.AGENT_TIMEOUT_PLANNER_AGENT_SECONDS,
                 )
                 context.set_planning(planning_result)
-                await log_callback("Orchestrator", "未找到历史规划，已自动重建规划")
-            await log_callback("Orchestrator", "使用历史计划")
+                await emit_log(
+                    log_callback, "Orchestrator", "未找到历史规划，已自动重建规划"
+                )
 
         if not is_fresh_task_intent(intent):
             last_result = session_history.get_last_result()
@@ -247,7 +258,7 @@ class DialogOrchestratorAgent:
                 })
 
                 context.set_last_result(last_result)
-                await log_callback("Orchestrator", "加载上次生成的文案信息")
+                await emit_log(log_callback, "Orchestrator", "加载上次生成的文案信息")
 
 
     async def _execute_agent_pipeline(
@@ -263,7 +274,9 @@ class DialogOrchestratorAgent:
 
         for agent_name in agent_names:
             if agent_name not in self.agent_map:
-                await log_callback("Orchestrator", f"未知 Agent: {agent_name}，跳过")
+                await emit_log(
+                    log_callback, agent_name, f"未知 Agent: {agent_name}，跳过"
+                )
                 continue
 
             # 构建输入
@@ -281,11 +294,11 @@ class DialogOrchestratorAgent:
                 if agent_name == "ImageAgent":
                     code = classify_agent_failure(e)
                     context.partial_errors["ImageAgent"] = code
-                    if log_callback:
-                        await log_callback(
-                            "Orchestrator",
-                            f"ImageAgent 失败（{code}），跳过生图并继续后续流程: {e}",
-                        )
+                    await emit_log(
+                        log_callback,
+                        "ImageAgent",
+                        "配图生成失败，已跳过并继续后续流程",
+                    )
                     context.set_image(image_url="", prompt="")
                     continue
                 raise
