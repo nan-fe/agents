@@ -1,7 +1,10 @@
 import { demoShareSnapshot, isDemoShareId } from '@/lib/demo-share';
 import type { ShareSnapshot } from '@/lib/share-types';
 
-export type { ShareSnapshot } from '@/lib/share-types';
+/** fetch 缓存 / ISR 再验证间隔（秒），须与 share/[shareId]/page.tsx 中 `revalidate` 字面量一致 */
+export const SHARE_PAGE_REVALIDATE_SECONDS = 3600;
+
+const shareCacheTag = (shareId: string) => `share:${shareId}`;
 
 const API_BASE_URL =
   process.env.API_BASE_URL ??
@@ -18,7 +21,10 @@ export const getShareSnapshot = async (
   const response = await fetch(
     `${API_BASE_URL}/shares/${encodeURIComponent(shareId)}`,
     {
-      next: { revalidate: 60 },
+      next: {
+        revalidate: SHARE_PAGE_REVALIDATE_SECONDS,
+        tags: [shareCacheTag(shareId)],
+      },
     }
   );
 

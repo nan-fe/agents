@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+### Changed 2026-05-23
+
+- **分享页 ISR**
+  - `frontend-share` 的 `/share/[shareId]` 由动态 SSR 调整为 ISR
+
+### Changed 2026-05-22
+
+- **use the react 19 hooks in frontend-ts**
+- **add login&registry feature**
+
 ### Changed 2026-05-20
 
 - **前端 SSE 日志渲染优化**
