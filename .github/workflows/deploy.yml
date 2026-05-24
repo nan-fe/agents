@@ -83,6 +83,22 @@ jobs:
     runs-on: ubuntu-latest
     needs: build-and-push
     steps:
+      # 服务器在国内，直连 github.com HTTPS 常失败（Empty reply from server）；
+      # 镜像已在 ACR，此处只需同步 compose 等部署文件，不再 git pull。
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Copy deploy files to server
+        uses: appleboy/scp-action@v1.0.0
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          source: "docker-compose.yml"
+          target: "/root/agents"
+          overwrite: true
+
       - name: Deploy to Aliyun Server via SSH
         uses: appleboy/ssh-action@v1.0.3
         env:
@@ -95,6 +111,7 @@ jobs:
           envs: AUTH_SECRET
           script: |
             set -euo pipefail
+            mkdir -p /root/agents
             cd /root/agents
 
             if [ -z "${AUTH_SECRET:-}" ]; then
@@ -102,8 +119,6 @@ jobs:
               echo "Add it at Settings → Secrets and variables → Actions"
               exit 1
             fi
-
-            git pull origin feat-init
 
             touch .env
             grep -v '^AUTH_SECRET=' .env > .env.tmp || true
