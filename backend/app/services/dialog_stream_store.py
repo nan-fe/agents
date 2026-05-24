@@ -70,7 +70,8 @@ class DialogStream:
             for queue in self._subscriber_queues:
                 await queue.put(stream_event)
         if self._store is not None:
-            await self._store._persist_stream(self)
+            # 落盘不阻塞 SSE 推送（同步 write_text 会卡住 event loop）
+            asyncio.create_task(self._store._persist_stream(self))
         return stream_event
         
 
