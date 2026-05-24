@@ -29,7 +29,7 @@ import {
   isResumeFailedResult,
   isResumeFailureLogEvent,
   isResumeFailureStreamEvent,
-  type DialogStreamResult,
+  type StreamMessage,
 } from '../utils/sse-resume';
 import { createStreamIngestor } from '../utils/sse-stream-ingest';
 
@@ -52,23 +52,17 @@ interface Version {
   imageUrl: string;
 }
 
-type StreamEvent =
-  | {
-      type: 'log';
-      data: {
-        from: string;
-        message: string;
-      };
-    }
-  | {
-      type: 'result';
-      data: DialogStreamResult;
-    };
+type StreamEvent = StreamMessage & {
+  type: 'log' | 'meta' | 'result';
+};
 
 type LogType = {
   agent_name: string;
   message: string;
   timestamp: string;
+  agent_key?: string;
+  intent?: string;
+  intent_label?: string;
 };
 
 interface MessageRowData {
@@ -161,20 +155,21 @@ const runDialogGeneration = async (
 
   const streamIngestor = createStreamIngestor();
 
-  const enqueueLog = (from: string, text: string) => {
+  const enqueueLog = (from: string, text: string, extra?: Partial<LogType>) => {
     deps.batchLogUpdate((prev) => [
       ...prev,
       {
         agent_name: from,
         message: text,
         timestamp: new Date().toISOString(),
+        ...extra,
       },
     ]);
   };
 
-  const appendLog = (from: string, text: string) => {
+  const appendLog = (from: string, text: string, extra?: Partial<LogType>) => {
     console.log(`${from}: ${text}`);
-    enqueueLog(from, text);
+    enqueueLog(from, text, extra);
   };
 
   try {
@@ -206,8 +201,12 @@ const runDialogGeneration = async (
         }
 
         streamIngestor.ingest(eventId, () => {
-          if (event.type === 'log') {
-            appendLog(event.data.from, event.data.message);
+          if (event.type === 'log' && event.data && 'message' in event.data) {
+            appendLog(event.data.from ?? '编排', event.data.message ?? '', {
+              agent_key: event.data.agent_key,
+              intent: event.data.intent,
+              intent_label: event.data.intent_label,
+            });
           } else if (event.type === 'result') {
             streamResult = event.data as DialogResultData;
           }

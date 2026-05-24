@@ -89,7 +89,13 @@ class ReviewerAgent(BaseAgent):
                 model_name=settings.BASE_MODEL,
                 temperature=0.1,
             )
-            await self.log(f"审核完成: {result}", log_callback)
+            approved = (
+                result.get("approved", False)
+                if isinstance(result, dict)
+                else result.approved
+            )
+            status = "通过" if approved else "需调整"
+            await self.log(f"审核完成：{status}", log_callback)
             return ReviewResult(**result)
         except Exception as e:
             print(f"审核失败", e)

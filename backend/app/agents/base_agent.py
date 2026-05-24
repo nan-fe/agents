@@ -1,6 +1,8 @@
 from abc import ABC, abstractmethod
 from typing import Optional, Any
 
+from app.utils.log_callback import emit_log
+
 
 class BaseAgent(ABC):
     """Agent基类"""
@@ -38,11 +40,4 @@ class BaseAgent(ABC):
             log_callback: 日志回调函数
         """
         if log_callback:
-            # 检查回调函数是否为异步函数
-            import inspect
-
-            if inspect.iscoroutinefunction(log_callback):
-                await log_callback(self.name, message)
-            else:
-                # 同步回调函数直接调用
-                log_callback(self.name, message)
+            await emit_log(log_callback, self.name, message)
