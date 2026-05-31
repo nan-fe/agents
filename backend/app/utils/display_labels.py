@@ -7,6 +7,7 @@ INTENT_DISPLAY_LABELS: Dict[str, str] = {
     "refine_image": "重新配图",
     "change_topic": "更换主题",
     "ask_question": "问答",
+    "review_failure": "审核未通过，自动修复",
 }
 
 AGENT_DISPLAY_LABELS: Dict[str, str] = {

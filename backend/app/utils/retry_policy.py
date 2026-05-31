@@ -2,8 +2,8 @@
 HTTP / LLM 调用策略化重试：仅对幂等、可恢复错误重试；4xx（除 429）不重试。
 指数退避 + 抖动，减轻惊群。
 
-编排层若需「LLM 驱动重试决策」（OrchestratorLLMService.retry_prompt），
-应先用本模块的 is_transient_exception 做门控，避免无意义的全链路重跑与双倍成本。
+编排层重试 Agent 前，应先用本模块的 is_transient_exception 做门控，
+避免无意义的全链路重跑与双倍成本。
 """
 from __future__ import annotations
 

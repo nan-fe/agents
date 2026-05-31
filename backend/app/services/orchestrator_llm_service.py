@@ -55,13 +55,13 @@ def _routing_intent_guidance(intent: str) -> str:
         return "用户开始一个新任务，需要完整的创作流程。"
     if intent == "refine_content":
         return (
-            "用户要修改/优化现有内容（如修改文案、调整风格），应只调用CopywriterAgent"
-            "（如需要可加 ReviewerAgent），避免重复规划。 "
+            "用户要修改/优化现有内容（如修改文案、调整风格），"
+            "priority_order 应仅包含 CopywriterAgent 与 ReviewerAgent，不要调用 ImageAgent 或 RagAgent。"
         )
     if intent == "refine_image":
         return (
-            "用户想根据输入的要求重新生成图片信息，应只调用 ImageAgent"
-            "（如需要可加 ReviewerAgent），不需要重新规划。"
+            "用户想根据输入的要求重新生成或修改图片，"
+            "priority_order 应仅包含 ImageAgent 与 ReviewerAgent，不要调用 CopywriterAgent 或 RagAgent。"
         )
     if intent == "change_topic":
         return "用户更换了主题，需要重新规划并执行完整流程。"
@@ -98,14 +98,14 @@ class OrchestratorLLMService:
 {format_instructions}
 
 要求：
-1. 根据用户意图选择合适的 Agent 组合：
-   - new_task：需要完整流程，调用多个 Agent
-   - refine_content：只调用CopywriterAgent，不需要重新规划和生图
-   - refine_image：只调用 ImageAgent，不需要重新规划和写文案
-   - change_topic：需要完整流程
-2. 考虑任务依赖关系，确定合理的调用顺序，比如 RagAgent 在商品类型没有发生改变，则只在首次使用，使用的数据可以给文案 Agent 补充商品信息上下文。
-3. 如果任务简单，可以跳过某些 Agent，比如简单的任务不需要调用 RagAgent或者其他 agent。
-4. 大多数情况下都需要 ReviewerAgent 进行质量检查，除非任务极简单。
+1. 根据用户意图选择合适的 Agent 组合（须严格遵守）：
+   - new_task：完整创作流程，通常含 RagAgent（按需）、CopywriterAgent、ImageAgent、ReviewerAgent
+   - refine_content：仅 CopywriterAgent → ReviewerAgent，不要 RagAgent / ImageAgent
+   - refine_image：仅 ImageAgent → ReviewerAgent，不要 RagAgent / CopywriterAgent
+   - change_topic：完整创作流程，通常含 RagAgent（按需）、CopywriterAgent、ImageAgent、ReviewerAgent
+2. 只要 priority_order 含 CopywriterAgent 或 ImageAgent，必须在末尾包含 ReviewerAgent。
+3. 考虑任务依赖关系，确定合理的调用顺序；RagAgent 仅在需要商品检索时使用。
+4. 如果任务简单，可以跳过 RagAgent。
 5. agents_to_call 和 priority_order 必须从可用 Agent 中选择，且顺序合理。
 6. 输出内容仅输出 JSON 对象，不要附加任何解释""",
             input_variables=[
