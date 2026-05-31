@@ -6,8 +6,6 @@ All notable changes to this project will be documented in this file.
 
 - **编排层 Planner / Router 职责收敛**
   - 新增 `orchestrator/planning/pipeline_resolver.py`：`refine_content` / `refine_image` 走规则表固定短链，不再调用 LLM 路由；`new_task` / `change_topic` 仍走 `route_task`
-  - 路由超时或失败时使用 intent-aware `fallback_route`，避免 refine 场景误跑全量 pipeline
-  - 精简 `OrchestratorLLMService.route_task` Prompt：移除 refine 相关约束，明确仅服务 fresh task
 
 - **规划模块目录收拢与命名澄清**
   - 原 `PlannerAgent` 重命名为 **ContentStrategistAgent**（内容 brief，非编排 pipeline 规划）
@@ -16,7 +14,6 @@ All notable changes to this project will be documented in this file.
     - `intents.py` — 意图常量、`should_run_content_strategist` 等规则
     - `content_strategist_agent.py` — 内容策划 LLM
     - `pipeline_resolver.py` — 执行路径解析
-  - SSE Agent 展示名「策划」调整为「内容策划」
 
 - **测试**
   - 新增 `test_pipeline_resolver.py`、`test_orchestrator_llm_service.py`（路由 Prompt 约束）
