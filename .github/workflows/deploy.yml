@@ -75,9 +75,6 @@ jobs:
           build-args: |
             STUDIO_UPSTREAM_URL=http://frontend:80
             API_UPSTREAM_URL=http://backend:8000
-            NEXT_PUBLIC_SENTRY_DSN=${{ secrets.SENTRY_DSN }}
-            SENTRY_DSN=${{ secrets.SENTRY_DSN }}
-            SENTRY_APPLICATION_ID=${{ vars.SENTRY_APPLICATION_ID }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
