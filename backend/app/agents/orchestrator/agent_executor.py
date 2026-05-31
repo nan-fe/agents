@@ -8,7 +8,7 @@ from app.utils.log_callback import emit_log
 
 def _agent_timeout_seconds(agent_name: str) -> float:
     mapping: Dict[str, float] = {
-        "PlannerAgent": settings.AGENT_TIMEOUT_PLANNER_AGENT_SECONDS,
+        "ContentStrategistAgent": settings.AGENT_TIMEOUT_PLANNER_AGENT_SECONDS,
         "CopywriterAgent": settings.AGENT_TIMEOUT_COPYWRITER_AGENT_SECONDS,
         "ImageAgent": settings.AGENT_TIMEOUT_IMAGE_AGENT_SECONDS,
         "ReviewerAgent": settings.AGENT_TIMEOUT_REVIEWER_AGENT_SECONDS,
@@ -78,7 +78,7 @@ class AgentExecutor:
         history: str = "",
     ) -> Any:
         """调用 Agent 的 run 方法"""
-        if agent_name in ("CopywriterAgent", "PlannerAgent"):
+        if agent_name in ("CopywriterAgent", "ContentStrategistAgent"):
             return await agent.run(agent_input, log_callback, history=history)
 
         if agent_name == "ImageAgent":

@@ -1,6 +1,14 @@
 from datetime import datetime
 from pydantic import BaseModel, Field
-from typing import Optional, List
+from typing import Literal, Optional, List
+
+ReviewFailureCategory = Literal[
+    "copywriting",
+    "image",
+    "both",
+    "policy_block",
+    "review_error",
+]
 
 
 class UserInput(BaseModel):
@@ -9,29 +17,6 @@ class UserInput(BaseModel):
     prompt: str
     session_id: str
     last_event_id: Optional[str] = None
-
-
-class AgentLog(BaseModel):
-    """Agent日志模型"""
-
-    agent_name: str
-    message: str
-    timestamp: float
-
-
-class PlanStep(BaseModel):
-    description: str  # 步骤描述
-    suggested_agent: Optional[str]  # 可选：建议使用的 Agent
-    input_overrides: Optional[dict]  # 可选：该步骤的特殊输入参数覆盖
-
-
-class ProductRecommendation(BaseModel):
-    """商品推荐模型"""
-
-    product_name: str
-    description: str
-    taobao_link: str
-    price: Optional[str] = None
 
 
 class PlanningResult(BaseModel):
@@ -65,22 +50,20 @@ class ImageResult(BaseModel):
     prompt: str
 
 
+class ReviewCorrections(BaseModel):
+    """审核修改建议（结构化）"""
+
+    copywriting: Optional[dict] = None
+    image: Optional[dict] = None
+
+
 class ReviewResult(BaseModel):
     """质检Agent输出模型"""
 
     approved: bool
     feedback: Optional[str] = None
-    corrections: Optional[dict] = None
-
-
-class FinalResult(BaseModel):
-    """最终结果模型"""
-
-    title: str
-    content: str
-    hashtags: List[str]
-    image_url: str
-    product_recommendations: Optional[List[ProductRecommendation]] = None
+    corrections: Optional[ReviewCorrections] = None
+    failure_category: Optional[ReviewFailureCategory] = None
 
 
 class ShareCreateRequest(BaseModel):

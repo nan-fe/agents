@@ -7,13 +7,14 @@ INTENT_DISPLAY_LABELS: Dict[str, str] = {
     "refine_image": "重新配图",
     "change_topic": "更换主题",
     "ask_question": "问答",
+    "review_failure": "审核未通过，自动修复",
 }
 
 AGENT_DISPLAY_LABELS: Dict[str, str] = {
     "Orchestrator": "编排",
     "SafetyGuard": "安全审核",
-    "PlannerAgent": "策划",
-    "Planner": "策划",
+    "ContentStrategistAgent": "内容策划",
+    "ContentStrategist": "内容策划",
     "CopywriterAgent": "文案",
     "Copywriter": "文案",
     "ImageAgent": "配图",

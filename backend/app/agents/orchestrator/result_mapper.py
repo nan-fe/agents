@@ -14,7 +14,7 @@ class ResultMapper:
         """
         self.context = context
         self._mapping = {
-            "PlannerAgent": self._map_planner_result,
+            "ContentStrategistAgent": self._map_content_strategist_result,
             "CopywriterAgent": self._map_copywriter_result,
             "ImageAgent": self._map_image_result,
             "ReviewerAgent": self._map_reviewer_result,
@@ -32,8 +32,8 @@ class ResultMapper:
         if mapper_func:
             mapper_func(result)
 
-    def _map_planner_result(self, result) -> None:
-        """映射 PlannerAgent 结果"""
+    def _map_content_strategist_result(self, result) -> None:
+        """映射 ContentStrategistAgent 结果"""
         self.context.set_planning(result)
 
     def _map_copywriter_result(self, result) -> None:

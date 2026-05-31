@@ -12,7 +12,7 @@ def test_intent_display_label():
 
 def test_agent_display_label():
     assert agent_display_label("CopywriterAgent") == "文案"
-    assert agent_display_label("Planner") == "策划"
+    assert agent_display_label("ContentStrategist") == "内容策划"
     assert agent_display_label("Orchestrator") == "编排"
 
 

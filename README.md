@@ -4,7 +4,7 @@
 
 ## 📖 项目简介
 
-本项目采用多智能体协作架构，通过 Planner、Copywriter、Image Designer、Reviewer 等多个专业 Agent 协同工作，自动完成小红书内容的策划、创作、配图和审核全流程。
+本项目采用多智能体协作架构：编排层负责意图识别、执行路径规划与内容 brief；Copywriter、Image、Reviewer 等专业 Agent 协同完成平台内容的创作、配图和审核。
 
 ## 🏗️ 技术架构
 
@@ -27,17 +27,16 @@
 │           │                                          │           │
 │           │                                          ▼           │
 │           │              ┌─────────────────────────────────┐    │
-│           │              │     Agent 协作网络              │    │
-│           │              │  ┌─────────┐  ┌──────────┐     │    │
-│           │              │  │ Planner │→│ Copywriter│     │    │
-│           │              │  │ 策划Agent│  │ 文案Agent │     │    │
-│           │              │  └────┬────┘  └─────┬────┘     │    │
-│           │              │       │             │           │    │
-│           │              │       ▼             ▼           │    │
-│           │              │  ┌──────────┐  ┌──────────┐    │    │
-│           │              │  │   RAG    │  │  Reviewer│    │    │
-│           │              │  │ 商品检索 │  │  质检Agent│    │    │
-│           │              │  └──────────┘  └──────────┘    │    │
+│           │              │     Orchestrator 编排层         │    │
+│           │              │  Plan 阶段 → Execute → Repair   │    │
+│           │              │  (intent / pipeline / brief)    │    │
+│           │              └───────────────┬─────────────────┘    │
+│           │                              │                     │
+│           │              ┌───────────────▼─────────────────┐    │
+│           │              │     执行 Agent 协作网络          │    │
+│           │              │  RAG → Copywriter → Image       │    │
+│           │              │              ↓                  │    │
+│           │              │           Reviewer              │    │
 │           │              └─────────────────────────────────┘    │
 │           │                                                   │   │
 │           │              ┌─────────────────────────────────┐    │
@@ -106,17 +105,31 @@
 
 
 ## 🚀 核心能力
+
+### 编排与执行
+
+一轮对话分为 **Plan（规划）→ Execute（执行）→ Repair（审核修复）** 三阶段：
+
+| 阶段 | 模块 | 职责 |
+|------|------|------|
+| **Plan** | `orchestrator/planning/` | 意图识别；是否重新生成内容 brief；解析执行 pipeline（refine 走规则表，新任务/换题走 LLM 路由） |
+| **Execute** | `DialogOrchestratorAgent` | 按 `priority_order` 顺序调用执行 Agent，读写 `ExecutionContext` |
+| **Repair** | `review_repair_router` | 审核未通过时，按失败类型规则路由修复子 pipeline（与主 Plan 分离） |
+
+**二次对话优化**：`refine_content` / `refine_image` 仅跑必要 Agent（如文案+审核、配图+审核），复用 session 中的 plan 与上轮结果，不重复内容 brief 与全量 pipeline。
+
 ### 智能体能力
 
-| Agent | 职责 | 核心功能 |
-|-------|------|----------|
-| **Planner Agent** | 内容策划 | 分析用户需求，生成创作要点（目标人群、核心卖点、语气风格等） |
-| **Copywriter Agent** | 文案创作 | 根据策划方案生成小红书风格文案（标题、正文、话题标签） |
-| **Image Agent** | 配图生成 | 根据文案内容生成高质量商品配图 |
-| **Reviewer Agent** | 内容审核 | 检查内容合规性、平台规则符合度、小红书风格匹配度 |
-| **Product RAG Agent** | 商品检索 | 基于向量检索和关键词匹配，检索相关商品信息 |
-| **Orchestrator** | 流程编排 | 协调各Agent协作，管理对话状态和历史 |
-| **Safety Guard** | 输入安全 | 在编排前拦截 prompt injection、越权指令、空输入和高风险内容 |
+| Agent / 模块 | 职责 | 核心功能 |
+|--------------|------|----------|
+| **Plan 阶段**（`planning/plan_phase`） | 编排规划 | 意图分类、`priority_order` 决策、session 产物加载 |
+| **Content Strategist** | 内容 brief | 按需生成创作要点（目标人群、核心卖点、语气风格、配图要求等）；不进执行 pipeline |
+| **Copywriter Agent** | 文案创作 | 根据 brief 生成小红书风格文案（标题、正文、话题标签） |
+| **Image Agent** | 配图生成 | 根据文案与 brief 生成配图 |
+| **Reviewer Agent** | 内容审核 | 检查合规性、平台规则、风格匹配度 |
+| **Product RAG Agent** | 商品检索 | 向量检索 + 关键词匹配，为文案提供商品信息 |
+| **Orchestrator** | 总编排 | 协调 Plan / Execute / Repair，管理对话状态 |
+| **Safety Guard** | 输入安全 | 编排前拦截 prompt injection、越权指令、空输入和高风险内容 |
 
 ### 基础设施能力
 
@@ -129,15 +142,42 @@
 
 ### 安全校验框架
 
-在进入 Orchestrator 前完成输入安全检查。被拦截的请求不会触发 Planner、Copywriter、Image 或 Reviewer，而是通过 SSE 返回统一的 `SAFETY_BLOCKED` 结果，并在日志流中标记为 `SafetyGuard`。
+在进入 Orchestrator 前完成输入安全检查。被拦截的请求不会触发后续 Agent，而是通过 SSE 返回统一的 `SAFETY_BLOCKED` 结果，并在日志流中标记为 `SafetyGuard`。
 
 ## 📁 项目结构
 
 ### 后端结构 (`backend/`)
 
 ```
-backend/README.md
+backend/
+├── app/
+│   ├── main.py                    # FastAPI 入口、SSE 对话
+│   ├── agents/
+│   │   ├── copywriter_agent.py    # 文案 Agent
+│   │   ├── image_agent.py         # 配图 Agent
+│   │   ├── reviewer_agent.py      # 审核 Agent
+│   │   ├── product_rag_system/    # 商品 RAG
+│   │   └── orchestrator/          # 编排层
+│   │       ├── agent.py           # DialogOrchestratorAgent
+│   │       ├── planning/          # 规划子模块
+│   │       │   ├── plan_phase.py           # Plan 阶段编排
+│   │       │   ├── intents.py              # 意图常量与 replann 规则
+│   │       │   ├── pipeline_resolver.py    # pipeline 规则 / LLM 路由
+│   │       │   └── content_strategist_agent.py  # 内容 brief
+│   │       ├── execution_context.py
+│   │       ├── session_history.py
+│   │       ├── agent_executor.py
+│   │       ├── agent_input_builder.py
+│   │       ├── result_mapper.py
+│   │       └── review_repair_router.py
+│   ├── services/
+│   │   └── orchestrator_llm_service.py  # 意图识别、fresh task 路由 LLM
+│   └── security/                  # 输入安全与 Prompt 规则
+├── tests/
+└── README.md
 ```
+
+详见 [backend/README.md](backend/README.md)。
 
 ### 前端结构 (`frontend-ts/`)
 

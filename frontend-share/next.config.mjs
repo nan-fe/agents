@@ -1,3 +1,5 @@
+import { withSentryConfig } from '@sentry/nextjs';
+
 /** @type {import('next').NextConfig} */
 const isProductionBuild = process.env.NODE_ENV === 'production';
 
@@ -34,4 +36,12 @@ const nextConfig = {
   },
 };
 
-export default nextConfig;
+export default withSentryConfig(nextConfig, {
+  org: process.env.SENTRY_ORG ?? 'better-stack',
+  project: process.env.SENTRY_APPLICATION_ID ?? 'frontend-share',
+  silent: !process.env.CI,
+  // Better Stack 通过 DSN 接入，无需 Sentry.io source map 上传
+  sourcemaps: {
+    disable: true,
+  },
+});

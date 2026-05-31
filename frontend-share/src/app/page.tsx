@@ -6,7 +6,7 @@ const features = [
   {
     title: '多智能体协作',
     description:
-      'Planner、Copywriter、Image、Reviewer 等 Agent 协同完成策划、创作、配图与审核。',
+      '编排、内容策划、文案、配图、审核等模块协同，完成小红书内容的规划、创作与质检。',
   },
   {
     title: '多轮对话创作',
@@ -32,8 +32,7 @@ const HomePage = async () => {
           基于多智能体的小红书内容创作平台
         </h1>
         <p className="mt-6 max-w-3xl text-base leading-8 text-gray-600 sm:text-lg">
-          通过 Planner、Copywriter、Image Designer、Reviewer
-          等专业 Agent 协同，自动完成小红书内容的策划、创作、配图和审核全流程。
+          通过编排、内容策划、文案、配图、审核等专业能力协同，自动完成小红书内容的规划、创作、配图和审核全流程。
         </p>
         <div className="mt-8 flex flex-wrap gap-3">
           {loggedInUser ? (

@@ -33,6 +33,10 @@ class Settings(BaseSettings):
     AGENT_TIMEOUT_REVIEWER_AGENT_SECONDS: float = 90.0
     AGENT_TIMEOUT_RAG_AGENT_SECONDS: float = 120.0
 
+    # 审核未通过后同轮自动修复
+    REVIEW_REPAIR_MAX_ROUNDS: int = 1
+    REVIEW_REPAIR_TOTAL_BUDGET_SECONDS: float = 600.0
+
     # SSE 断点续传缓冲：生成完成后保留时长（秒），超时后释放内存
     DIALOG_STREAM_RETENTION_SECONDS: float = 1800.0
 

@@ -7,13 +7,13 @@ from langchain_core.output_parsers import JsonOutputParser
 from pydantic import BaseModel, Field
 import openai
 from app.config import settings
-from app.agents.planner_agent import PlannerAgent
+from app.agents.orchestrator.planning import ContentStrategistAgent
 from dotenv import load_dotenv
 
 load_dotenv()
 
-# 初始化 PlannerAgent 和 LangSmith 客户端
-planner_agent = PlannerAgent()
+# 初始化 ContentStrategistAgent 和 LangSmith 客户端
+content_strategist_agent = ContentStrategistAgent()
 client = Client()
 
 # 初始化 OpenAI 客户端（用于评估）
@@ -428,7 +428,7 @@ async def evaluate_planner(inputs: dict) -> dict:
         user_input = f"{user_input}\n\n【额外要求】\n{unexpected_scenario}"
     
     try:
-        result: PlanningResult = await planner_agent.run(
+        result: PlanningResult = await content_strategist_agent.run(
             input_data=user_input,
             history=history
         )
@@ -464,7 +464,7 @@ async def evaluate_planner_with_history(inputs: dict) -> dict:
     
     # 模拟多轮迭代
     # 第一轮：初始计划
-    first_result = await planner_agent.run(
+    first_result = await content_strategist_agent.run(
         input_data=user_input,
         history=""
     )
@@ -475,7 +475,7 @@ async def evaluate_planner_with_history(inputs: dict) -> dict:
     # 第二轮：根据反馈调整
     if feedback:
         adjusted_input = f"{user_input}\n\n【用户反馈】\n{feedback}"
-        second_result = await planner_agent.run(
+        second_result = await content_strategist_agent.run(
             input_data=adjusted_input,
             history=f"上一轮计划：{first_result.topic}"
         )

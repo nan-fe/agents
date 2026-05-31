@@ -9,7 +9,8 @@
 对「触发异步操作 + pending 状态 + 更新结果」的场景，使用 `useActionState`，不要用 `useState` 手动管理 loading，也不要在组件内写 `try/catch/finally` 来切换 pending。
 
 ```tsx
-// ✅ 推荐：action 定义在组件外，组件内只 dispatch
+// ✅ 推荐：action 定义在组件外，onClick 内用 startTransition 包裹 dispatch
+import { startTransition, useActionState } from 'react';
 const shareResultAction = async (prev: State, payload: Payload): Promise<State> => {
   try {
     const data = await api(payload);
@@ -22,7 +23,16 @@ const shareResultAction = async (prev: State, payload: Payload): Promise<State> 
 
 const MyComponent = ({ payload }: Props) => {
   const [state, dispatch, isPending] = useActionState(shareResultAction, initialState);
-  return <Button loading={isPending} onClick={() => dispatch(payload)} />;
+  return (
+    <Button
+      loading={isPending}
+      onClick={() => {
+        startTransition(() => {
+          dispatch(payload);
+        });
+      }}
+    />
+  );
 };
 ```
 
