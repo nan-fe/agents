@@ -31,7 +31,6 @@ services:
     env_file:
       - ./backend/.env
     volumes:
-      - ./backend:/app
       - ./data/shares:/data/shares
     networks:
       - app-network
