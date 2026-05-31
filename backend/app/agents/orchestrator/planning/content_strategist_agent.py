@@ -1,21 +1,22 @@
-from app.agents.base_agent import BaseAgent
-from app.models.schemas import PlanningResult
+"""内容策划 Agent：生成创作要点（topic、卖点、语气等），由 Plan 阶段按需调用。"""
 from typing import Optional
-from langchain_core.prompts import PromptTemplate
+
 from langchain_core.output_parsers import JsonOutputParser
+from langchain_core.prompts import PromptTemplate
+
+from app.agents.base_agent import BaseAgent
 from app.config import settings
+from app.models.schemas import PlanningResult
 from app.security.prompt_rules import COMMON_SECURITY_PROMPT
 from app.utils.llm_factory import llm_factory
 
 
-class PlannerAgent(BaseAgent):
-    """策划Agent"""
+class ContentStrategistAgent(BaseAgent):
+    """内容策划 Agent（领域层 brief，非编排 pipeline 规划）。"""
 
     def __init__(self):
-        """初始化策划Agent"""
-        super().__init__("Planner", "小红书资深运营")
+        super().__init__("ContentStrategist", "小红书资深运营")
         self.parser = JsonOutputParser(pydantic_object=PlanningResult)
-        # 构建提示模板
         template = (
             """
         你是一位小红书资深运营，擅长分析用户需求并转化为创作要点。
@@ -57,16 +58,7 @@ class PlannerAgent(BaseAgent):
         log_callback: Optional[callable] = None,
         history: str = "",
     ) -> PlanningResult:
-        """运行策划生成链
-
-        Args:
-            input_data: 用户输入的描述
-            log_callback: 日志回调函数
-            history: 历史数据
-
-        Returns:
-            策划结果字典
-        """
+        """根据用户输入生成内容策划 brief。"""
         try:
             chain_input = {"input_data": input_data, "history": history or ""}
 
@@ -84,11 +76,11 @@ class PlannerAgent(BaseAgent):
                 if isinstance(planning_result, dict)
                 else planning_result.topic
             )
-            await self.log(f"策划方案生成完成，主题：{topic}", log_callback)
+            await self.log(f"内容策划完成，主题：{topic}", log_callback)
 
             return PlanningResult(**planning_result)
         except Exception as e:
-            print("planning chain error", e)
+            print("content strategist chain error", e)
             return PlanningResult(
                 **{
                     "target_audience": ["通用人群"],

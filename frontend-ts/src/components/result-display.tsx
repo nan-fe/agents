@@ -1,4 +1,4 @@
-import { useActionState } from 'react';
+import { startTransition, useActionState } from 'react';
 import { Button, Space, message } from 'antd';
 import ReactMarkdown from 'react-markdown';
 import {
@@ -71,7 +71,11 @@ const ResultDisplay = (params: { result?: ShareResult }) => {
             <Button
               type="primary"
               loading={isSharing}
-              onClick={() => createShareLink(result)}
+              onClick={() => {
+                startTransition(() => {
+                  createShareLink(result);
+                });
+              }}
             >
               生成分享链接
             </Button>

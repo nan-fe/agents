@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { ResourceHints } from '@/components/resource-hints';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -13,6 +14,9 @@ const RootLayout = ({
 }>) => {
   return (
     <html lang="zh-CN">
+      <head>
+        <ResourceHints />
+      </head>
       <body className="min-h-screen bg-slate-50 text-gray-800 antialiased">
         {children}
       </body>

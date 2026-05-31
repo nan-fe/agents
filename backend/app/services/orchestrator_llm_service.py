@@ -40,32 +40,13 @@ class IntentAnalysisTimeoutError(Exception):
         }
 
 
-def _default_route(reason: str) -> RoutingDecision:
-    return RoutingDecision(
-        task_type="new_task",
-        agents_to_call=["CopywriterAgent", "ImageAgent", "ReviewerAgent"],
-        reasoning=reason,
-        priority_order=["CopywriterAgent", "ImageAgent", "ReviewerAgent"],
-    )
-
-
 def _routing_intent_guidance(intent: str) -> str:
-    # 与历史版本保持一致的提示文案，避免路由模型行为漂移
+    """fresh task 路由提示；refine 由 pipeline_resolver 规则表处理，不进入本路径。"""
     if intent == "new_task":
         return "用户开始一个新任务，需要完整的创作流程。"
-    if intent == "refine_content":
-        return (
-            "用户要修改/优化现有内容（如修改文案、调整风格），"
-            "priority_order 应仅包含 CopywriterAgent 与 ReviewerAgent，不要调用 ImageAgent 或 RagAgent。"
-        )
-    if intent == "refine_image":
-        return (
-            "用户想根据输入的要求重新生成或修改图片，"
-            "priority_order 应仅包含 ImageAgent 与 ReviewerAgent，不要调用 CopywriterAgent 或 RagAgent。"
-        )
     if intent == "change_topic":
         return "用户更换了主题，需要重新规划并执行完整流程。"
-    return "根据具体情况判断需要的 Agent。"
+    return "需要完整的创作流程。"
 
 
 class OrchestratorLLMService:
@@ -98,11 +79,8 @@ class OrchestratorLLMService:
 {format_instructions}
 
 要求：
-1. 根据用户意图选择合适的 Agent 组合（须严格遵守）：
-   - new_task：完整创作流程，通常含 RagAgent（按需）、CopywriterAgent、ImageAgent、ReviewerAgent
-   - refine_content：仅 CopywriterAgent → ReviewerAgent，不要 RagAgent / ImageAgent
-   - refine_image：仅 ImageAgent → ReviewerAgent，不要 RagAgent / CopywriterAgent
-   - change_topic：完整创作流程，通常含 RagAgent（按需）、CopywriterAgent、ImageAgent、ReviewerAgent
+1. 本路由仅用于 new_task / change_topic，须输出完整创作流程：
+   通常含 RagAgent（按需）、CopywriterAgent、ImageAgent、ReviewerAgent。
 2. 只要 priority_order 含 CopywriterAgent 或 ImageAgent，必须在末尾包含 ReviewerAgent。
 3. 考虑任务依赖关系，确定合理的调用顺序；RagAgent 仅在需要商品检索时使用。
 4. 如果任务简单，可以跳过 RagAgent。
@@ -152,7 +130,7 @@ class OrchestratorLLMService:
     async def route_task(
         self, user_input: str, planning_result: Dict, intent: str = "new_task"
     ) -> RoutingDecision:
-        """动态路由；超时或其它失败 → 默认流水线。"""
+        """fresh task（new_task / change_topic）LLM 路由；refine 由 pipeline_resolver 规则处理。"""
         parser = JsonOutputParser(pydantic_object=RoutingDecision)
         timeout = settings.AGENT_TIMEOUT_ROUTING_SECONDS
 
@@ -170,14 +148,18 @@ class OrchestratorLLMService:
             )
             return RoutingDecision(**raw)
 
+        from app.agents.orchestrator.planning.pipeline_resolver import fallback_route
+
         try:
             return await asyncio.wait_for(_call(), timeout=timeout)
         except asyncio.TimeoutError:
-            print(f"路由决策超时（>{timeout}s），使用默认流水线")
-            return _default_route(f"路由超时（>{timeout}s）：默认完整创作流程")
+            print(f"路由决策超时（>{timeout}s），使用 intent-aware 兜底")
+            return fallback_route(
+                intent, f"路由超时（>{timeout}s）：intent-aware 兜底"
+            )
         except Exception as e:
             print(f"路由决策失败: {e}")
-            return _default_route("默认路由：执行完整的内容创作流程")
+            return fallback_route(intent, "默认路由：intent-aware 兜底")
 
     async def analyze_intent(
         self, user_input: str, chat_history: List[BaseMessage]

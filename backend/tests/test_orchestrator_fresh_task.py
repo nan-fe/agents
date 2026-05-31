@@ -1,4 +1,7 @@
-from app.agents.orchestrator.plan_phase import FRESH_TASK_INTENTS, is_fresh_task_intent
+from app.agents.orchestrator.planning import (
+    FRESH_TASK_INTENTS,
+    is_fresh_task_intent,
+)
 
 
 def test_fresh_task_intents() -> None:

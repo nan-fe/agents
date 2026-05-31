@@ -9,7 +9,9 @@ backend/
 │   ├── main.py          # FastAPI 应用入口
 │   ├── config.py        # 配置管理
 │   ├── models/          # 数据模型
-│   ├── agents/          # 多Agent核心模块
+│   ├── agents/          # 多 Agent 模块（执行 Agent + orchestrator 编排层）
+│   │   └── orchestrator/
+│   │       └── planning/  # Plan 阶段：意图、内容 brief、pipeline 解析
 │   ├── security/        # 输入安全校验与 Prompt 安全规则
 │   ├── services/        # 外部服务与工具
 │   └── utils/           # 工具函数

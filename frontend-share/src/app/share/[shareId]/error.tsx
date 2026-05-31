@@ -1,6 +1,8 @@
 'use client';
 
+import * as Sentry from '@sentry/nextjs';
 import Link from 'next/link';
+import { useEffect } from 'react';
 
 type ShareErrorProps = {
   error: Error & { digest?: string };
@@ -8,6 +10,10 @@ type ShareErrorProps = {
 };
 
 const ShareError = ({ error, reset }: ShareErrorProps) => {
+  useEffect(() => {
+    Sentry.captureException(error);
+  }, [error]);
+
   console.error('Failed to render share page:', error);
 
   return (

@@ -1,4 +1,9 @@
-from app.agents.planner_agent import PlannerAgent
+from .planning import (
+    ContentStrategistAgent,
+    FRESH_TASK_INTENTS,
+    PlanPhaseRunner,
+    is_fresh_task_intent,
+)
 from app.agents.copywriter_agent import CopywriterAgent
 from app.agents.image_agent import ImageAgent
 from app.agents.reviewer_agent import ReviewerAgent
@@ -12,11 +17,6 @@ from .execution_context import ExecutionContext
 from .agent_input_builder import AgentInputBuilder
 from .agent_executor import AgentExecutor
 from .result_mapper import ResultMapper
-from .plan_phase import (
-    FRESH_TASK_INTENTS,
-    PlanPhaseRunner,
-    is_fresh_task_intent,
-)
 from .review_repair_router import (
     content_agents_ran,
     route_review_failure,
@@ -43,16 +43,18 @@ class DialogOrchestratorAgent:
 
     def __init__(self):
         """初始化协调器"""
-        self.planner_agent = PlannerAgent()
+        self.content_strategist_agent = ContentStrategistAgent()
         self.copywriter_agent = CopywriterAgent()
         self.image_agent = ImageAgent()
         self.reviewer_agent = ReviewerAgent()
         self.rag_agent = ProductRagAgent()
         self.llm_service = OrchestratorLLMService()
-        self.plan_phase = PlanPhaseRunner(self.planner_agent, self.llm_service)
+        self.plan_phase = PlanPhaseRunner(
+            self.content_strategist_agent, self.llm_service
+        )
 
         self.agent_map = {
-            "PlannerAgent": self.planner_agent,
+            "ContentStrategistAgent": self.content_strategist_agent,
             "CopywriterAgent": self.copywriter_agent,
             "ImageAgent": self.image_agent,
             "ReviewerAgent": self.reviewer_agent,

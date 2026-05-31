@@ -7,7 +7,7 @@ from app.agents.orchestrator.review_repair_router import (
 
 def test_content_agents_ran() -> None:
     assert content_agents_ran(["CopywriterAgent"]) is True
-    assert content_agents_ran(["RagAgent", "PlannerAgent"]) is False
+    assert content_agents_ran(["RagAgent", "ContentStrategistAgent"]) is False
 
 
 def test_derive_failure_category_from_corrections() -> None:

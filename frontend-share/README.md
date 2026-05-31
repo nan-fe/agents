@@ -55,27 +55,31 @@ pnpm dev
 
 ### 3. 访问地址
 
-| 地址 | 说明 |
-| --- | --- |
-| `http://localhost:3000/` | 门户首页 |
-| `http://localhost:3000/register` | 注册页 |
-| `http://localhost:3000/login` | 登录页 |
-| `http://localhost:3000/studio` | 创作台（需登录，**必须走此入口**） |
-| `http://localhost:3000/share/[shareId]` | 公开分享页 |
+
+| 地址                                      | 说明                  |
+| --------------------------------------- | ------------------- |
+| `http://localhost:3000/`                | 门户首页                |
+| `http://localhost:3000/register`        | 注册页                 |
+| `http://localhost:3000/login`           | 登录页                 |
+| `http://localhost:3000/studio`          | 创作台（需登录，**必须走此入口**） |
+| `http://localhost:3000/share/[shareId]` | 公开分享页               |
+
 
 首次使用请先在 `/register` 注册账号，再登录进入创作台。
 
 ## 环境变量
 
-| 变量 | 说明 | 默认值 |
-| --- | --- | --- |
-| `AUTH_SECRET` | Auth.js JWT 签名密钥，生产必填 | dev 下自动使用内置开发密钥 |
-| `DATABASE_URL` | PostgreSQL 连接串 | `postgresql://postgres:postgres@localhost:5432/xhs_auth` |
-| `STUDIO_UPSTREAM_URL` | 创作台 upstream，Next rewrite 目标 | `http://localhost:5173` |
-| `API_UPSTREAM_URL` | 后端 upstream，供 `/dialog`、`/session`、`/shares` rewrite | `http://localhost:8000` |
-| `API_BASE_URL` | 分享页 SSR 请求后端地址 | `http://localhost:8000` |
-| `NEXT_PUBLIC_API_BASE_URL` | 浏览器可见后端 API 地址 | `http://localhost:8000` |
-| `NEXT_PUBLIC_SITE_URL` | 站点公网根地址（不带尾部 `/`） | 未配置则省略 Host |
+
+| 变量                         | 说明                                                   | 默认值                                                      |
+| -------------------------- | ---------------------------------------------------- | -------------------------------------------------------- |
+| `AUTH_SECRET`              | Auth.js JWT 签名密钥，生产必填                                | dev 下未设置时用内置开发密钥；已设置则用 `.env.local` 中的值                  |
+| `DATABASE_URL`             | PostgreSQL 连接串                                       | `postgresql://postgres:postgres@localhost:5432/xhs_auth` |
+| `STUDIO_UPSTREAM_URL`      | 创作台 upstream，Next rewrite 目标                         | `http://localhost:5173`                                  |
+| `API_UPSTREAM_URL`         | 后端 upstream，供 `/dialog`、`/session`、`/shares` rewrite | `http://localhost:8000`                                  |
+| `API_BASE_URL`             | 分享页 SSR 请求后端地址                                       | `http://localhost:8000`                                  |
+| `NEXT_PUBLIC_API_BASE_URL` | 浏览器可见后端 API 地址                                       | `http://localhost:8000`                                  |
+| `NEXT_PUBLIC_SITE_URL`     | 站点公网根地址（不带尾部 `/`）                                    | 未配置则省略 Host                                              |
+
 
 示例：
 
@@ -90,6 +94,24 @@ pnpm dev
 ```bash
 openssl rand -base64 32
 ```
+
+本地 dev 二选一即可：
+
+- **不设置** `AUTH_SECRET`：使用内置开发密钥
+- **设置固定值**（`openssl rand -base64 32`）：写入 `.env.local`；修改后需清 cookie 并重新登录
+
+勿同时跑多个 `pnpm dev`（例如 3000 与 3001 各一个），`localhost` cookie 会共用，密钥不一致时会反复出现本错误。
+
+### 故障排查：`JWTSessionError` / `no matching decryption secret`
+
+表示浏览器里的 session cookie 是用**另一套** `AUTH_SECRET` 签名的（常见于修改了 `.env`、复制了占位符、或 3000/3001 双实例密钥不一致）。middleware 会自动清除无效 cookie；**刷新一次**后应不再报错，然后重新登录即可。
+
+处理方式（任选其一）：
+
+1. 刷新页面（无效 cookie 会被清除），再重新登录
+2. 手动清除 `localhost` 站点 cookie 后重新登录
+3. 结束占用 3000 端口的旧 `next dev` 进程，只保留一个实例
+4. 在 `.env.local` 中设置固定密钥：`openssl rand -base64 32`，重启 `pnpm dev` 后再登录
 
 ## 鉴权架构
 
@@ -142,6 +164,7 @@ Docker Compose 中：
 - `frontend-share` 作为唯一公网入口，默认映射 `3000:3000`
 - `frontend`（创作端 Nginx）仅内网暴露，由 `STUDIO_UPSTREAM_URL=http://frontend:80` 接入
 - 生产环境在 GitHub **Settings → Secrets and variables → Actions** 配置 `AUTH_SECRET`（`openssl rand -base64 32` 生成）；CI 部署时会写入服务器 `/root/agents/.env`
+- 错误监控：在 Actions **Secrets** 配置 `SENTRY_DSN`（Better Stack Data ingestion 中的 DSN），在 **Variables** 配置 `SENTRY_APPLICATION_ID`；服务器 `/root/agents/.env` 中同样设置 `SENTRY_DSN`、`NEXT_PUBLIC_SENTRY_DSN`（与 DSN 相同）供运行时服务端上报
 - 建议修改 Compose 中 PostgreSQL 默认密码，且勿将 `5432` 对公网开放
 
 ```bash
@@ -151,15 +174,37 @@ docker compose up -d
 
 `postgres` 使用与业务镜像相同的阿里云 ACR：`agents:postgres`（CI 在 GitHub 上从官方 `postgres:16-alpine` 同步推送，服务器无需访问 docker.io）。
 
+## 错误监控（Better Stack + Sentry SDK）
+
+通过 [@sentry/nextjs](https://docs.sentry.io/platforms/javascript/guides/nextjs/) 将错误上报至 [Better Stack Errors](https://betterstack.com/docs/errors/collecting-errors/sentry-sdk/)（Sentry 兼容 DSN）。
+
+在 `.env` 或 `.env.local` 中配置（**勿提交真实 token**）：
+
+```bash
+# DSN 格式：https://$APPLICATION_TOKEN@$INGESTING_HOST/1
+SENTRY_DSN=https://YOUR_TOKEN@s2461160.eu-nbg-2.betterstackdata.com/1
+NEXT_PUBLIC_SENTRY_DSN=https://YOUR_TOKEN@s2461160.eu-nbg-2.betterstackdata.com/1
+SENTRY_APPLICATION_ID=your-application-id
+```
+
+- `NEXT_PUBLIC_SENTRY_DSN`：客户端错误，需在 **构建时** 注入（Docker `ARG` / CI build-args）
+- `SENTRY_DSN`：服务端 / RSC / API 错误，运行时注入即可
+- 未配置 DSN 时 SDK 自动 `enabled: false`，不影响本地开发
+
+本地验证：配置 DSN 后 `pnpm build && pnpm start`，访问任意会触发错误的页面，在 Better Stack **Errors** 面板查看上报。
+
 ## 文件说明
 
-| 文件 | 职责 |
-| --- | --- |
-| `prisma/schema.prisma` | 用户表模型 |
-| `src/auth.ts` | Auth.js 配置与 Credentials provider |
-| `src/middleware.ts` | 保护 `/studio`，处理 `/login`、`/register` 重定向 |
-| `src/lib/user-service.ts` | 注册、登录凭据校验 |
-| `src/lib/prisma.ts` | Prisma Client 单例 |
-| `src/app/login/` | 登录页 |
-| `src/app/register/` | 注册页 |
-| `next.config.mjs` | `/studio` 与 API rewrite 规则 |
+
+| 文件                        | 职责                                       |
+| ------------------------- | ---------------------------------------- |
+| `prisma/schema.prisma`    | 用户表模型                                    |
+| `src/auth.ts`             | Auth.js 配置与 Credentials provider         |
+| `src/middleware.ts`       | 保护 `/studio`，处理 `/login`、`/register` 重定向 |
+| `src/lib/user-service.ts` | 注册、登录凭据校验                                |
+| `src/lib/prisma.ts`       | Prisma Client 单例                         |
+| `src/app/login/`          | 登录页                                      |
+| `src/app/register/`       | 注册页                                      |
+| `next.config.mjs`         | `/studio` 与 API rewrite 规则               |
+
+

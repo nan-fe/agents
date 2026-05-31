@@ -88,8 +88,8 @@ class AgentInputBuilder:
         product_category = (self.context.planning.product_category or "").strip()
         return product_category or self.user_input
 
-    def build_planner_input(self) -> str:
-        """构建规划 Agent 输入"""
+    def build_content_strategist_input(self) -> str:
+        """构建内容策划 Agent 输入"""
         return self.user_input
 
     def build(self, agent_name: str) -> Any:
@@ -99,7 +99,7 @@ class AgentInputBuilder:
             "ImageAgent": self.build_image_input,
             "ReviewerAgent": self.build_reviewer_input,
             "RagAgent": self.build_rag_input,
-            "PlannerAgent": self.build_planner_input,
+            "ContentStrategistAgent": self.build_content_strategist_input,
         }
         
         builder = builders.get(agent_name)

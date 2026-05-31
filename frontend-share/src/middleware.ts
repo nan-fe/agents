@@ -2,6 +2,22 @@ import { getToken } from 'next-auth/jwt';
 import { NextResponse, type NextRequest } from 'next/server';
 
 import { getAuthSecret } from '@/lib/auth-secret';
+import {
+  clearAuthSessionCookies,
+  hasAuthSessionCookie,
+} from '@/lib/auth-session-cookies';
+
+const resolveSession = async (request: NextRequest) => {
+  const token = await getToken({
+    req: request,
+    secret: getAuthSecret(),
+  });
+
+  return {
+    token,
+    isLoggedIn: !!token,
+  };
+};
 
 export const middleware = async (request: NextRequest) => {
   const { nextUrl } = request;
@@ -10,15 +26,15 @@ export const middleware = async (request: NextRequest) => {
   const isLogin = pathname === '/login';
   const isRegister = pathname === '/register';
 
+  const { token, isLoggedIn } = await resolveSession(request);
+
+  if (hasAuthSessionCookie(request) && !token) {
+    return clearAuthSessionCookies(request, NextResponse.next());
+  }
+
   if (!isStudio && !isLogin && !isRegister) {
     return NextResponse.next();
   }
-
-  const token = await getToken({
-    req: request,
-    secret: getAuthSecret(),
-  });
-  const isLoggedIn = !!token;
 
   if (isStudio && !isLoggedIn) {
     const loginUrl = new URL('/login', nextUrl.origin);
@@ -35,5 +51,12 @@ export const middleware = async (request: NextRequest) => {
 };
 
 export const config = {
-  matcher: ['/studio', '/studio/:path*', '/login', '/register'],
+  matcher: [
+    '/',
+    '/studio',
+    '/studio/:path*',
+    '/login',
+    '/register',
+    '/share/:path*',
+  ],
 };

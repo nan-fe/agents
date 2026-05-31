@@ -2,10 +2,33 @@
 
 All notable changes to this project will be documented in this file.
 
+### Changed 2026-05-31
+
+- **编排层 Planner / Router 职责收敛**
+  - 新增 `orchestrator/planning/pipeline_resolver.py`：`refine_content` / `refine_image` 走规则表固定短链，不再调用 LLM 路由；`new_task` / `change_topic` 仍走 `route_task`
+  - 路由超时或失败时使用 intent-aware `fallback_route`，避免 refine 场景误跑全量 pipeline
+  - 精简 `OrchestratorLLMService.route_task` Prompt：移除 refine 相关约束，明确仅服务 fresh task
+
+- **规划模块目录收拢与命名澄清**
+  - 原 `PlannerAgent` 重命名为 **ContentStrategistAgent**（内容 brief，非编排 pipeline 规划）
+  - 规划相关代码迁入 `backend/app/agents/orchestrator/planning/`：
+    - `plan_phase.py` — Plan 阶段（intent → brief → pipeline）
+    - `intents.py` — 意图常量、`should_run_content_strategist` 等规则
+    - `content_strategist_agent.py` — 内容策划 LLM
+    - `pipeline_resolver.py` — 执行路径解析
+  - SSE Agent 展示名「策划」调整为「内容策划」
+
+- **测试**
+  - 新增 `test_pipeline_resolver.py`、`test_orchestrator_llm_service.py`（路由 Prompt 约束）
+  - 原 `test_planner_agent.py` 更名为 `test_content_strategist_agent.py`
+
 ### Changed 2026-05-23
 
 - **分享页 ISR**
   - `frontend-share` 的 `/share/[shareId]` 由动态 SSR 调整为 ISR
+- **Better Stack 错误监控**
+  - `frontend-share` 接入 `@sentry/nextjs`，通过 Better Stack Sentry 兼容 DSN 上报客户端/服务端错误
+  - 新增 `global-error.tsx`、分享页 `error.tsx` 自动 `captureException`；Docker / Compose / CI 支持 `SENTRY_DSN` 注入
 
 ### Changed 2026-05-22
 

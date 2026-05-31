@@ -58,6 +58,9 @@ services:
       - STUDIO_UPSTREAM_URL=http://frontend:80
       - AUTH_SECRET=${AUTH_SECRET:-change-me-in-production}
       - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/xhs_auth
+      - SENTRY_DSN=${SENTRY_DSN:-}
+      - NEXT_PUBLIC_SENTRY_DSN=${NEXT_PUBLIC_SENTRY_DSN:-}
+      - SENTRY_APPLICATION_ID=${SENTRY_APPLICATION_ID:-frontend-share}
     depends_on:
       postgres:
         condition: service_healthy

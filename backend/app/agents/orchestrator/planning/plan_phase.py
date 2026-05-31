@@ -1,11 +1,10 @@
-"""统一规划阶段：意图识别 + 策划 + 路由。"""
+"""统一规划阶段：意图识别 + 内容策划 + pipeline 解析。"""
 from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional
 
-from app.agents.planner_agent import PlannerAgent
 from app.config import settings
 from app.services.orchestrator_llm_service import (
     IntentAnalysisTimeoutError,
@@ -15,12 +14,14 @@ from app.services.orchestrator_llm_service import (
 from app.utils.display_labels import format_agent_pipeline, intent_display_label
 from app.utils.log_callback import emit_log
 
-from .execution_context import ExecutionContext
-from .session_history import WritingSessionHistory
-
-FRESH_TASK_INTENTS = frozenset({"new_task", "change_topic"})
-
-REFINE_INTENTS = frozenset({"refine_content", "refine_image"})
+from ..execution_context import ExecutionContext
+from ..session_history import WritingSessionHistory
+from .content_strategist_agent import ContentStrategistAgent
+from .intents import (
+    is_fresh_task_intent,
+    should_run_content_strategist,
+)
+from .pipeline_resolver import resolve_pipeline
 
 ASK_QUESTION_RESPONSE: Dict[str, Any] = {
     "title": "",
@@ -32,20 +33,6 @@ ASK_QUESTION_RESPONSE: Dict[str, Any] = {
         "请输入您想要生成的文案要求，例如：帮我写一篇关于防晒霜的推荐文案"
     ),
 }
-
-
-def is_fresh_task_intent(intent: str) -> bool:
-    """新任务 / 换题：重新策划，不复用上一轮 plan 与 result。"""
-    return intent in FRESH_TASK_INTENTS
-
-
-def should_run_planner(intent: str, has_last_plan: bool) -> bool:
-    """是否在本轮执行 PlannerAgent。"""
-    if is_fresh_task_intent(intent):
-        return True
-    if intent in REFINE_INTENTS:
-        return not has_last_plan
-    return not has_last_plan
 
 
 @dataclass
@@ -60,14 +47,14 @@ class PlanPhaseResult:
 
 
 class PlanPhaseRunner:
-    """intent → Planner（按需）→ route_task（LLM 路由）。"""
+    """intent → 内容策划（按需）→ resolve_pipeline（refine 规则 / fresh LLM）。"""
 
     def __init__(
         self,
-        planner_agent: PlannerAgent,
+        content_strategist_agent: ContentStrategistAgent,
         llm_service: OrchestratorLLMService,
     ):
-        self.planner_agent = planner_agent
+        self.content_strategist_agent = content_strategist_agent
         self.llm_service = llm_service
 
     async def run(
@@ -132,18 +119,18 @@ class PlanPhaseRunner:
             context, session_history, intent, log_callback
         )
 
-        await emit_log(log_callback, "Orchestrator", "规划阶段：路由 Agent…")
-        routing = await self.llm_service.route_task(
-            user_input, context.get_planning(), intent
+        await emit_log(log_callback, "Orchestrator", "规划阶段：解析 pipeline…")
+        resolution = await resolve_pipeline(
+            intent, user_input, context.get_planning(), self.llm_service
         )
-
-        pipeline_order = list(routing.priority_order)
+        routing = resolution.routing
+        pipeline_order = list(resolution.priority_order)
 
         pipeline_labels = format_agent_pipeline(pipeline_order)
         await emit_log(
             log_callback,
             "Orchestrator",
-            f"规划阶段完成，执行：{' → '.join(pipeline_labels)}",
+            f"规划阶段完成（{resolution.source}），执行：{' → '.join(pipeline_labels)}",
             intent=intent,
         )
 
@@ -163,9 +150,11 @@ class PlanPhaseRunner:
         log_callback: Optional[Callable],
     ) -> bool:
         last_plan = session_history.get_last_plan()
-        if should_run_planner(intent, last_plan is not None):
+        if should_run_content_strategist(intent, last_plan is not None):
             planning_result = await asyncio.wait_for(
-                self.planner_agent.run(user_input, log_callback, history=""),
+                self.content_strategist_agent.run(
+                    user_input, log_callback, history=""
+                ),
                 timeout=settings.AGENT_TIMEOUT_PLANNER_AGENT_SECONDS,
             )
             context.set_planning(planning_result)

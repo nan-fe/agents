@@ -13,8 +13,8 @@ INTENT_DISPLAY_LABELS: Dict[str, str] = {
 AGENT_DISPLAY_LABELS: Dict[str, str] = {
     "Orchestrator": "编排",
     "SafetyGuard": "安全审核",
-    "PlannerAgent": "策划",
-    "Planner": "策划",
+    "ContentStrategistAgent": "内容策划",
+    "ContentStrategist": "内容策划",
     "CopywriterAgent": "文案",
     "Copywriter": "文案",
     "ImageAgent": "配图",
