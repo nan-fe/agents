@@ -5,6 +5,8 @@
 ## 📖 项目简介
 
 本项目采用多智能体协作架构：编排层负责意图识别、执行路径规划与内容 brief；Copywriter、Image、Reviewer 等专业 Agent 协同完成平台内容的创作、配图和审核。
+<img width="3808" height="1912" alt="image" src="https://github.com/user-attachments/assets/7e6c9b5a-7e0d-46aa-b461-d3343db9acec" />
+
 
 ## 🏗️ 技术架构
 
@@ -332,8 +334,13 @@ npx knip
 ## 📊 评估
 
 项目集成了 LangSmith 进行智能体性能评估，可通过 LangSmith 平台查看各 Agent 的执行追踪和评估结果。
-### LangSmith 评估截图
-<img width="3380" height="1040" alt="image" src="https://github.com/user-attachments/assets/2fd49dbd-0a9a-457c-bd9a-1190ee8943da" />
+### 文案生成 deepseek-v4-pro(A) vs deepseek-v4-flash(B)
+从结构性、相关性以及语言风格对比，AI 裁判模型是 Pro/zai-org/GLM-5.1
+<img width="1268" height="532" alt="image" src="https://github.com/user-attachments/assets/e16f76fc-5c05-448a-aa8c-421d1f85be2d" />
+延时&成本
+<img width="1258" height="530" alt="image" src="https://github.com/user-attachments/assets/e3330885-a381-4157-88f3-ead121d16976" />
+
+
 
 ## ⚠️ 已知限制
 
