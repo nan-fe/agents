@@ -2,24 +2,24 @@ import Link from 'next/link';
 
 const NotFound = () => {
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-5xl items-center px-4 py-12">
-      <section className="w-full rounded-3xl border border-slate-200 bg-white p-8 text-center">
-        <p className="mb-3 text-sm font-bold tracking-widest text-indigo-600">
-          SHARE NOT FOUND
-        </p>
-        <h1 className="text-3xl font-bold leading-tight text-gray-950 sm:text-5xl">
-          分享内容不存在或已过期
-        </h1>
-        <p className="mx-auto mt-6 max-w-2xl whitespace-pre-wrap text-base leading-8 text-gray-600 sm:text-lg">
-          请确认分享链接是否完整，或回到创作端重新生成分享链接。
-        </p>
-        <div className="mt-7 flex flex-wrap justify-center gap-3">
-          <Link
-            className="rounded-full border border-indigo-600 bg-indigo-600 px-5 py-2.5 text-white"
-            href="/"
-          >
-            返回首页
-          </Link>
+    <main
+      id="main-content"
+      className="mx-auto flex min-h-screen w-full max-w-5xl items-center px-4 py-12"
+    >
+      <section className="atelier-panel w-full p-8 text-center sm:p-12">
+        <div className="atelier-panel-inner">
+          <p className="atelier-eyebrow">Share Not Found</p>
+          <h1 className="atelier-heading mt-4 text-3xl sm:text-5xl">
+            分享内容不存在或已过期
+          </h1>
+          <p className="atelier-body mx-auto mt-6 max-w-2xl">
+            请确认分享链接是否完整，或回到创作端重新生成分享链接。
+          </p>
+          <div className="mt-8">
+            <Link className="atelier-btn-primary" href="/">
+              返回首页
+            </Link>
+          </div>
         </div>
       </section>
     </main>

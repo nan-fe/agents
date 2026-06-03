@@ -17,8 +17,8 @@ client = Client()
 
 # 初始化 OpenAI 客户端（用于评估）
 oai_client = wrappers.wrap_openai(openai.OpenAI(
-    api_key=settings.API_KEY,
-    base_url=settings.MODEL_BASE_URL,
+    api_key=settings.SILICONFLOW_API_KEY,
+    base_url=settings.SILICONFLOW_BASE_URL,
 ))
 # ========== 评估器定义 ==========
 def relevance_evaluator(inputs: dict, outputs: dict) -> dict:
@@ -59,7 +59,7 @@ def relevance_evaluator(inputs: dict, outputs: dict) -> dict:
 """
 
     response = oai_client.beta.chat.completions.create(
-        model="deepseek-v4-flash",
+        model="Pro/zai-org/GLM-5.1",
         messages=[
             {"role": "system", "content": instructions},
             {"role": "user", "content": user_msg}
@@ -113,7 +113,7 @@ def style_evaluator(inputs: dict, outputs: dict) -> dict:
 """
 
     response = oai_client.beta.chat.completions.create(
-       model="deepseek-v4-flash",
+       model="Pro/zai-org/GLM-5.1",
         messages=[
             {"role": "system", "content": instructions},
             {"role": "user", "content": user_msg}
@@ -157,7 +157,7 @@ def structure_evaluator(inputs: dict, outputs: dict) -> dict:
     user_msg = f"【待评估文案】\n{outputs['content']}"
 
     response = oai_client.beta.chat.completions.create(
-       model="deepseek-v4-flash",
+       model="Pro/zai-org/GLM-5.1",
         messages=[
             {"role": "system", "content": instructions},
             {"role": "user", "content": user_msg}

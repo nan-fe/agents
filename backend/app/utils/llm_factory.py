@@ -2,6 +2,8 @@ from typing import Optional, Dict, Any
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import PromptTemplate
 from langchain_core.output_parsers import BaseOutputParser
+from langsmith import Client, traceable
+from langsmith.run_helpers import get_current_run_tree
 from app.utils.token_counter import token_counter
 from app.utils.retry_policy import retry_with_backoff
 from app.config import settings
@@ -9,6 +11,30 @@ from app.config import settings
 
 class LLMFactory:
     """动态LLM工厂，自动计算max_tokens并创建LLM实例"""
+    _langsmith_client = Client(api_key=settings.LANGCHAIN_API_KEY)
+
+    @staticmethod
+    def _report_feedback_safe(
+        *,
+        key: str,
+        score: float | int | bool,
+        comment: str = "",
+    ) -> None:
+        """向 LangSmith 上报反馈；失败时静默，不影响主流程。"""
+        try:
+            run_tree = get_current_run_tree()
+            if not run_tree:
+                return
+            LLMFactory._langsmith_client.create_feedback(
+                run_id=run_tree.id,
+                key=key,
+                score=score,
+                comment=comment or None,
+            )
+        except Exception:
+            # 指标上报失败不应影响业务链路
+            print(f"[LangSmith] feedback上报失败: key={key}")
+            return
 
     @staticmethod
     def create_llm_with_dynamic_tokens(
@@ -69,6 +95,7 @@ class LLMFactory:
         )
 
     @staticmethod
+    @traceable(name="llm_factory.run_chain_with_dynamic_tokens", run_type="chain")
     async def run_chain_with_dynamic_tokens(
         prompt_template: PromptTemplate,
         chain_input: Dict[str, Any],
@@ -78,6 +105,8 @@ class LLMFactory:
         history: str = "",
         safety_buffer: int = 200,
         http_retry_max_attempts: Optional[int] = None,
+        agent_name: str = "",
+        prompt_version: str = "",
         **kwargs,
     ) -> Any:
         """使用动态max_tokens执行chain
@@ -92,6 +121,8 @@ class LLMFactory:
             safety_buffer: 安全缓冲token数
             http_retry_max_attempts: HTTP 层重试次数；None 则用全局 LLM_HTTP_RETRY_MAX_ATTEMPTS。
                 意图/路由等外层另有 asyncio.wait_for 时，应设为 1，避免退避 sleep 撑爆外层超时。
+            agent_name: 当前调用的 Agent 名称（用于 LangSmith 过滤）
+            prompt_version: Prompt 版本标记（用于 LangSmith 对比）
             **kwargs: 其他传递给ChatOpenAI的参数
 
         Returns:
@@ -132,7 +163,21 @@ class LLMFactory:
         else:
             chain = prompt_to_use | llm
 
+        metadata: Dict[str, Any] = {}
+        if agent_name:
+            metadata["agent_name"] = agent_name
+        if prompt_version:
+            metadata["prompt_version"] = prompt_version
+        if model_name or settings.BASE_MODEL:
+            metadata["model_name"] = model_name or settings.BASE_MODEL
+
+        invoke_config: Dict[str, Any] = {}
+        if metadata:
+            invoke_config["metadata"] = metadata
+
         async def _ainvoke_once():
+            if invoke_config:
+                return await chain.ainvoke(chain_input, config=invoke_config)
             return await chain.ainvoke(chain_input)
 
         attempts = (
@@ -141,14 +186,29 @@ class LLMFactory:
             else settings.LLM_HTTP_RETRY_MAX_ATTEMPTS
         )
         attempts = max(1, int(attempts))
-
-        return await retry_with_backoff(
-            _ainvoke_once,
-            max_attempts=attempts,
-            base_delay=settings.LLM_HTTP_RETRY_BASE_DELAY,
-            max_delay=settings.LLM_HTTP_RETRY_MAX_DELAY,
-            operation_name="langchain_ainvoke",
-        )
+        try:
+            result = await retry_with_backoff(
+                _ainvoke_once,
+                max_attempts=attempts,
+                base_delay=settings.LLM_HTTP_RETRY_BASE_DELAY,
+                max_delay=settings.LLM_HTTP_RETRY_MAX_DELAY,
+                operation_name="langchain_ainvoke",
+            )
+            if parser:
+                LLMFactory._report_feedback_safe(
+                    key="parse_success",
+                    score=1,
+                    comment=f"agent={agent_name or 'unknown'}",
+                )
+            return result
+        except Exception:
+            if parser:
+                LLMFactory._report_feedback_safe(
+                    key="parse_success",
+                    score=0,
+                    comment=f"agent={agent_name or 'unknown'}",
+                )
+            raise
 
 
 llm_factory = LLMFactory()

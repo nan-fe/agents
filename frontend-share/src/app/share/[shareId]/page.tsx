@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation';
 import ShareActions from '../../../components/share-actions';
 import { DEMO_SHARE_ID } from '../../../lib/demo-share';
 import { preloadShareImage } from '../../../lib/preload-share-image';
+import { truncateWithEllipsis } from '@/lib/format';
 import { getShareSnapshot } from '../../../lib/shares';
 
 type SharePageProps = {
@@ -20,12 +21,7 @@ export const dynamicParams = true;
 
 export const generateStaticParams = () => [{ shareId: DEMO_SHARE_ID }];
 
-const toDescription = (content: string) => {
-  const normalized = content.replace(/\s+/g, ' ').trim();
-  return normalized.length > 120
-    ? `${normalized.slice(0, 117)}...`
-    : normalized;
-};
+const toDescription = (content: string) => truncateWithEllipsis(content, 120);
 
 export const generateMetadata = async ({
   params,
@@ -41,7 +37,7 @@ export const generateMetadata = async ({
 
   const title = share.title || '小红书内容分享';
   const description = toDescription(
-    share.content || share.message || '查看 AI 生成的小红书图文内容'
+    share.content || share.message || '查看 AI 生成的小红书图文内容',
   );
   const images = share.image_url ? [share.image_url] : [];
 
@@ -80,25 +76,28 @@ const SharePage = async ({ params }: SharePageProps) => {
   }
 
   return (
-    <main className="mx-auto w-full max-w-5xl px-4 py-12 sm:py-16">
-      <article className="overflow-hidden rounded-3xl border border-slate-200 bg-white/95">
-        <div className="p-6 sm:p-8">
-          <p className="mb-3 text-sm font-bold tracking-widest text-indigo-600">
-            {shareId === 'demo' ? 'SHARE DEMO' : 'AI GENERATED CONTENT'}
+    <main
+      id="main-content"
+      className="mx-auto w-full max-w-5xl px-4 py-12 sm:py-16"
+    >
+      <article className="atelier-panel overflow-hidden">
+        <span className="atelier-corner-fan" aria-hidden />
+        <span className="atelier-corner-fan atelier-corner-fan--tr" aria-hidden />
+        <div className="atelier-panel-inner p-6 sm:p-10">
+          <p className="atelier-eyebrow">
+            {shareId === 'demo' ? 'Share Demo' : 'AI Generated Content'}
           </p>
-          <h1 className="text-3xl font-bold leading-tight text-gray-950 sm:text-5xl">
-            {title}
-          </h1>
-          <div className="mt-6 whitespace-pre-wrap text-base leading-8 text-gray-700 sm:text-lg">
+          <h1 className="atelier-heading mt-4 text-3xl sm:text-5xl">{title}</h1>
+          <div className="atelier-deco-rule my-8">
+            <span>Gallery</span>
+          </div>
+          <div className="atelier-body whitespace-pre-wrap text-base sm:text-lg">
             {content}
           </div>
           {hashtags.length > 0 && (
-            <div className="mt-6 flex flex-wrap gap-2.5">
+            <div className="mt-8 flex flex-wrap gap-2">
               {hashtags.map((tag) => (
-                <span
-                  className="rounded-full bg-slate-100 px-3 py-2 text-sm text-slate-700"
-                  key={tag}
-                >
+                <span className="atelier-tag" key={tag}>
                   {tag}
                 </span>
               ))}
@@ -107,17 +106,19 @@ const SharePage = async ({ params }: SharePageProps) => {
           <ShareActions title={title} content={content} hashtags={hashtags} />
         </div>
         {share.image_url && (
-          <Image
-            className="h-auto max-h-[560px] w-full bg-slate-50 object-contain"
-            src={share.image_url}
-            alt={title}
-            width={1024}
-            height={1024}
-            unoptimized
-          />
+          <div className="atelier-frame mx-6 mb-6 sm:mx-10 sm:mb-10">
+            <Image
+              className="h-auto max-h-[560px] w-full bg-canvas object-contain"
+              src={share.image_url}
+              alt={title}
+              width={1024}
+              height={1024}
+              unoptimized
+            />
+          </div>
         )}
       </article>
-      <p className="mt-5 text-center text-sm text-gray-500">
+      <p className="mt-6 text-center font-body text-sm italic text-ink-muted">
         {shareId === 'demo'
           ? '这是分享页示例内容，登录创作台后可生成并分享真实结果'
           : '由 XHS Multi-Agent Creator 生成'}

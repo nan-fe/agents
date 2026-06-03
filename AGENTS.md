@@ -12,4 +12,3 @@ The Vite app in `frontend-ts/` uses React 19 with React Compiler enabled. Follow
 
 - Prefer `useActionState` for async interactions with pending state (avoid manual `useState` + `try/finally` in components).
 - Run `pnpm lint:react` in `frontend-ts/` before merging; `react-hooks/todo` and `react-hooks/unsupported-syntax` must be zero errors.
-

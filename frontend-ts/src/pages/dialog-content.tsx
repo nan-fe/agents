@@ -1,27 +1,22 @@
-import { useState, useRef, useEffect, useMemo } from 'react';
 import {
-  Layout,
-  Input,
-  Button,
-  Space,
-  message,
-  Typography,
-  Select,
-  Card,
-} from 'antd';
-import {
-  SendOutlined,
-  HistoryOutlined,
-  StopOutlined,
-} from '@ant-design/icons';
+  useState,
+  useRef,
+  useEffect,
+  useMemo,
+  useCallback,
+  type KeyboardEvent,
+} from 'react';
+import { Input, Button, message, Modal, Select } from 'antd';
+import { SendOutlined, StopOutlined } from '@ant-design/icons';
 import {
   createDialogGenerateRequest,
   generateDialogContent,
   type UserInput,
 } from '../services/api';
-import { List, RowComponentProps, useListRef } from 'react-window';
 import AgentLogs from '../components/agent-logs';
-import ResultDisplay from '../components/result-display';
+import ChatMessage from '../components/chat-message';
+import ConversationTurn from '../components/conversation-turn';
+import PendingTurn from '../components/pending-turn';
 import { HistoryItem } from '../components/history-panel';
 import { useBatchedState } from '../hooks/use-batched-state';
 import { useSSEClient, type SSEConnectOptions } from '../hooks/use-sse-client';
@@ -32,25 +27,18 @@ import {
   type StreamMessage,
 } from '../utils/sse-resume';
 import { createStreamIngestor } from '../utils/sse-stream-ingest';
+import { formatDateTime } from '../utils/format';
+import { getOrCreateSessionId } from '../utils/session';
+import {
+  createInitialThread,
+  type AgentLogEntry,
+  type DialogResultData,
+  type PendingThreadItem,
+  type ThreadItem,
+  type TurnThreadItem,
+} from '../types/conversation';
 
-const { Header, Content } = Layout;
-const { Text, Paragraph, Title } = Typography;
-
-interface Message {
-  id: string;
-  type: 'user' | 'system';
-  content: string;
-  timestamp: number;
-}
-
-interface Version {
-  id: number;
-  timestamp: number;
-  content: string;
-  title: string;
-  hashtags: string[];
-  imageUrl: string;
-}
+const { TextArea } = Input;
 
 type StreamEvent = StreamMessage & {
   type: 'log' | 'meta' | 'result';
@@ -65,64 +53,13 @@ type LogType = {
   intent_label?: string;
 };
 
-interface MessageRowData {
-  messages: Message[];
-}
-
-const MESSAGE_BASE_HEIGHT = 56;
-const MESSAGE_LINE_HEIGHT = 24;
-const MESSAGE_CHARS_PER_LINE = 18;
-const MESSAGE_MAX_HEIGHT = 640;
-const SESSION_STORAGE_KEY = 'xhs_session_id';
-
-const WELCOME_MESSAGE_CONTENT =
-  '哈喽～我是你的内容创作助手 小H，你可以输入内容描述（例如：推荐一款适合学生党的平价防晒霜，清爽不油腻）我将生成一段图文给你发小红书';
-
-const createWelcomeMessage = (): Message => ({
-  id: 'msg_welcome',
-  type: 'system',
-  content: WELCOME_MESSAGE_CONTENT,
-  timestamp: Date.now(),
-});
-
-const getOrCreateSessionId = (): string => {
-  const sessionStorageId = sessionStorage.getItem(SESSION_STORAGE_KEY);
-  const localStorageId = localStorage.getItem(SESSION_STORAGE_KEY);
-  const stableId = sessionStorageId || localStorageId;
-
-  if (stableId) {
-    if (!sessionStorageId) {
-      sessionStorage.setItem(SESSION_STORAGE_KEY, stableId);
-    }
-    if (!localStorageId) {
-      localStorage.setItem(SESSION_STORAGE_KEY, stableId);
-    }
-    return stableId;
-  }
-
-  const newId = `session_${Date.now()}`;
-  sessionStorage.setItem(SESSION_STORAGE_KEY, newId);
-  localStorage.setItem(SESSION_STORAGE_KEY, newId);
-  return newId;
-};
-
-const createInitialMessages = (): Message[] => [createWelcomeMessage()];
-
-type DialogResultData = {
-  content: string;
-  title: string;
-  hashtags: string[];
-  image_url: string;
-  message?: string;
-  error_code?: string;
-};
-
 type GenerationSuccess = {
   kind: 'success';
   resultData: DialogResultData;
   userPrompt: string;
   sessionId: string;
   versionCount: number;
+  pendingId: string;
 };
 
 type GenerationOutcome =
@@ -142,6 +79,7 @@ type GenerationPayload = {
   prompt: string;
   sessionId: string;
   versionCount: number;
+  pendingId: string;
   getCancelled: () => boolean;
   deps: GenerationDeps;
   onSuccess: (outcome: GenerationSuccess) => void;
@@ -150,7 +88,7 @@ type GenerationPayload = {
 const runDialogGeneration = async (
   payload: GenerationPayload,
 ): Promise<GenerationOutcome> => {
-  const { prompt, sessionId, versionCount, getCancelled, deps } = payload;
+  const { prompt, sessionId, getCancelled, deps } = payload;
   let streamResult: DialogResultData | null = null;
 
   const streamIngestor = createStreamIngestor();
@@ -214,7 +152,7 @@ const runDialogGeneration = async (
       },
       fallback: async (error, lastEventId) => {
         console.warn('SSE 连接异常，已切换降级策略:', error);
-        message.warning('实时通道异常，正在切换降级模式...');
+        message.warning('实时通道异常，正在切换降级模式…');
         return generateDialogContent({
           request: {
             prompt,
@@ -249,7 +187,8 @@ const runDialogGeneration = async (
       resultData,
       userPrompt: prompt,
       sessionId,
-      versionCount,
+      versionCount: payload.versionCount,
+      pendingId: payload.pendingId,
     };
   } catch (error) {
     console.error('Error generating content:', error);
@@ -264,7 +203,6 @@ const runDialogGeneration = async (
   }
 };
 
-// SSE 流式生成不适合包在 useActionState 里（会延迟中间 state 提交），用模块级 async 执行。
 const executeDialogGeneration = async (
   payload: GenerationPayload,
   onSettled: () => void,
@@ -282,110 +220,132 @@ const executeDialogGeneration = async (
   }
 };
 
-const estimateMessageRowHeight = (content: string) => {
-  const lineCount = content
-    .split('\n')
-    .reduce((total, line) => total + Math.max(1, Math.ceil(line.length / MESSAGE_CHARS_PER_LINE)), 0);
-
-  return MESSAGE_BASE_HEIGHT + lineCount * MESSAGE_LINE_HEIGHT;
-};
-
-const MessageRow = ({ index, style, messages }: RowComponentProps<MessageRowData>) => {
-  const messageItem = messages[index];
-
-  return (
-    <div style={style} className="box-border pb-2">
-      <div className="flex h-full flex-col box-border border-b border-gray-100 pb-2">
-        <Text strong>{messageItem.type === 'user' ? '用户' : '系统'}</Text>
-        <Paragraph className="!mb-1">{messageItem.content}</Paragraph>
-        <Text type="secondary" className="text-xs">
-          {new Date(messageItem.timestamp).toLocaleString()}
-        </Text>
-      </div>
-    </div>
-  );
-};
+type ScrollIntent = { type: 'bottom' } | { type: 'version'; versionId: number };
 
 const DialogContent = () => {
-  const [messages, setMessages] = useState(createInitialMessages);
-  const [versions, setVersions] = useState<Version[]>([]);
+  const [thread, setThread] = useState<ThreadItem[]>(createInitialThread);
   const [currentVersion, setCurrentVersion] = useState<number>(-1);
   const [inputValue, setInputValue] = useState<string>('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationEpoch, setGenerationEpoch] = useState(0);
   const [currentSessionId] = useState(getOrCreateSessionId);
-  
+
   const {
     state: logs,
     batchUpdate: batchLogUpdate,
     flushNow: flushLogs,
     resetState: resetLogs,
   } = useBatchedState<LogType[]>([]);
-  const [result, setResult] = useState<any>(null);
   const [finishTask, setFinishTask] = useState(false);
-  const [history, setHistory] = useState<HistoryItem[]>([]);
+  const [, setHistory] = useState<HistoryItem[]>([]);
   const { connect, disconnect } = useSSEClient();
-  const virtualListRef = useListRef(null);
-  const messageViewportRef = useRef<HTMLDivElement>(null);
-  const [viewportHeight, setViewportHeight] = useState(MESSAGE_MAX_HEIGHT);
-  const messageRowHeights = useMemo(
-    () => messages.map((item) => estimateMessageRowHeight(item.content)),
-    [messages],
+  const threadRef = useRef<HTMLDivElement>(null);
+  const cancelByUserRef = useRef(false);
+  const scrollIntentRef = useRef<ScrollIntent>({ type: 'bottom' });
+  const generationLogsRef = useRef<AgentLogEntry[]>([]);
+
+  const trackLogUpdate = useCallback(
+    (updater: (prev: LogType[]) => LogType[]) => {
+      batchLogUpdate((prev) => {
+        const next = updater(prev);
+        generationLogsRef.current = next.map(({ agent_name, message, timestamp }) => ({
+          agent_name,
+          message,
+          timestamp,
+        }));
+        return next;
+      });
+    },
+    [batchLogUpdate],
   );
 
-  const cancelByUserRef = useRef(false);
+  const completedTurns = useMemo(
+    () => thread.filter((item): item is TurnThreadItem => item.type === 'turn'),
+    [thread],
+  );
+
+  const pendingTurn = useMemo(
+    () => thread.find((item): item is PendingThreadItem => item.type === 'pending'),
+    [thread],
+  );
+
+  const versionOptions = useMemo(
+    () =>
+      completedTurns.map((turn) => ({
+        id: turn.versionId,
+        timestamp: turn.completedTimestamp,
+        title: turn.result.title,
+      })),
+    [completedTurns],
+  );
+
+  const scrollToBottom = () => {
+    const el = threadRef.current;
+    if (!el) return;
+    el.scrollTop = el.scrollHeight;
+  };
+
+  const scrollToVersion = (versionId: number) => {
+    document
+      .getElementById(`version-anchor-${versionId}`)
+      ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
 
   useEffect(() => {
-    if (messages.length === 0) return;
-    virtualListRef.current?.scrollToRow({
-      align: 'end',
-      index: messages.length - 1,
-    });
-  }, [messages, virtualListRef]);
+    const intent = scrollIntentRef.current;
+    if (intent.type === 'version') {
+      scrollToVersion(intent.versionId);
+      return;
+    }
+    scrollToBottom();
+  }, [thread, logs, isGenerating, currentVersion]);
 
   useEffect(() => {
-    const container = messageViewportRef.current;
-    if (!container) return;
+    if (!isGenerating) {
+      return;
+    }
 
-    const syncHeight = () => {
-      setViewportHeight(container.clientHeight || MESSAGE_MAX_HEIGHT);
+    const onBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
     };
 
-    syncHeight();
-    const observer = new ResizeObserver(syncHeight);
-    observer.observe(container);
-    return () => observer.disconnect();
-  }, []);
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+  }, [isGenerating]);
 
   const applyGenerationSuccess = (outcome: GenerationSuccess) => {
-    const { resultData, userPrompt, sessionId, versionCount } = outcome;
+    const { resultData, userPrompt, sessionId, versionCount, pendingId } = outcome;
+    const completedAt = Date.now();
+    flushLogs();
+    const capturedLogs = [...generationLogsRef.current];
 
-    setResult(resultData);
-
-    const systemMessage: Message = {
-      id: `msg_${Date.now() + 1}`,
-      type: 'system',
-      content: '已生成内容，请查看下方文案区域',
-      timestamp: Date.now(),
-    };
-    setMessages((prev) => [...prev, systemMessage]);
+    setThread((prev) =>
+      prev.map((item) => {
+        if (item.type !== 'pending' || item.id !== pendingId) {
+          return item;
+        }
+        const turn: TurnThreadItem = {
+          type: 'turn',
+          id: `turn_${versionCount}`,
+          versionId: versionCount,
+          userPrompt: item.userPrompt,
+          userTimestamp: item.userTimestamp,
+          result: resultData,
+          completedTimestamp: completedAt,
+          logs: capturedLogs,
+        };
+        return turn;
+      }),
+    );
+    setCurrentVersion(versionCount);
     setFinishTask(true);
-
-    const newVersion: Version = {
-      id: versionCount,
-      timestamp: Date.now(),
-      content: resultData.content,
-      title: resultData.title,
-      hashtags: resultData.hashtags,
-      imageUrl: resultData.image_url,
-    };
-    setVersions((prev) => [...prev, newVersion]);
-    setCurrentVersion(newVersion.id);
+    scrollIntentRef.current = { type: 'version', versionId: versionCount };
+    generationLogsRef.current = [];
 
     const historyItem: HistoryItem = {
       id: sessionId,
       userInput: userPrompt,
-      timestamp: Date.now(),
+      timestamp: completedAt,
       title: resultData.title,
     };
     setHistory((prev) => [historyItem, ...prev]);
@@ -393,174 +353,235 @@ const DialogContent = () => {
 
   const startGeneration = (prompt: string) => {
     const trimmedPrompt = prompt.trim();
-    if (!trimmedPrompt) {
+    if (!trimmedPrompt || pendingTurn) {
       return;
     }
 
     cancelByUserRef.current = false;
     resetLogs([]);
+    generationLogsRef.current = [];
     setFinishTask(false);
 
-    const userMessage: Message = {
-      id: `msg_${Date.now()}`,
-      type: 'user',
-      content: trimmedPrompt,
-      timestamp: Date.now(),
+    const pendingId = `pending_${Date.now()}`;
+    const pendingItem: PendingThreadItem = {
+      type: 'pending',
+      id: pendingId,
+      userPrompt: trimmedPrompt,
+      userTimestamp: Date.now(),
     };
-    setMessages((prev) => [...prev, userMessage]);
+
+    setThread((prev) => [...prev, pendingItem]);
     setInputValue('');
     setIsGenerating(true);
     setGenerationEpoch((epoch) => epoch + 1);
+    scrollIntentRef.current = { type: 'bottom' };
 
     void executeDialogGeneration(
       {
         prompt: trimmedPrompt,
         sessionId: currentSessionId,
-        versionCount: versions.length,
+        versionCount: completedTurns.length,
+        pendingId,
         getCancelled: () => cancelByUserRef.current,
-        deps: { connect, batchLogUpdate, flushLogs },
+        deps: { connect, batchLogUpdate: trackLogUpdate, flushLogs },
         onSuccess: applyGenerationSuccess,
       },
-      () => setIsGenerating(false),
+      () => {
+        setIsGenerating(false);
+        setThread((prev) => {
+          if (!prev.some((item) => item.type === 'pending')) {
+            return prev;
+          }
+          return prev.filter((item) => item.type !== 'pending');
+        });
+      },
     );
   };
 
   const handleSubmit = () => {
+    if (isGenerating) return;
     startGeneration(inputValue);
   };
 
+  const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
+      handleSubmit();
+    }
+  };
+
   const handleStopGeneration = () => {
-    cancelByUserRef.current = true;
-    disconnect();
-    message.info('已停止当前生成任务');
+    Modal.confirm({
+      title: '停止生成？',
+      content: '当前任务将中断，已生成部分可能不完整。',
+      okText: '停止',
+      cancelText: '继续',
+      onOk: () => {
+        cancelByUserRef.current = true;
+        disconnect();
+        message.info('已停止当前生成任务');
+      },
+    });
   };
 
   const handleVersionSelect = (versionId: number) => {
-    const version = versions[versionId];
+    if (!completedTurns.some((turn) => turn.versionId === versionId)) {
+      return;
+    }
     setCurrentVersion(versionId);
-    setResult({
-      title: version.title,
-      content: version.content,
-      hashtags: version.hashtags,
-      image_url: version.imageUrl,
-    });
-
-    const systemMessage: Message = {
-      id: `msg_${Date.now()}`,
-      type: 'system',
-      content: `已切换至版本 V${versionId + 1}`,
-      timestamp: Date.now(),
-    };
-    setMessages((prev) => [...prev, systemMessage]);
-
-    message.success(`已切换至版本 V${versionId + 1}`);
+    scrollIntentRef.current = { type: 'version', versionId };
   };
 
   return (
-    <Layout className="min-h-full">
-      <Header className="bg-white px-4 shadow-md">
-        <Title level={4} className="!my-4">
-          内容创作助手
-        </Title>
-      </Header>
-      <Layout className="min-h-0">
-        <Content className="flex w-full min-w-0">
-          <div className="flex w-full min-w-0 flex-col gap-4 lg:h-[calc(100vh-160px)] lg:flex-row">
-            {/* 历史记录面板 */}
-            {/* <HistoryPanel
-              history={history}
-              onSelectHistory={handleSelectHistory}
-              onDeleteHistory={handleDeleteHistory}
-              currentSessionId={currentSessionId}
-            /> */}
-            
-            {/* 聊天窗口 */}
-            <Card
-              title="聊天记录"
-              className="flex min-h-[360px] w-full flex-col lg:h-full lg:w-[min(420px,36vw)] lg:flex-shrink-0 [&_.ant-card-body]:flex [&_.ant-card-body]:min-h-0 [&_.ant-card-body]:flex-1 [&_.ant-card-body]:flex-col"
+    <main id="studio-main" className="chat-layout relative flex h-full min-h-0 flex-col">
+      <a className="skip-link" href="#studio-thread">
+        跳到对话内容
+      </a>
+      <header className="chat-header flex shrink-0 items-center justify-between gap-4 px-4 py-3 sm:px-6">
+        <div className="min-w-0">
+          <h1 className="truncate font-display text-sm font-semibold tracking-wide text-ink sm:text-base">
+            内容创作助手
+          </h1>
+          <p className="mt-0.5 truncate font-body text-xs italic text-ink-muted">
+            多智能体协作 · 小红书图文生成
+          </p>
+        </div>
+        {versionOptions.length > 0 && (
+          <div className="flex shrink-0 items-center gap-2">
+            <label
+              className="hidden font-display text-[0.65rem] uppercase tracking-widest text-gold-dark sm:inline"
+              htmlFor="version-select"
             >
-              <div ref={messageViewportRef} className="flex-1 min-h-0 mb-4">
-                <List
-                  rowComponent={MessageRow}
-                  rowCount={messages.length}
-                  rowHeight={(index) => messageRowHeights[index] ?? MESSAGE_BASE_HEIGHT}
-                  rowProps={{ messages }}
-                  overscanCount={2}
-                  style={{ height: viewportHeight, width: '100%' }}
-                  listRef={virtualListRef}
+              版本
+            </label>
+            <Select
+              id="version-select"
+              aria-label="文案版本"
+              value={currentVersion >= 0 ? currentVersion : undefined}
+              onChange={handleVersionSelect}
+              className="min-w-[10rem] sm:min-w-[12rem]"
+              placeholder="选择版本"
+              size="middle"
+            >
+              {versionOptions.map((version) => (
+                <Select.Option key={version.id} value={version.id}>
+                  V{version.id + 1} · {formatDateTime(version.timestamp)}
+                  {version.title ? ` · ${version.title}` : ''}
+                </Select.Option>
+              ))}
+            </Select>
+          </div>
+        )}
+      </header>
+
+      <div
+        ref={threadRef}
+        id="studio-thread"
+        role="log"
+        aria-live="polite"
+        aria-relevant="additions"
+        aria-label="对话记录"
+        className="chat-thread min-h-0 flex-1 overflow-y-auto"
+      >
+        <div className="mx-auto w-full max-w-3xl px-4 py-6 sm:px-6">
+          {thread.map((item) => {
+            if (item.type === 'welcome') {
+              return (
+                <div key={item.id} className="turn-segment turn-segment--welcome">
+                  <ChatMessage
+                    role="assistant"
+                    content={item.content}
+                    timestamp={item.timestamp}
+                  />
+                </div>
+              );
+            }
+
+            if (item.type === 'turn') {
+              return (
+                <ConversationTurn
+                  key={item.id}
+                  turn={item}
+                  isActive={currentVersion === item.versionId}
                 />
+              );
+            }
+
+            if (item.type === 'pending') {
+              return (
+                <PendingTurn key={item.id} pending={item}>
+                  <AgentLogs
+                    key={`${generationEpoch}-${finishTask}`}
+                    logs={logs}
+                    isCollapse={false}
+                    isLoading={isGenerating}
+                    title="思考过程"
+                    variant="embedded"
+                  />
+                </PendingTurn>
+              );
+            }
+
+            return null;
+          })}
+        </div>
+      </div>
+
+      <div className="chat-composer px-4 py-4 sm:px-6">
+        <div className="mx-auto w-full max-w-3xl">
+          <div className="chat-composer-box overflow-hidden rounded-sm">
+            <label className="sr-only" htmlFor="studio-prompt">
+              描述你想创作的小红书内容
+            </label>
+            <TextArea
+              id="studio-prompt"
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="描述你想创作的小红书内容…（Enter 发送，Shift+Enter 换行）"
+              autoSize={{ minRows: 1, maxRows: 6 }}
+              disabled={isGenerating}
+              aria-describedby="studio-prompt-hint"
+            />
+            <div className="flex items-center justify-between gap-2 border-t border-gold/15 px-3 py-2">
+              <p
+                id="studio-prompt-hint"
+                className="font-body text-xs italic text-ink-muted"
+              >
+                {isGenerating
+                  ? '生成中…，可随时停止'
+                  : `${completedTurns.length > 0 ? `已有 ${completedTurns.length} 个版本 · ` : ''}新消息将出现在上一轮结果下方`}
+              </p>
+              <div className="flex shrink-0 gap-2">
+                {isGenerating ? (
+                  <Button
+                    danger
+                    type="primary"
+                    size="small"
+                    icon={<StopOutlined />}
+                    onClick={handleStopGeneration}
+                    className="!font-display !text-xs !uppercase !tracking-wider"
+                  >
+                    停止
+                  </Button>
+                ) : (
+                  <Button
+                    type="primary"
+                    size="small"
+                    icon={<SendOutlined />}
+                    onClick={handleSubmit}
+                    disabled={!inputValue.trim() || Boolean(pendingTurn)}
+                    className="!font-display !text-xs !uppercase !tracking-wider"
+                  >
+                    发送
+                  </Button>
+                )}
               </div>
-
-              <div className="flex flex-col gap-2 sm:flex-row">
-                <Input
-                  value={inputValue}
-                  onChange={(e) => setInputValue(e.target.value)}
-                  placeholder="请输入您的需求..."
-                  onPressEnter={handleSubmit}
-                  className="flex-1"
-                />
-                <Space>
-                  {isGenerating ? (
-                    <Button
-                      danger
-                      type="primary"
-                      icon={<StopOutlined />}
-                      onClick={handleStopGeneration}
-                    >
-                      停止生成
-                    </Button>
-                  ) : (
-                    <Button
-                      type="primary"
-                      icon={<SendOutlined />}
-                      onClick={handleSubmit}
-                      disabled={isGenerating}
-                    >
-                      发送
-                    </Button>
-                  )}
-                </Space>
-              </div>
-            </Card>
-
-            {/* 右侧内容区 */}
-            <div className="flex min-w-0 flex-1 flex-col overflow-x-hidden lg:h-full lg:overflow-y-auto">
-              {/* 版本选择器 */}
-              <Card title="文案版本" extra={<HistoryOutlined />}>
-                <Select
-                  value={currentVersion}
-                  onChange={handleVersionSelect}
-                  className="w-full"
-                  placeholder="选择版本"
-                >
-                  {versions.map((version) => (
-                    <Select.Option key={version.id} value={version.id}>
-                      V{version.id + 1} -{" "}
-                      {new Date(version.timestamp).toLocaleString()}
-                    </Select.Option>
-                  ))}
-                </Select>
-              </Card>
-
-              {/* 生成结果展示 */}
-              {result ? (
-                <Card title="生成结果" className="mt-4">
-                  <ResultDisplay result={result} />
-                </Card>
-              ) : null}
-
-              {/* Agent 日志 */}
-              <AgentLogs
-                key={`${generationEpoch}-${finishTask}`}
-                logs={logs}
-                isCollapse={finishTask}
-                isLoading={isGenerating}
-              />
             </div>
           </div>
-        </Content>
-      </Layout>
-    </Layout>
+        </div>
+      </div>
+    </main>
   );
 };
 
