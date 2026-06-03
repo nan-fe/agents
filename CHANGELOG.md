@@ -2,6 +2,39 @@
 
 All notable changes to this project will be documented in this file.
 
+### Changed 2026-06-02
+
+- **Atelier 视觉与设计系统（`frontend-ts` / `frontend-share`）**
+  - 统一 Art Deco + 油画质感「创作画室」主题：Cinzel / Cormorant Garamond、`atelier-*` 组件与 Tailwind 色板（`frontend-ts/src/theme/`、`index.css`、`globals.css`）
+  - `frontend-share` 首页、登录/注册、分享页、404 与错误页接入同一套面板与装饰样式；`layout` 使用 `next/font` 加载字体
+  - 新增 `frontend-share/src/lib/format.ts`、`frontend-ts/src/utils/format.ts`：`Intl.DateTimeFormat` 统一时间展示
+
+- **Studio 对话体验重构（`frontend-ts`）**
+  - 布局改为窄侧栏 + 居中对话流 + 底部输入区（类 DeepSeek）；侧栏「新对话」通过 `resetSessionId()` 重置会话并 remount `DialogContent`
+  - 对话线程模型：`welcome` / `turn` / `pending` 按时间顺序渲染；每轮用户气泡与助手回复分离，生成结果独立内容面板
+  - 新增 `chat-avatar`、`chat-message`、`conversation-turn`、`pending-turn`；版本选择器 + `version-anchor-*` 滚动定位
+  - 退出登录改为侧栏 `<a href="/logout">`，移除顶栏按钮
+
+- **思考过程展示**
+  - 生成中与完成后均可查看 Agent 日志；完成后写入 `TurnThreadItem.logs` 持久化
+  - 柔和辅助样式面板 + Step 时间线；展开/收起使用上下箭头；滚动区自动跟随最新日志
+  - `agent-logs` 移除 Ant Design Collapse，改为自定义嵌入式折叠
+
+- **可访问性与交互规范**
+  - Skip link、`main` 地标、`aria-live`、表单 label、`prefers-reduced-motion`、`:focus-visible` 等 Web Interface Guidelines 项落地
+  - `result-display` 分享链使用 `useActionState`；`session.ts` 统一管理 `session_id`
+
+- **LangSmith 可观测性（后端）**
+  - `llm_factory` 支持 `agent_name` / `prompt_version` / `model_name` metadata；结构化解析成功/失败上报 `parse_success` feedback
+  - Copywriter、Reviewer、编排意图/路由调用补齐版本标记
+  - `pipeline_resolver`：`@traceable` 包裹 `resolve_pipeline`；fallback 路由上报 LangSmith `fallback_route` feedback
+
+- **分享门户与登出**
+  - `frontend-share` `/logout` 同时支持 `GET` 与 `POST`，修复创作台 `location.assign('/logout')` 返回 405
+
+- **评测脚本**
+  - `evaluate_copywriter.py` 评估 LLM 改为 SiliconFlow `GLM-5.1` 配置
+
 ### Changed 2026-05-31
 
 - **编排层 Planner / Router 职责收敛**

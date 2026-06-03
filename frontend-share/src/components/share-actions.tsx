@@ -8,12 +8,6 @@ type ShareActionsProps = {
   hashtags: string[];
 };
 
-const buttonClass =
-  'rounded-full border border-slate-300 bg-white px-4 py-2.5 text-slate-700 transition hover:border-slate-400 hover:text-slate-900';
-
-const primaryButtonClass =
-  'rounded-full border border-indigo-600 bg-indigo-600 px-4 py-2.5 text-white transition hover:bg-indigo-700';
-
 const copyText = async (text: string) => {
   if (navigator.clipboard?.writeText) {
     await navigator.clipboard.writeText(text);
@@ -42,7 +36,7 @@ const ShareActions = ({
       [title, content, hashtags.map((tag) => `#${tag}`).join(' ')]
         .filter(Boolean)
         .join('\n\n'),
-    [content, hashtags, title]
+    [content, hashtags, title],
   );
 
   useEffect(() => {
@@ -61,29 +55,37 @@ const ShareActions = ({
   };
 
   return (
-    <div className="mt-7 flex flex-wrap gap-3">
+    <div className="mt-8 flex flex-wrap gap-3">
+      <p aria-live="polite" className="sr-only">
+        {copied ? `已复制${copied}` : ''}
+      </p>
       <button
-        className={primaryButtonClass}
+        className="atelier-btn-primary"
         type="button"
         onClick={() => handleCopy('链接', currentUrl)}
       >
-        复制链接
+        {copied === '链接' ? '已复制' : '复制链接'}
       </button>
       <button
-        className={buttonClass}
+        className="atelier-btn-ghost"
         type="button"
         onClick={() => handleCopy('文案', shareText)}
       >
-        复制文案
+        {copied === '文案' ? '已复制' : '复制文案'}
       </button>
-      <a className={buttonClass} href={xUrl} target="_blank" rel="noreferrer">
+      <a
+        className="atelier-btn-ghost"
+        href={xUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+      >
         分享到 X
       </a>
       <a
-        className={buttonClass}
+        className="atelier-btn-ghost"
         href={weiboUrl}
         target="_blank"
-        rel="noreferrer"
+        rel="noopener noreferrer"
       >
         分享到微博
       </a>

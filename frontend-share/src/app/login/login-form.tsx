@@ -49,44 +49,46 @@ const LoginForm = ({ returnUrl }: LoginFormProps) => {
     <form action={formAction} className="space-y-5">
       <input name="returnUrl" type="hidden" value={returnUrl} />
       <div className="space-y-2">
-        <label className="block text-sm font-medium text-gray-700" htmlFor="username">
+        <label className="atelier-label" htmlFor="username">
           账号
         </label>
         <input
           autoComplete="username"
-          className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-gray-900 outline-none ring-indigo-200 transition focus:ring-2"
+          autoCapitalize="off"
+          spellCheck={false}
+          className="atelier-input"
           id="username"
           name="username"
-          placeholder="请输入账号"
+          placeholder="例如：creator_demo…"
           required
           type="text"
         />
       </div>
       <div className="space-y-2">
-        <label className="block text-sm font-medium text-gray-700" htmlFor="password">
+        <label className="atelier-label" htmlFor="password">
           密码
         </label>
         <input
           autoComplete="current-password"
-          className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-gray-900 outline-none ring-indigo-200 transition focus:ring-2"
+          className="atelier-input"
           id="password"
           name="password"
-          placeholder="请输入密码"
+          placeholder="请输入密码…"
           required
           type="password"
         />
       </div>
       {state.error ? (
-        <p className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-600">
+        <p className="atelier-alert-error" role="alert">
           {state.error}
         </p>
       ) : null}
       <button
-        className="w-full rounded-full bg-indigo-600 px-5 py-3 font-medium text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-70"
+        className="atelier-btn-primary w-full"
         disabled={isPending}
         type="submit"
       >
-        {isPending ? '登录中...' : '登录并进入创作台'}
+        {isPending ? '登录中…' : '登录并进入创作台'}
       </button>
     </form>
   );

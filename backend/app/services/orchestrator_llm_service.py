@@ -144,6 +144,8 @@ class OrchestratorLLMService:
                     "intent_guidance": _routing_intent_guidance(intent),
                 },
                 parser=parser,
+                agent_name="OrchestratorRouting",
+                prompt_version="orchestrator_routing_v1",
                 **self._llm_orch_kwargs(0.3),
             )
             return RoutingDecision(**raw)
@@ -172,6 +174,8 @@ class OrchestratorLLMService:
             r = await llm_factory.run_chain_with_dynamic_tokens(
                 prompt_template=self.intent_prompt,
                 chain_input={"user_input": user_input, "chat_history": history_str},
+                agent_name="OrchestratorIntent",
+                prompt_version="orchestrator_intent_v1",
                 **self._llm_orch_kwargs(0.1),
             )
             return str(r.content).strip()

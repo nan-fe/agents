@@ -98,6 +98,8 @@ class ReviewerAgent(BaseAgent):
                 parser=self.parser,
                 model_name=settings.BASE_MODEL,
                 temperature=0.1,
+                agent_name="ReviewerAgent",
+                prompt_version="reviewer_v1",
             )
             review = self._normalize_result(result)
             status = "通过" if review.approved else "需调整"

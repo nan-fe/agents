@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Card, Button, List, Empty, Popconfirm } from 'antd';
+import { Card, List, Empty } from 'antd';
 import { HistoryOutlined, RightOutlined } from '@ant-design/icons';
 import { formatTimestamp } from '../utils/helper';
 
@@ -18,26 +18,30 @@ interface HistoryPanelProps {
 }
 
 const HistoryPanel = (props: HistoryPanelProps) => {
-  const { history, onSelectHistory, onDeleteHistory, currentSessionId } = props;
+  const { history, onSelectHistory, currentSessionId } = props;
   const [expanded, setExpanded] = useState(true);
-
-  const handleDelete = (id: string) => {
-    onDeleteHistory(id);
-  };
 
   return (
     <Card
       title={
-        <div className="flex items-center justify-between cursor-pointer" onClick={() => setExpanded(!expanded)}>
-          <span className="font-bold flex items-center gap-2">
-            <HistoryOutlined />
+        <button
+          type="button"
+          className="flex w-full cursor-pointer items-center justify-between border-0 bg-transparent p-0 text-left"
+          aria-expanded={expanded}
+          onClick={() => setExpanded((value) => !value)}
+        >
+          <span className="flex items-center gap-2 font-bold">
+            <HistoryOutlined aria-hidden="true" />
             历史记录
           </span>
-          <RightOutlined className={`transition-transform ${expanded ? 'rotate-90' : ''}`} />
-        </div>
+          <RightOutlined
+            aria-hidden="true"
+            className={`transition-transform ${expanded ? 'rotate-90' : ''}`}
+          />
+        </button>
       }
-      className="w-[280px] flex-shrink-0"
-      bodyStyle={{ padding: 0 }}
+      className="atelier-panel-frame w-[280px] flex-shrink-0"
+      styles={{ body: { padding: 0 } }}
     >
       {expanded && (
         <div className="p-4">
@@ -47,24 +51,25 @@ const HistoryPanel = (props: HistoryPanelProps) => {
             <List
               dataSource={history}
               renderItem={(item) => (
-                <List.Item
-                  key={item.id}
-                  className={`cursor-pointer p-3 rounded-lg mb-2 transition-all ${
-                    item.id === currentSessionId
-                      ? 'bg-purple-50 border border-purple-200'
-                      : 'hover:bg-gray-50'
-                  }`}
-                  onClick={() => onSelectHistory(item)}
-
-                >
-                  <div className="flex flex-col">
-                    <span className="text-sm font-medium text-gray-800 truncate">
-                      {item.title || item.userInput}
-                    </span>
-                    <span className="text-xs text-gray-400 mt-1">
-                      {formatTimestamp(item.timestamp)}
-                    </span>
-                  </div>
+                <List.Item className="!border-0 !p-0">
+                  <button
+                    type="button"
+                    className={`mb-2 w-full cursor-pointer rounded-sm p-3 text-left transition-colors ${
+                      item.id === currentSessionId
+                        ? 'border border-gold bg-gold/10'
+                        : 'hover:bg-canvas/80'
+                    }`}
+                    onClick={() => onSelectHistory(item)}
+                  >
+                    <div className="flex flex-col">
+                      <span className="truncate font-body text-sm font-medium text-ink">
+                        {item.title || item.userInput}
+                      </span>
+                      <span className="mt-1 font-body text-xs italic text-ink-muted">
+                        {formatTimestamp(item.timestamp)}
+                      </span>
+                    </div>
+                  </button>
                 </List.Item>
               )}
             />

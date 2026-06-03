@@ -196,6 +196,8 @@ class CopywriterAgent(BaseAgent):
                 model_name=settings.BASE_MODEL,
                 temperature=0.7,
                 history=history,
+                agent_name="CopywriterAgent",
+                prompt_version="copywriter_v2",
             )
             print(f"生成符合平台特点的文案 result: {result}")
             normalized = self._normalize_copywriting_result(result, topic)
