@@ -11,8 +11,6 @@ export const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL ??
   (import.meta.env.DEV ? "http://localhost:8000" : "");
 
-const DEFAULT_SHARE_PORT = "3001";
-
 const getShareBaseUrl = () => {
   if (import.meta.env.VITE_SHARE_BASE_URL) {
     return import.meta.env.VITE_SHARE_BASE_URL;
@@ -26,7 +24,7 @@ const getShareBaseUrl = () => {
     return "";
   }
 
-  return `${window.location.protocol}//${window.location.hostname}:${DEFAULT_SHARE_PORT}`;
+  return window.location.origin;
 };
 
 export const SHARE_BASE_URL = getShareBaseUrl();
