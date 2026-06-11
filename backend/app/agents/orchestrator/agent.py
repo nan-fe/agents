@@ -22,6 +22,8 @@ from .review_repair_router import (
     route_review_failure,
 )
 from .session_history import WritingSessionHistory
+from app.memory import project_memory
+from app.memory.project_memory import new_project_id
 from typing import Optional, Callable, Dict, List
 import time
 from langchain_core.messages import HumanMessage
@@ -72,7 +74,13 @@ class DialogOrchestratorAgent:
         return self.session_histories[session_id]
 
     async def run(
-        self, user_input: str, session_id: str, log_callback: Optional[Callable] = None
+        self,
+        user_input: str,
+        session_id: str,
+        log_callback: Optional[Callable] = None,
+        *,
+        project_id: Optional[str] = None,
+        user_id: Optional[str] = None,
     ) -> dict:
         """运行多Agent协作流程"""
         session_id = (session_id or "").strip()
@@ -87,6 +95,16 @@ class DialogOrchestratorAgent:
         session_history = self.get_session_history(session_id)
         session_history.add_message(HumanMessage(content=user_input))
 
+        resolved_project_id = (
+            (project_id or "").strip()
+            or session_history.project_id
+            or new_project_id()
+        )
+        session_history.bind_project(resolved_project_id)
+        await self._hydrate_session_from_project_memory(
+            session_history, resolved_project_id, log_callback
+        )
+
         await emit_log(log_callback, "Orchestrator", "开始智能任务编排...")
 
         context = ExecutionContext()
@@ -94,7 +112,9 @@ class DialogOrchestratorAgent:
             user_input, session_history, context, log_callback
         )
         if plan.early_exit is not None:
-            return plan.early_exit
+            early_exit = dict(plan.early_exit)
+            early_exit["project_id"] = resolved_project_id
+            return early_exit
 
         await self._execute_agent_pipeline(
             plan.pipeline_order, context, user_input, log_callback
@@ -109,6 +129,35 @@ class DialogOrchestratorAgent:
 
         if context.review.failure_category != "policy_block":
             session_history.update_result(final_result)
+            session_history.update_plan(context.get_planning())
+            session_history.last_intent = plan.intent
+
+            parent_version_id = session_history.current_version_id
+            if parent_version_id is None:
+                latest = await project_memory.get_latest_version(
+                    resolved_project_id
+                )
+                if latest is not None:
+                    parent_version_id = latest.version_id
+                    session_history.bind_version(
+                        latest.version_id, latest.version_label
+                    )
+
+            version_row = await project_memory.append_version(
+                project_id=resolved_project_id,
+                parent_version_id=parent_version_id,
+                intent=plan.intent,
+                user_input=user_input,
+                result=final_result,
+                planning=context.get_planning(),
+            )
+            session_history.bind_version(
+                version_row.version_id, version_row.version_label
+            )
+            final_result["project_id"] = resolved_project_id
+            final_result["version_id"] = version_row.version_id
+            final_result["version"] = version_row.version_label
+            final_result["version_number"] = version_row.version_number
         else:
             session_history.update_result({
                 "title": "",
@@ -120,11 +169,35 @@ class DialogOrchestratorAgent:
                 "failure_category": "policy_block",
                 "error_code": "POLICY_BLOCK",
             })
-        session_history.update_plan(context.get_planning())
+            session_history.update_plan(context.get_planning())
+            final_result["project_id"] = resolved_project_id
 
         await emit_log(log_callback, "Orchestrator", "多 Agent 协作完成，正在整理结果")
 
         return final_result
+
+    async def _hydrate_session_from_project_memory(
+        self,
+        session_history: WritingSessionHistory,
+        project_id: str,
+        log_callback: Optional[Callable] = None,
+    ) -> None:
+        """页面重进后 Working Memory 为空时，从 versions 恢复上轮结果。"""
+        if session_history.get_last_result():
+            return
+
+        latest = await project_memory.get_latest_version(project_id)
+        if latest is None:
+            return
+
+        session_history.update_result(latest.result)
+        session_history.update_plan(latest.planning or {})
+        session_history.bind_version(latest.version_id, latest.version_label)
+        await emit_log(
+            log_callback,
+            "Orchestrator",
+            f"已从项目记忆恢复 {latest.version_label}",
+        )
 
     async def _run_review_repair_loop(
         self,

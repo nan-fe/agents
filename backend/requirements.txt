@@ -21,3 +21,5 @@ chromadb
 pandas
 bs4
 rank-bm25
+sqlalchemy>=2.0
+aiosqlite

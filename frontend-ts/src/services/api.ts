@@ -30,6 +30,13 @@ const getShareBaseUrl = () => {
 export const SHARE_BASE_URL = getShareBaseUrl();
 
 export type UserInput = components["schemas"]["UserInput"];
+export type ProjectFinalizeRequest = components["schemas"]["ProjectFinalizeRequest"];
+export type ProjectFinalizeResponse = components["schemas"]["ProjectFinalizeResponse"];
+export type ProjectCreateResponse = components["schemas"]["ProjectCreateResponse"];
+export type ProjectConversationResponse =
+  components["schemas"]["ProjectConversationResponse"];
+export type ProjectListResponse = components["schemas"]["ProjectListResponse"];
+export type ProjectListItem = components["schemas"]["ProjectListItem"];
 
 export type ShareResult = {
   title?: string;
@@ -52,6 +59,81 @@ export type DialogSSEType = {
   request: UserInput;
   log_callback: (from: string, message: string) => void;
   streamIngestor?: StreamIngestor;
+};
+
+export const createProject = async (
+  userId?: string,
+): Promise<ProjectCreateResponse> => {
+  const response = await fetch(`${API_BASE_URL}/projects`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(userId ? { user_id: userId } : {}),
+  });
+
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+
+  return response.json();
+};
+
+export const getProjects = async (
+  userId?: string,
+): Promise<ProjectListResponse> => {
+  const query = userId ? `?user_id=${encodeURIComponent(userId)}` : "";
+  const response = await fetch(`${API_BASE_URL}/projects${query}`);
+
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+
+  return response.json();
+};
+
+export const getProjectConversation = async (
+  projectId: string,
+): Promise<ProjectConversationResponse> => {
+  const response = await fetch(
+    `${API_BASE_URL}/projects/${encodeURIComponent(projectId)}`,
+  );
+
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+
+  return response.json();
+};
+
+export const finalizeProject = async (
+  payload: ProjectFinalizeRequest,
+): Promise<ProjectFinalizeResponse> => {
+  const response = await fetch(`${API_BASE_URL}/projects/finalize`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+    keepalive: true,
+  });
+
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+
+  return response.json();
+};
+
+export const finalizeProjectBeacon = (payload: ProjectFinalizeRequest): void => {
+  if (typeof navigator === "undefined" || !navigator.sendBeacon) {
+    return;
+  }
+
+  const blob = new Blob([JSON.stringify(payload)], {
+    type: "application/json",
+  });
+  navigator.sendBeacon(`${API_BASE_URL}/projects/finalize`, blob);
 };
 
 export const createDialogGenerateRequest = (

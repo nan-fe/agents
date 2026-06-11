@@ -11,12 +11,22 @@ from sse_starlette.sse import EventSourceResponse
 
 from app.agents.orchestrator.agent import DialogOrchestratorAgent
 from app.config import settings
+from app.memory import project_memory
+from app.memory.db import close_db, init_db
 from app.models.schemas import (
+    ProjectConversationResponse,
+    ProjectCreateRequest,
+    ProjectCreateResponse,
+    ProjectListItem,
+    ProjectListResponse,
+    ProjectFinalizeRequest,
+    ProjectFinalizeResponse,
     ShareCreateRequest,
     ShareCreateResponse,
     ShareSnapshot,
     UserInput,
     SSEMessage,
+    VersionSnapshot,
 )
 from app.security.input_guard import check_input_security, safety_rejection_payload
 from app.services.dialog_stream_store import DialogStream, dialog_stream_store
@@ -37,6 +47,8 @@ orchestrator = DialogOrchestratorAgent()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """后台预热 RAG 向量索引，便于就绪探针与首包体验。"""
+    await init_db()
+
     async def _warm_rag():
         try:
             await orchestrator.rag_agent.ensure_index_ready()
@@ -52,6 +64,7 @@ async def lifespan(app: FastAPI):
             await t
         except asyncio.CancelledError:
             pass
+    await close_db()
 
 
 app = FastAPI(title=settings.APP_NAME, debug=settings.DEBUG, lifespan=lifespan)
@@ -165,6 +178,9 @@ async def _run_dialog_generation(
     stream: DialogStream,
     user_input: str,
     session_id: str,
+    *,
+    project_id: Optional[str] = None,
+    user_id: Optional[str] = None,
 ) -> None:
     async def log_callback(
         agent_key: str,
@@ -198,7 +214,11 @@ async def _run_dialog_generation(
 
         try:
             final_result = await orchestrator.run(
-                user_input, session_id, log_callback
+                user_input,
+                session_id,
+                log_callback,
+                project_id=project_id,
+                user_id=user_id,
             )
         except asyncio.CancelledError:
             raise
@@ -266,11 +286,20 @@ async def _start_generation_on_stream(
     stream: DialogStream,
     user_input: str,
     session_id: str,
+    *,
+    project_id: Optional[str] = None,
+    user_id: Optional[str] = None,
 ) -> asyncio.Queue:
     stream.is_complete = False
     subscriber_queue = await stream.subscribe()
     stream.task = asyncio.create_task(
-        _run_dialog_generation(stream, user_input, session_id)
+        _run_dialog_generation(
+            stream,
+            user_input,
+            session_id,
+            project_id=project_id,
+            user_id=user_id,
+        )
     )
     return subscriber_queue
 
@@ -280,6 +309,9 @@ async def generate_dialog_event_stream(
     user_input: str,
     session_id: str,
     last_event_id: Optional[str] = None,
+    *,
+    project_id: Optional[str] = None,
+    user_id: Optional[str] = None,
 ):
     is_resume = bool((last_event_id or "").strip())
 
@@ -335,7 +367,11 @@ async def generate_dialog_event_stream(
             )
             stream = await dialog_stream_store.create_stream(session_id, user_input)
             subscriber_queue = await _start_generation_on_stream(
-                stream, user_input, session_id
+                stream,
+                user_input,
+                session_id,
+                project_id=project_id,
+                user_id=user_id,
             )
             async for event in _stream_subscribed_events(
                 request, stream, subscriber_queue
@@ -372,11 +408,109 @@ async def generate_dialog_event_stream(
 
     stream = await dialog_stream_store.create_stream(session_id, user_input)
     subscriber_queue = await _start_generation_on_stream(
-        stream, user_input, session_id
+        stream,
+        user_input,
+        session_id,
+        project_id=project_id,
+        user_id=user_id,
     )
 
     async for event in _stream_subscribed_events(request, stream, subscriber_queue):
         yield event
+
+
+@app.get("/projects", response_model=ProjectListResponse)
+async def list_projects(user_id: Optional[str] = None):
+    """进入页面时拉取项目列表，按用户最近打开时间降序，默认定位第一个。"""
+    rows = await project_memory.list_projects(user_id=user_id)
+    items: list[ProjectListItem] = []
+    for row in rows:
+        count = await project_memory.version_count(row.project_id)
+        items.append(
+            ProjectListItem(
+                project_id=row.project_id,
+                topic=row.topic or "",
+                final_version=row.final_version,
+                project_summary=row.project_summary or "",
+                version_count=count,
+                updated_at=row.updated_at,
+                last_accessed_at=row.last_accessed_at,
+                finalized=count > 0 and bool(row.final_version),
+            )
+        )
+    return ProjectListResponse(projects=items)
+
+
+@app.post("/projects", response_model=ProjectCreateResponse)
+async def create_project(payload: ProjectCreateRequest | None = None):
+    """新建对话时创建 project 并写入列表。"""
+    body = payload or ProjectCreateRequest()
+    project_id = await project_memory.create_project(user_id=body.user_id)
+    return ProjectCreateResponse(project_id=project_id)
+
+
+@app.get("/projects/{project_id}", response_model=ProjectConversationResponse)
+async def get_project_conversation(project_id: str):
+    """加载指定 project 的对话（从 versions 重建）。"""
+    project_id = (project_id or "").strip()
+    if not project_id:
+        raise HTTPException(status_code=400, detail="project_id 不能为空")
+
+    await project_memory.touch_project(project_id)
+    versions = await project_memory.list_versions(project_id)
+    project = await project_memory.get_project(project_id)
+
+    snapshots = [
+        VersionSnapshot(
+            version_id=v.version_id,
+            version_label=v.version_label,
+            version_number=v.version_number,
+            parent_version_id=v.parent_version_id,
+            summary=v.summary,
+            user_input=v.user_input,
+            result=v.result,
+            intent=v.intent,
+            created_at=v.created_at,
+        )
+        for v in versions
+    ]
+
+    latest_label = versions[-1].version_label if versions else None
+    return ProjectConversationResponse(
+        project_id=project_id,
+        topic=(project.topic if project and project.topic else None)
+        or latest_label,
+        final_version=(project.final_version if project else None) or latest_label,
+        project_summary=project.project_summary if project else None,
+        versions=snapshots,
+    )
+
+
+@app.post("/projects/finalize", response_model=ProjectFinalizeResponse)
+async def finalize_project(payload: ProjectFinalizeRequest):
+    """页面关闭或新建话题时，将 versions 汇总写入 projects 表。"""
+    project_id = (payload.project_id or "").strip()
+    if not project_id:
+        raise HTTPException(status_code=400, detail="project_id 不能为空")
+
+    versions = await project_memory.list_versions(project_id)
+    if not versions:
+        return ProjectFinalizeResponse(
+            project_id=project_id,
+            finalized=False,
+            version_count=0,
+            message="无版本记录，跳过汇总",
+        )
+
+    row = await project_memory.finalize_project(
+        project_id, user_id=payload.user_id
+    )
+    return ProjectFinalizeResponse(
+        project_id=project_id,
+        finalized=row is not None,
+        final_version=row.final_version if row else None,
+        version_count=len(versions),
+    )
 
 
 @app.post("/dialog/generate")
@@ -389,6 +523,8 @@ async def generateDialog(request: Request, user_input: UserInput):
             user_input.prompt,
             user_input.session_id,
             user_input.last_event_id,
+            project_id=user_input.project_id,
+            user_id=user_input.user_id,
         ),
         media_type="text/event-stream",
         headers={

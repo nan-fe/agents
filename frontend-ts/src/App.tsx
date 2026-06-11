@@ -5,9 +5,9 @@ import {
   UserOutlined,
   VideoCameraOutlined,
 } from '@ant-design/icons';
-import { Layout, Menu } from 'antd';
+import { Layout, Menu, Modal, message } from 'antd';
 import DialogContent from './pages/dialog-content';
-import { resetSessionId } from './utils/session';
+import { startNewConversation } from './utils/new-conversation';
 
 import './App.css';
 
@@ -25,8 +25,22 @@ const App: React.FC = () => {
   const [chatSessionKey, setChatSessionKey] = useState(0);
 
   const handleNewChat = () => {
-    resetSessionId();
-    setChatSessionKey((key) => key + 1);
+    Modal.confirm({
+      title: '开始新对话？',
+      content: '当前会话将保存到项目档案，并创建新的创作项目。',
+      okText: '新对话',
+      cancelText: '取消',
+      onOk: async () => {
+        try {
+          await startNewConversation();
+          setChatSessionKey((key) => key + 1);
+          message.success('已开始新对话');
+        } catch (error) {
+          console.error('开始新对话失败:', error);
+          message.error('开始新对话失败，请稍后重试');
+        }
+      },
+    });
   };
 
   return (
