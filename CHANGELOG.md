@@ -2,6 +2,33 @@
 
 All notable changes to this project will be documented in this file.
 
+### Changed 2026-06-11 — PR1：编排短期记忆（L1）
+
+为内容创作对话补充 **L1 短期记忆**：在现有 `session_histories` + `ExecutionContext` 状态机之上，增加 SQLite 持久化的 `projects` / `versions` 表，使多轮对话可跨刷新恢复、可在历史项目中切换。
+
+- **后端（`backend/app/memory/`）**
+  - 新增 `projects`、`versions` ORM 与 `ProjectMemoryService`：`versions` 在每次成功生成后即时写入；`projects` 在页面关闭（`pagehide` beacon）或侧栏「新对话」时通过 `finalize` 汇总写入
+  - 新增 API：`GET /projects`、`POST /projects`、`GET /projects/{project_id}`、`POST /projects/finalize`
+  - 编排器绑定 `project_id`，内存会话为空时从 DB 水合；成功结果返回 `project_id` / `version_id` / `version`
+  - `updated_at` 表示内容最近变更；`last_accessed_at` 表示用户最近打开，历史列表按后者降序
+  - `UTCDateTime` 类型修复 SQLite 读回无时区导致的前端时间偏差
+
+- **前端（`frontend-ts`）**
+  - `localStorage` 持久化 `project_id` + `session_id`；首屏拉取项目列表并恢复最近打开的对话
+  - 侧栏「新对话」：finalize 当前项目 → 新建 session + project
+  - 顶栏历史抽屉：按 `last_accessed_at` 展示项目列表，点击切换并加载 `versions` 重建线程
+  - `parseApiDateTime` 统一将 API UTC 时间转本地展示
+
+- **部署**
+  - `docker-compose.yml` 挂载 `./data/memory`，`DATABASE_URL=sqlite+aiosqlite:////data/memory/memory.db`
+
+**PR1.1 待补充（未在本 PR 交付）**
+
+- `session_histories` 空闲超时驱逐（进程内会话与 DB 解耦后的内存回收）
+- 编排器在未收到 `project_id` 时 `new_project_id()` 兜底但未写 DB stub 的边界对齐
+- `GET /projects` 列表 `version_count` 的 N+1 查询优化
+- L2 长期记忆（跨项目用户偏好）与项目 JSON 索引
+
 ### Changed 2026-06-02
 
 - **Atelier 视觉与设计系统（`frontend-ts` / `frontend-share`）**

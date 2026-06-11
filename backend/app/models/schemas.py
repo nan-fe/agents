@@ -17,6 +17,67 @@ class UserInput(BaseModel):
     prompt: str
     session_id: str
     last_event_id: Optional[str] = None
+    project_id: Optional[str] = None
+    user_id: Optional[str] = None
+
+
+class ProjectFinalizeRequest(BaseModel):
+    """页面关闭或新建话题时，将 versions 汇总写入 projects。"""
+
+    project_id: str
+    session_id: Optional[str] = None
+    user_id: Optional[str] = None
+
+
+class ProjectFinalizeResponse(BaseModel):
+    project_id: str
+    finalized: bool
+    final_version: Optional[str] = None
+    version_count: int = 0
+    message: Optional[str] = None
+
+
+class ProjectCreateRequest(BaseModel):
+    user_id: Optional[str] = None
+
+
+class ProjectCreateResponse(BaseModel):
+    project_id: str
+
+
+class VersionSnapshot(BaseModel):
+    version_id: str
+    version_label: str
+    version_number: int
+    parent_version_id: Optional[str] = None
+    summary: str = ""
+    user_input: Optional[str] = None
+    result: dict
+    intent: Optional[str] = None
+    created_at: datetime
+
+
+class ProjectConversationResponse(BaseModel):
+    project_id: str
+    topic: Optional[str] = None
+    final_version: Optional[str] = None
+    project_summary: Optional[str] = None
+    versions: List[VersionSnapshot] = Field(default_factory=list)
+
+
+class ProjectListItem(BaseModel):
+    project_id: str
+    topic: str = ""
+    final_version: Optional[str] = None
+    project_summary: str = ""
+    version_count: int = 0
+    updated_at: datetime
+    last_accessed_at: datetime
+    finalized: bool = False
+
+
+class ProjectListResponse(BaseModel):
+    projects: List[ProjectListItem] = Field(default_factory=list)
 
 
 class PlanningResult(BaseModel):

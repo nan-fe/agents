@@ -103,7 +103,9 @@ async def _test_resume_orphan_restarts_full_pipeline_from_id_1(
     assert stream is not None
     stream.task = None
 
-    async def _fake_run_generation(target_stream, user_input, session_id_arg):
+    async def _fake_run_generation(
+        target_stream, user_input, session_id_arg, **kwargs
+    ):
         await target_stream.append_event(
             {"event": "message", "data": _log_payload("restart-1")}
         )
@@ -149,7 +151,9 @@ async def _test_resume_subscribes_running_task_without_duplicating_replay(
 
     gate = asyncio.Event()
 
-    async def _slow_run_generation(target_stream, user_input, session_id_arg):
+    async def _slow_run_generation(
+        target_stream, user_input, session_id_arg, **kwargs
+    ):
         await gate.wait()
         await target_stream.append_event(
             {"event": "message", "data": _log_payload("live-6")}

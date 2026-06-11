@@ -104,6 +104,63 @@ export interface components {
             session_id: string;
             /** Last Event Id */
             last_event_id?: string | null;
+            /** Project Id */
+            project_id?: string | null;
+            /** User Id */
+            user_id?: string | null;
+        };
+        /** ProjectFinalizeRequest */
+        ProjectFinalizeRequest: {
+            project_id: string;
+            session_id?: string | null;
+            user_id?: string | null;
+        };
+        /** ProjectFinalizeResponse */
+        ProjectFinalizeResponse: {
+            project_id: string;
+            finalized: boolean;
+            final_version?: string | null;
+            version_count: number;
+            message?: string | null;
+        };
+        /** ProjectCreateResponse */
+        ProjectCreateResponse: {
+            project_id: string;
+        };
+        /** VersionSnapshot */
+        VersionSnapshot: {
+            version_id: string;
+            version_label: string;
+            version_number: number;
+            parent_version_id?: string | null;
+            summary?: string;
+            user_input?: string | null;
+            result: Record<string, unknown>;
+            intent?: string | null;
+            created_at: string;
+        };
+        /** ProjectConversationResponse */
+        ProjectConversationResponse: {
+            project_id: string;
+            topic?: string | null;
+            final_version?: string | null;
+            project_summary?: string | null;
+            versions: components["schemas"]["VersionSnapshot"][];
+        };
+        /** ProjectListItem */
+        ProjectListItem: {
+            project_id: string;
+            topic?: string;
+            final_version?: string | null;
+            project_summary?: string;
+            version_count: number;
+            updated_at: string;
+            last_accessed_at: string;
+            finalized?: boolean;
+        };
+        /** ProjectListResponse */
+        ProjectListResponse: {
+            projects: components["schemas"]["ProjectListItem"][];
         };
         /** ValidationError */
         ValidationError: {

@@ -18,6 +18,12 @@ def test_session_history_messages_and_state() -> None:
     assert history.get_last_result()["title"] == "标题"
     assert history.get_last_plan()["topic"] == "防晒"
 
+    history.bind_project("proj_test123")
+    history.bind_version("ver_abc", "v2")
+    assert history.project_id == "proj_test123"
+    assert history.current_version_id == "ver_abc"
+    assert history.current_version_label == "v2"
+
     history.clear()
     assert history.get_messages() == []
     assert history.get_last_result() is None

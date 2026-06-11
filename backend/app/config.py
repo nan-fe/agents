@@ -1,6 +1,12 @@
+from pathlib import Path
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import Optional
 import os
+
+_DEFAULT_MEMORY_DB = (
+    Path(__file__).resolve().parent / "data" / "memory.db"
+)
 
 
 class Settings(BaseSettings):
@@ -39,6 +45,9 @@ class Settings(BaseSettings):
 
     # SSE 断点续传缓冲：生成完成后保留时长（秒），超时后释放内存
     DIALOG_STREAM_RETENTION_SECONDS: float = 1800.0
+
+    # Project Memory（SQLite 默认；生产可改为 postgresql+asyncpg://...）
+    DATABASE_URL: str = f"sqlite+aiosqlite:///{_DEFAULT_MEMORY_DB}"
 
     # 意图/路由等外层有 wait_for 的编排 LLM：默认不重试，避免退避 sleep 先于外层超时触发「生成失败」
     LLM_ORCHESTRATION_HTTP_RETRY_MAX_ATTEMPTS: int = 1

@@ -5,6 +5,10 @@ export type DialogResultData = {
   image_url: string;
   message?: string;
   error_code?: string;
+  project_id?: string;
+  version_id?: string;
+  version?: string;
+  version_number?: number;
 };
 
 export type AgentLogEntry = {

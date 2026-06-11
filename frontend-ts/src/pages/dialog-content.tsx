@@ -10,10 +10,13 @@ import { Input, Button, message, Modal, Select } from 'antd';
 import { SendOutlined, StopOutlined } from '@ant-design/icons';
 import {
   createDialogGenerateRequest,
+  createProject,
+  finalizeProjectBeacon,
   generateDialogContent,
   type UserInput,
 } from '../services/api';
 import AgentLogs from '../components/agent-logs';
+import ProjectHistoryDrawer from '../components/project-history-drawer';
 import ChatMessage from '../components/chat-message';
 import ConversationTurn from '../components/conversation-turn';
 import PendingTurn from '../components/pending-turn';
@@ -28,7 +31,15 @@ import {
 } from '../utils/sse-resume';
 import { createStreamIngestor } from '../utils/sse-stream-ingest';
 import { formatDateTime } from '../utils/format';
-import { getOrCreateSessionId } from '../utils/session';
+import {
+  bootstrapInitialConversation,
+  switchHistoryProject,
+} from '../utils/project-session-actions';
+import {
+  bindProjectId,
+  clearProjectId,
+  getOrCreateSessionId,
+} from '../utils/session';
 import {
   createInitialThread,
   type AgentLogEntry,
@@ -78,6 +89,7 @@ type GenerationDeps = {
 type GenerationPayload = {
   prompt: string;
   sessionId: string;
+  projectId: string | null;
   versionCount: number;
   pendingId: string;
   getCancelled: () => boolean;
@@ -88,7 +100,7 @@ type GenerationPayload = {
 const runDialogGeneration = async (
   payload: GenerationPayload,
 ): Promise<GenerationOutcome> => {
-  const { prompt, sessionId, getCancelled, deps } = payload;
+  const { prompt, sessionId, projectId, getCancelled, deps } = payload;
   let streamResult: DialogResultData | null = null;
 
   const streamIngestor = createStreamIngestor();
@@ -117,6 +129,7 @@ const runDialogGeneration = async (
           {
             prompt,
             session_id: sessionId,
+            ...(projectId ? { project_id: projectId } : {}),
             ...(lastEventId ? { last_event_id: lastEventId } : {}),
           } satisfies UserInput,
           signal,
@@ -157,6 +170,7 @@ const runDialogGeneration = async (
           request: {
             prompt,
             session_id: sessionId,
+            ...(projectId ? { project_id: projectId } : {}),
             ...(lastEventId ? { last_event_id: lastEventId } : {}),
           },
           log_callback: appendLog,
@@ -203,6 +217,15 @@ const runDialogGeneration = async (
   }
 };
 
+const ensureProjectId = async (currentProjectId: string | null): Promise<string> => {
+  if (currentProjectId) {
+    return currentProjectId;
+  }
+  const created = await createProject();
+  bindProjectId(created.project_id);
+  return created.project_id;
+};
+
 const executeDialogGeneration = async (
   payload: GenerationPayload,
   onSettled: () => void,
@@ -228,7 +251,11 @@ const DialogContent = () => {
   const [inputValue, setInputValue] = useState<string>('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationEpoch, setGenerationEpoch] = useState(0);
-  const [currentSessionId] = useState(getOrCreateSessionId);
+  const [currentSessionId, setCurrentSessionId] = useState(getOrCreateSessionId);
+  const [currentProjectId, setCurrentProjectId] = useState<string | null>(null);
+  const [isRestoring, setIsRestoring] = useState(true);
+  const projectIdRef = useRef<string | null>(currentProjectId);
+  const sessionIdRef = useRef(currentSessionId);
 
   const {
     state: logs,
@@ -286,9 +313,16 @@ const DialogContent = () => {
   };
 
   const scrollToVersion = (versionId: number) => {
-    document
-      .getElementById(`version-anchor-${versionId}`)
-      ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    const container = threadRef.current;
+    const anchor = document.getElementById(`version-anchor-${versionId}`);
+    if (!container || !anchor) {
+      return;
+    }
+    const offset = anchor.getBoundingClientRect().top - container.getBoundingClientRect().top;
+    container.scrollTo({
+      top: container.scrollTop + offset,
+      behavior: 'smooth',
+    });
   };
 
   useEffect(() => {
@@ -299,6 +333,75 @@ const DialogContent = () => {
     }
     scrollToBottom();
   }, [thread, logs, isGenerating, currentVersion]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    void bootstrapInitialConversation().then((result) => {
+      if (cancelled) {
+        return;
+      }
+
+      if (result.status === 'empty') {
+        clearProjectId();
+        setCurrentProjectId(null);
+        setThread(createInitialThread());
+        setCurrentVersion(-1);
+        setIsRestoring(false);
+        return;
+      }
+
+      if (result.status === 'error') {
+        message.warning('无法加载历史对话，将开始新对话');
+        clearProjectId();
+        setCurrentProjectId(null);
+        setThread(createInitialThread());
+        setCurrentVersion(-1);
+        setIsRestoring(false);
+        return;
+      }
+
+      bindProjectId(result.projectId);
+      setCurrentProjectId(result.projectId);
+      setThread(result.thread);
+      setCurrentVersion(result.latestVersionIndex);
+      if (result.latestVersionIndex >= 0) {
+        scrollIntentRef.current = {
+          type: 'version',
+          versionId: result.latestVersionIndex,
+        };
+      }
+      setIsRestoring(false);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    projectIdRef.current = currentProjectId;
+  }, [currentProjectId]);
+
+  useEffect(() => {
+    sessionIdRef.current = currentSessionId;
+  }, [currentSessionId]);
+
+  useEffect(() => {
+    const onPageHide = () => {
+      const projectId = projectIdRef.current;
+      if (!projectId) {
+        return;
+      }
+      finalizeProjectBeacon({
+        project_id: projectId,
+        session_id: sessionIdRef.current,
+      });
+    };
+
+    window.addEventListener('pagehide', onPageHide);
+    return () => window.removeEventListener('pagehide', onPageHide);
+  }, []);
 
   useEffect(() => {
     if (!isGenerating) {
@@ -318,6 +421,11 @@ const DialogContent = () => {
     const completedAt = Date.now();
     flushLogs();
     const capturedLogs = [...generationLogsRef.current];
+
+    if (resultData.project_id) {
+      bindProjectId(resultData.project_id);
+      setCurrentProjectId(resultData.project_id);
+    }
 
     setThread((prev) =>
       prev.map((item) => {
@@ -353,49 +461,68 @@ const DialogContent = () => {
 
   const startGeneration = (prompt: string) => {
     const trimmedPrompt = prompt.trim();
-    if (!trimmedPrompt || pendingTurn) {
+    if (!trimmedPrompt || pendingTurn || isRestoring) {
       return;
     }
 
-    cancelByUserRef.current = false;
-    resetLogs([]);
-    generationLogsRef.current = [];
-    setFinishTask(false);
+    void (async () => {
+      let projectId = currentProjectId;
+      try {
+        projectId = await ensureProjectId(projectId);
+        if (projectId !== currentProjectId) {
+          setCurrentProjectId(projectId);
+        }
+      } catch (error) {
+        console.error('创建项目失败:', error);
+        message.error('创建项目失败，请稍后重试');
+        return;
+      }
 
-    const pendingId = `pending_${Date.now()}`;
-    const pendingItem: PendingThreadItem = {
-      type: 'pending',
-      id: pendingId,
-      userPrompt: trimmedPrompt,
-      userTimestamp: Date.now(),
-    };
+      cancelByUserRef.current = false;
+      resetLogs([]);
+      generationLogsRef.current = [];
+      setFinishTask(false);
 
-    setThread((prev) => [...prev, pendingItem]);
-    setInputValue('');
-    setIsGenerating(true);
-    setGenerationEpoch((epoch) => epoch + 1);
-    scrollIntentRef.current = { type: 'bottom' };
+      const pendingId = `pending_${Date.now()}`;
+      const pendingItem: PendingThreadItem = {
+        type: 'pending',
+        id: pendingId,
+        userPrompt: trimmedPrompt,
+        userTimestamp: Date.now(),
+      };
 
-    void executeDialogGeneration(
-      {
-        prompt: trimmedPrompt,
-        sessionId: currentSessionId,
-        versionCount: completedTurns.length,
-        pendingId,
-        getCancelled: () => cancelByUserRef.current,
-        deps: { connect, batchLogUpdate: trackLogUpdate, flushLogs },
-        onSuccess: applyGenerationSuccess,
-      },
-      () => {
-        setIsGenerating(false);
-        setThread((prev) => {
-          if (!prev.some((item) => item.type === 'pending')) {
-            return prev;
-          }
-          return prev.filter((item) => item.type !== 'pending');
-        });
-      },
-    );
+      setThread((prev) => [...prev, pendingItem]);
+      setInputValue('');
+      setIsGenerating(true);
+      setGenerationEpoch((epoch) => epoch + 1);
+      scrollIntentRef.current = { type: 'bottom' };
+
+      const versionCount = thread.filter(
+        (item): item is TurnThreadItem => item.type === 'turn',
+      ).length;
+
+      void executeDialogGeneration(
+        {
+          prompt: trimmedPrompt,
+          sessionId: currentSessionId,
+          projectId,
+          versionCount,
+          pendingId,
+          getCancelled: () => cancelByUserRef.current,
+          deps: { connect, batchLogUpdate: trackLogUpdate, flushLogs },
+          onSuccess: applyGenerationSuccess,
+        },
+        () => {
+          setIsGenerating(false);
+          setThread((prev) => {
+            if (!prev.some((item) => item.type === 'pending')) {
+              return prev;
+            }
+            return prev.filter((item) => item.type !== 'pending');
+          });
+        },
+      );
+    })();
   };
 
   const handleSubmit = () => {
@@ -432,13 +559,42 @@ const DialogContent = () => {
     scrollIntentRef.current = { type: 'version', versionId };
   };
 
+  const handleSelectHistoryProject = (projectId: string) => {
+    if (isGenerating || isRestoring || projectId === currentProjectId) {
+      return;
+    }
+
+    setIsRestoring(true);
+    void switchHistoryProject(projectId).then((result) => {
+      if (result.status === 'error') {
+        message.error('加载对话失败，请稍后重试');
+        setIsRestoring(false);
+        return;
+      }
+
+      bindProjectId(result.projectId);
+      setCurrentProjectId(result.projectId);
+      setThread(result.loaded.thread);
+      setCurrentVersion(result.loaded.latestVersionIndex);
+      scrollIntentRef.current =
+        result.loaded.latestVersionIndex >= 0
+          ? { type: 'version', versionId: result.loaded.latestVersionIndex }
+          : { type: 'bottom' };
+      resetLogs([]);
+      generationLogsRef.current = [];
+      setInputValue('');
+      setFinishTask(false);
+      setIsRestoring(false);
+    });
+  };
+
   return (
     <main id="studio-main" className="chat-layout relative flex h-full min-h-0 flex-col">
       <a className="skip-link" href="#studio-thread">
         跳到对话内容
       </a>
-      <header className="chat-header flex shrink-0 items-center justify-between gap-4 px-4 py-3 sm:px-6">
-        <div className="min-w-0">
+      <header className="chat-header flex shrink-0 items-center gap-3 px-4 py-3 sm:gap-4 sm:px-6">
+        <div className="min-w-0 flex-1">
           <h1 className="truncate font-display text-sm font-semibold tracking-wide text-ink sm:text-base">
             内容创作助手
           </h1>
@@ -446,32 +602,41 @@ const DialogContent = () => {
             多智能体协作 · 小红书图文生成
           </p>
         </div>
-        {versionOptions.length > 0 && (
-          <div className="flex shrink-0 items-center gap-2">
-            <label
-              className="hidden font-display text-[0.65rem] uppercase tracking-widest text-gold-dark sm:inline"
-              htmlFor="version-select"
-            >
-              版本
-            </label>
-            <Select
-              id="version-select"
-              aria-label="文案版本"
-              value={currentVersion >= 0 ? currentVersion : undefined}
-              onChange={handleVersionSelect}
-              className="min-w-[10rem] sm:min-w-[12rem]"
-              placeholder="选择版本"
-              size="middle"
-            >
-              {versionOptions.map((version) => (
-                <Select.Option key={version.id} value={version.id}>
-                  V{version.id + 1} · {formatDateTime(version.timestamp)}
-                  {version.title ? ` · ${version.title}` : ''}
-                </Select.Option>
-              ))}
-            </Select>
-          </div>
-        )}
+        <div className="flex max-w-[min(100%,18rem)] shrink-0 items-center gap-2 sm:max-w-none">
+          {versionOptions.length > 0 && (
+            <>
+              <label
+                className="hidden font-display text-[0.65rem] uppercase tracking-widest text-gold-dark sm:inline"
+                htmlFor="version-select"
+              >
+                版本
+              </label>
+              <Select
+                id="version-select"
+                aria-label="文案版本"
+                value={currentVersion >= 0 ? currentVersion : undefined}
+                onChange={handleVersionSelect}
+                className="min-w-[10rem] sm:min-w-[12rem]"
+                placeholder="选择版本"
+                size="middle"
+              >
+                {versionOptions.map((version) => (
+                  <Select.Option key={version.id} value={version.id}>
+                    V{version.id + 1} · {formatDateTime(version.timestamp)}
+                    {version.title ? ` · ${version.title}` : ''}
+                  </Select.Option>
+                ))}
+              </Select>
+            </>
+          )}
+          <ProjectHistoryDrawer
+            currentProjectId={currentProjectId}
+            onSelectProject={(projectId) => {
+              void handleSelectHistoryProject(projectId);
+            }}
+            disabled={isGenerating || isRestoring}
+          />
+        </div>
       </header>
 
       <div
@@ -484,6 +649,11 @@ const DialogContent = () => {
         className="chat-thread min-h-0 flex-1 overflow-y-auto"
       >
         <div className="mx-auto w-full max-w-3xl px-4 py-6 sm:px-6">
+          {isRestoring && (
+            <p className="mb-4 text-center font-body text-sm italic text-ink-muted">
+              正在恢复上次会话…
+            </p>
+          )}
           {thread.map((item) => {
             if (item.type === 'welcome') {
               return (
@@ -540,7 +710,7 @@ const DialogContent = () => {
               onKeyDown={handleKeyDown}
               placeholder="描述你想创作的小红书内容…（Enter 发送，Shift+Enter 换行）"
               autoSize={{ minRows: 1, maxRows: 6 }}
-              disabled={isGenerating}
+              disabled={isGenerating || isRestoring}
               aria-describedby="studio-prompt-hint"
             />
             <div className="flex items-center justify-between gap-2 border-t border-gold/15 px-3 py-2">
@@ -548,9 +718,11 @@ const DialogContent = () => {
                 id="studio-prompt-hint"
                 className="font-body text-xs italic text-ink-muted"
               >
-                {isGenerating
-                  ? '生成中…，可随时停止'
-                  : `${completedTurns.length > 0 ? `已有 ${completedTurns.length} 个版本 · ` : ''}新消息将出现在上一轮结果下方`}
+                {isRestoring
+                  ? '正在恢复上次会话…'
+                  : isGenerating
+                    ? '生成中…，可随时停止'
+                    : `${completedTurns.length > 0 ? `已有 ${completedTurns.length} 个版本 · ` : ''}新消息将出现在上一轮结果下方`}
               </p>
               <div className="flex shrink-0 gap-2">
                 {isGenerating ? (
@@ -570,7 +742,9 @@ const DialogContent = () => {
                     size="small"
                     icon={<SendOutlined />}
                     onClick={handleSubmit}
-                    disabled={!inputValue.trim() || Boolean(pendingTurn)}
+                    disabled={
+                      !inputValue.trim() || Boolean(pendingTurn) || isRestoring
+                    }
                     className="!font-display !text-xs !uppercase !tracking-wider"
                   >
                     发送

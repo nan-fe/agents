@@ -28,10 +28,12 @@ services:
     environment:
       - PYTHONUNBUFFERED=1
       - SHARE_STORE_PATH=/data/shares/shares.json
+      - DATABASE_URL=sqlite+aiosqlite:////data/memory/memory.db
     env_file:
       - ./backend/.env
     volumes:
       - ./data/shares:/data/shares
+      - ./data/memory:/data/memory
     networks:
       - app-network
     restart: unless-stopped
