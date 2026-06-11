@@ -25,6 +25,14 @@ const nextConfig = {
       },
       // /dialog/generate 由 app/dialog/generate/route.ts 流式代理（rewrite 会缓冲 SSE）
       {
+        source: '/projects',
+        destination: `${apiUpstream}/projects`,
+      },
+      {
+        source: '/projects/:path*',
+        destination: `${apiUpstream}/projects/:path*`,
+      },
+      {
         source: '/session/:path*',
         destination: `${apiUpstream}/session/:path*`,
       },

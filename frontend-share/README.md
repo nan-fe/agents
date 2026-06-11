@@ -120,7 +120,7 @@ openssl rand -base64 32
          ├─ /、/login、/register、/share/*   公开
          ├─ middleware 校验 session
          ├─ /studio/*                        rewrite → frontend-ts (/studio/)
-         └─ /dialog|/session|/shares         rewrite → backend
+         └─ /dialog|/projects|/session|/shares rewrite → backend
 
 PostgreSQL (users 表)
          ↑ 注册写入 / 登录校验
