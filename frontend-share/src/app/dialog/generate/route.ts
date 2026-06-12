@@ -1,4 +1,5 @@
 import { getApiUpstreamUrl } from '@/lib/api-upstream';
+import { fetchWithReport } from '@/lib/fetch-with-report';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -8,14 +9,19 @@ export const POST = async (request: Request) => {
   const upstream = getApiUpstreamUrl();
   const body = await request.text();
 
-  const upstreamResponse = await fetch(`${upstream}/dialog/generate`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': request.headers.get('content-type') ?? 'application/json',
-      Accept: request.headers.get('accept') ?? 'text/event-stream',
+  const upstreamResponse = await fetchWithReport(
+    `${upstream}/dialog/generate`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type':
+          request.headers.get('content-type') ?? 'application/json',
+        Accept: request.headers.get('accept') ?? 'text/event-stream',
+      },
+      body,
+      ignoreClientErrors: true,
     },
-    body,
-  });
+  );
 
   if (!upstreamResponse.body) {
     return new Response(await upstreamResponse.text(), {

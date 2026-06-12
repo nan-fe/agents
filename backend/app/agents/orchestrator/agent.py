@@ -21,8 +21,10 @@ from .review_repair_router import (
     content_agents_ran,
     route_review_failure,
 )
+from .session_eviction import evict_idle_sessions
 from .session_history import WritingSessionHistory
 from app.memory import project_memory
+from app.services.dialog_stream_store import dialog_stream_store
 from app.memory.project_memory import new_project_id
 from typing import Optional, Callable, Dict, List
 import time
@@ -67,11 +69,25 @@ class DialogOrchestratorAgent:
         self.session_histories: Dict[str, WritingSessionHistory] = {}
 
     def get_session_history(self, session_id: str) -> WritingSessionHistory:
+        self._evict_idle_sessions(protected_session_ids={session_id})
         if session_id not in self.session_histories:
             self.session_histories[session_id] = WritingSessionHistory(
                 session_id
             )
-        return self.session_histories[session_id]
+        history = self.session_histories[session_id]
+        history.touch()
+        return history
+
+    def _evict_idle_sessions(
+        self, *, protected_session_ids: set[str] | frozenset[str] | None = None
+    ) -> list[str]:
+        protected = set(protected_session_ids or ())
+        protected |= set(dialog_stream_store.active_generation_session_ids())
+        return evict_idle_sessions(
+            self.session_histories,
+            ttl_seconds=settings.SESSION_IDLE_TTL_SECONDS,
+            protected_session_ids=protected,
+        )
 
     async def run(
         self,
@@ -101,6 +117,9 @@ class DialogOrchestratorAgent:
             or new_project_id()
         )
         session_history.bind_project(resolved_project_id)
+        await project_memory.ensure_project_stub(
+            resolved_project_id, user_id=user_id
+        )
         await self._hydrate_session_from_project_memory(
             session_history, resolved_project_id, log_callback
         )

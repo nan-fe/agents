@@ -1,4 +1,5 @@
 import { demoShareSnapshot, isDemoShareId } from '@/lib/demo-share';
+import { fetchWithReport } from '@/lib/fetch-with-report';
 import type { ShareSnapshot } from '@/lib/share-types';
 
 /** fetch 缓存 / ISR 再验证间隔（秒），须与 share/[shareId]/page.tsx 中 `revalidate` 字面量一致 */
@@ -18,14 +19,16 @@ export const getShareSnapshot = async (
     return demoShareSnapshot;
   }
 
-  const response = await fetch(
+  const response = await fetchWithReport(
     `${API_BASE_URL}/shares/${encodeURIComponent(shareId)}`,
     {
       next: {
         revalidate: SHARE_PAGE_REVALIDATE_SECONDS,
         tags: [shareCacheTag(shareId)],
       },
-    }
+      ignoreStatuses: [404],
+      reportHttpErrors: false,
+    },
   );
 
   if (response.status === 404) {

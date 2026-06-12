@@ -28,18 +28,48 @@ def build_version_summary(intent: str, user_input: str, result: dict[str, Any]) 
     return f"{intent or 'create'}: {snippet}" if snippet else intent or "version"
 
 
+def should_persist_project_row(
+    topic: str | None, final_version: str | None
+) -> bool:
+    return bool((topic or "").strip()) and bool((final_version or "").strip())
+
+
+def metadata_from_version(version: VersionRow) -> tuple[str, str]:
+    planning = version.planning or {}
+    topic = (planning.get("topic") or "").strip() or (
+        (version.result.get("title") or "").strip()
+    )
+    return topic, version.version_label
+
+
 class ProjectMemoryService:
-    async def create_project(self, *, user_id: str | None = None) -> str:
-        """创建 project 并写入 projects 表（stub），便于 GET /projects 列表定位。"""
-        project_id = new_project_id()
-        now = _utcnow()
+    async def ensure_project_stub(
+        self,
+        project_id: str,
+        *,
+        user_id: str | None = None,
+        topic: str | None = None,
+        final_version: str | None = None,
+    ) -> None:
+        """若 projects 表尚无该行且具备 topic/final_version，写入 stub（幂等）。"""
+        project_id = (project_id or "").strip()
+        topic = (topic or "").strip()
+        final_version = (final_version or "").strip()
+        if not project_id or not should_persist_project_row(topic, final_version):
+            return
+
         async with get_session() as session:
+            existing = await session.get(ProjectRow, project_id)
+            if existing is not None:
+                return
+
+            now = _utcnow()
             session.add(
                 ProjectRow(
                     project_id=project_id,
                     user_id=user_id,
-                    topic="",
-                    final_version=None,
+                    topic=topic,
+                    final_version=final_version,
                     project_summary="",
                     created_at=now,
                     updated_at=now,
@@ -47,16 +77,40 @@ class ProjectMemoryService:
                 )
             )
             await session.commit()
-        return project_id
+
+    async def create_project(self, *, user_id: str | None = None) -> str:
+        """分配 project_id；无 topic/final_version 时不写入 projects 表。"""
+        return new_project_id()
 
     async def touch_project(self, project_id: str) -> None:
         """记录用户打开项目的时间，不影响 updated_at（内容变更时间）。"""
+        project_id = (project_id or "").strip()
+        if not project_id:
+            return
+
         async with get_session() as session:
             row = await session.get(ProjectRow, project_id)
-            if row is None:
+            if row is not None:
+                row.last_accessed_at = _utcnow()
+                await session.commit()
                 return
-            row.last_accessed_at = _utcnow()
-            await session.commit()
+
+        versions = await self.list_versions(project_id)
+        if not versions:
+            return
+
+        topic, final_version = metadata_from_version(versions[-1])
+        if not should_persist_project_row(topic, final_version):
+            return
+
+        await self.ensure_project_stub(
+            project_id, topic=topic, final_version=final_version
+        )
+        async with get_session() as session:
+            row = await session.get(ProjectRow, project_id)
+            if row is not None:
+                row.last_accessed_at = _utcnow()
+                await session.commit()
 
     async def list_projects(self, *, user_id: str | None = None) -> list[ProjectRow]:
         async with get_session() as session:
@@ -97,17 +151,14 @@ class ProjectMemoryService:
             if not versions:
                 continue
             latest = versions[-1]
-            planning = latest.planning or {}
-            topic = (planning.get("topic") or "").strip() or (
-                latest.result.get("title") or ""
-            )
+            topic, final_version = metadata_from_version(latest)
             summaries = [v.summary for v in versions if v.summary]
             orphans.append(
                 ProjectRow(
                     project_id=project_id,
                     user_id=None,
                     topic=str(topic),
-                    final_version=latest.version_label,
+                    final_version=final_version,
                     project_summary=" → ".join(summaries[-8:]),
                     created_at=latest_at,
                     updated_at=latest_at,
@@ -128,13 +179,22 @@ class ProjectMemoryService:
         return merged
 
     async def version_count(self, project_id: str) -> int:
+        counts = await self.version_counts([project_id])
+        return counts.get(project_id, 0)
+
+    async def version_counts(self, project_ids: list[str]) -> dict[str, int]:
+        if not project_ids:
+            return {}
         async with get_session() as session:
-            result = await session.execute(
-                select(func.count())
-                .select_from(VersionRow)
-                .where(VersionRow.project_id == project_id)
+            rows = await session.execute(
+                select(VersionRow.project_id, func.count())
+                .where(VersionRow.project_id.in_(project_ids))
+                .group_by(VersionRow.project_id)
             )
-            return int(result.scalar_one())
+        counts = dict.fromkeys(project_ids, 0)
+        for project_id, count in rows.all():
+            counts[str(project_id)] = int(count)
+        return counts
 
     async def append_version(
         self,
@@ -202,10 +262,7 @@ class ProjectMemoryService:
             return None
 
         latest = versions[-1]
-        planning = latest.planning or {}
-        topic = (planning.get("topic") or "").strip()
-        if not topic:
-            topic = (latest.result.get("title") or "").strip()
+        topic, final_version = metadata_from_version(latest)
 
         summaries = [v.summary for v in versions if v.summary]
         project_summary = " → ".join(summaries[-8:])
@@ -218,7 +275,7 @@ class ProjectMemoryService:
                     project_id=project_id,
                     user_id=user_id,
                     topic=topic,
-                    final_version=latest.version_label,
+                    final_version=final_version,
                     project_summary=project_summary,
                     created_at=now,
                     updated_at=now,
@@ -228,10 +285,9 @@ class ProjectMemoryService:
             else:
                 existing.user_id = user_id or existing.user_id
                 existing.topic = topic or existing.topic
-                existing.final_version = latest.version_label
+                existing.final_version = final_version
                 existing.project_summary = project_summary
                 existing.updated_at = now
-                existing.last_accessed_at = now
                 row = existing
 
             await session.commit()

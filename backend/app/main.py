@@ -12,6 +12,7 @@ from sse_starlette.sse import EventSourceResponse
 from app.agents.orchestrator.agent import DialogOrchestratorAgent
 from app.config import settings
 from app.memory import project_memory
+from app.memory.project_memory import should_persist_project_row
 from app.memory.db import close_db, init_db
 from app.models.schemas import (
     ProjectConversationResponse,
@@ -182,6 +183,7 @@ async def _run_dialog_generation(
     project_id: Optional[str] = None,
     user_id: Optional[str] = None,
 ) -> None:
+    dialog_stream_store.mark_generation_started(session_id)
     async def log_callback(
         agent_key: str,
         message: str,
@@ -252,6 +254,7 @@ async def _run_dialog_generation(
             {"event": "message", "data": result_message.model_dump_json()}
         )
     finally:
+        dialog_stream_store.mark_generation_finished(session_id)
         stream.is_complete = True
         await dialog_stream_store.mark_complete(stream)
         asyncio.create_task(_schedule_stream_cleanup(session_id, id(stream)))
@@ -423,9 +426,18 @@ async def generate_dialog_event_stream(
 async def list_projects(user_id: Optional[str] = None):
     """进入页面时拉取项目列表，按用户最近打开时间降序，默认定位第一个。"""
     rows = await project_memory.list_projects(user_id=user_id)
+    rows = [
+        row
+        for row in rows
+        if should_persist_project_row(row.topic, row.final_version)
+    ]
+    rows.sort(key=lambda row: (row.last_accessed_at, row.created_at), reverse=True)
+    version_counts = await project_memory.version_counts(
+        [row.project_id for row in rows]
+    )
     items: list[ProjectListItem] = []
     for row in rows:
-        count = await project_memory.version_count(row.project_id)
+        count = version_counts.get(row.project_id, 0)
         items.append(
             ProjectListItem(
                 project_id=row.project_id,
@@ -443,7 +455,7 @@ async def list_projects(user_id: Optional[str] = None):
 
 @app.post("/projects", response_model=ProjectCreateResponse)
 async def create_project(payload: ProjectCreateRequest | None = None):
-    """新建对话时创建 project 并写入列表。"""
+    """新建对话时分配 project_id；无 topic/final_version 时不写入 projects 表。"""
     body = payload or ProjectCreateRequest()
     project_id = await project_memory.create_project(user_id=body.user_id)
     return ProjectCreateResponse(project_id=project_id)

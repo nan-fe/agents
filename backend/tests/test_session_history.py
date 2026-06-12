@@ -28,3 +28,14 @@ def test_session_history_messages_and_state() -> None:
     assert history.get_messages() == []
     assert history.get_last_result() is None
     assert history.get_last_plan() is None
+
+
+def test_session_history_touch_updates_idle_seconds() -> None:
+    import time
+
+    history = WritingSessionHistory("session-touch")
+    history._last_active_at = time.monotonic() - 5.0
+    assert history.idle_seconds() >= 5.0
+
+    history.touch()
+    assert history.idle_seconds() < 0.1

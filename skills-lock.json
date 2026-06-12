@@ -31,6 +31,12 @@
       "skillPath": "skills/frontend-ui-ux-design/SKILL.md",
       "computedHash": "9b248bd883108d9e4a8ae9149f1042b8b50adc7b9b99b9f40a26f7d4b5092ed4"
     },
+    "sentry-nextjs-sdk": {
+      "source": "getsentry/sentry-agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/sentry-nextjs-sdk/SKILL.md",
+      "computedHash": "6bbb2bce22fa8fc3e0385dbe06fe5a26770b2f91f66ad8e78d80c1df3d4b2e05"
+    },
     "web-design-guidelines": {
       "source": "vercel-labs/agent-skills",
       "sourceType": "github",

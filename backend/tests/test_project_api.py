@@ -1,11 +1,13 @@
 import asyncio
+from datetime import datetime, timezone
 
 import pytest
 from httpx import ASGITransport, AsyncClient
 
 from app.config import settings
 from app.main import app
-from app.memory.db import close_db, init_db
+from app.memory.db import close_db, get_session, init_db
+from app.memory.models import ProjectRow
 from app.memory.project_memory import ProjectMemoryService
 
 
@@ -31,16 +33,15 @@ async def _run_project_api_flow() -> None:
 
         list_after_create = await client.get("/projects")
         assert list_after_create.status_code == 200
-        first_project = list_after_create.json()["projects"][0]
-        assert first_project["project_id"] == project_id
-        assert first_project["last_accessed_at"].endswith("Z")
-        assert first_project["updated_at"].endswith("Z")
+        assert list_after_create.json()["projects"] == []
+
+        service = ProjectMemoryService()
+        assert await service.get_project(project_id) is None
 
         empty = await client.get(f"/projects/{project_id}")
         assert empty.status_code == 200
         assert empty.json()["versions"] == []
 
-        service = ProjectMemoryService()
         await service.append_version(
             project_id=project_id,
             parent_version_id=None,
@@ -67,3 +68,49 @@ async def _run_project_api_flow() -> None:
 
 def test_project_create_and_conversation_api() -> None:
     asyncio.run(_run_project_api_flow())
+
+
+async def _test_list_projects_filters_empty_metadata() -> None:
+    await close_db()
+    await init_db()
+    now = datetime.now(timezone.utc)
+    empty_id = "proj_empty000001"
+    valid_id = "proj_valid000001"
+    async with get_session() as session:
+        session.add(
+            ProjectRow(
+                project_id=empty_id,
+                topic="",
+                final_version=None,
+                project_summary="",
+                created_at=now,
+                updated_at=now,
+                last_accessed_at=now,
+            )
+        )
+        session.add(
+            ProjectRow(
+                project_id=valid_id,
+                topic="有效项目",
+                final_version="v1",
+                project_summary="摘要",
+                created_at=now,
+                updated_at=now,
+                last_accessed_at=now,
+            )
+        )
+        await session.commit()
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.get("/projects")
+        assert response.status_code == 200
+        project_ids = [item["project_id"] for item in response.json()["projects"]]
+        assert empty_id not in project_ids
+        assert valid_id in project_ids
+
+    await close_db()
+
+
+def test_list_projects_filters_empty_metadata() -> None:
+    asyncio.run(_test_list_projects_filters_empty_metadata())
