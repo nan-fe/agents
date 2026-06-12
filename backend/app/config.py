@@ -46,6 +46,9 @@ class Settings(BaseSettings):
     # SSE 断点续传缓冲：生成完成后保留时长（秒），超时后释放内存
     DIALOG_STREAM_RETENTION_SECONDS: float = 1800.0
 
+    # 进程内 session_histories 空闲驱逐（秒）；0 表示关闭
+    SESSION_IDLE_TTL_SECONDS: float = 1800.0
+
     # Project Memory（SQLite 默认；生产可改为 postgresql+asyncpg://...）
     DATABASE_URL: str = f"sqlite+aiosqlite:///{_DEFAULT_MEMORY_DB}"
 

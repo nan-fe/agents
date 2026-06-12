@@ -10,6 +10,13 @@ export const getSentryDsn = (): string | undefined => {
 
 export const isSentryEnabled = (): boolean => Boolean(getSentryDsn());
 
+const getDefaultTracesSampleRate = (): number => {
+  if (process.env.SENTRY_TRACES_SAMPLE_RATE) {
+    return Number(process.env.SENTRY_TRACES_SAMPLE_RATE);
+  }
+  return process.env.NODE_ENV === 'development' ? 1 : 0.1;
+};
+
 export const getSentryInitOptions = (): SentryInitOptions => {
   const enabled = isSentryEnabled();
 
@@ -17,11 +24,7 @@ export const getSentryInitOptions = (): SentryInitOptions => {
     dsn: getSentryDsn(),
     enabled,
     environment: process.env.SENTRY_ENVIRONMENT ?? process.env.NODE_ENV,
-    tracesSampleRate: enabled
-      ? Number(
-          process.env.SENTRY_TRACES_SAMPLE_RATE ?? 1
-        )
-      : 0,
+    tracesSampleRate: enabled ? getDefaultTracesSampleRate() : 0,
     initialScope: {
       tags: {
         application: process.env.SENTRY_APPLICATION_ID ?? 'frontend-share',

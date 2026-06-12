@@ -1,4 +1,5 @@
 """会话历史（内存）。"""
+import time
 from collections import deque
 from typing import Any, Dict, List, Optional
 
@@ -11,6 +12,7 @@ class WritingSessionHistory(BaseChatMessageHistory):
 
     def __init__(self, session_id: str, max_messages: int = 20):
         self.session_id = session_id
+        self._last_active_at = time.monotonic()
         self.messages: deque = deque(maxlen=max_messages)
         self._last_result: Optional[Dict[str, Any]] = None
         self._last_plan: Optional[Dict[str, Any]] = None
@@ -19,7 +21,15 @@ class WritingSessionHistory(BaseChatMessageHistory):
         self.current_version_label: Optional[str] = None
         self.last_intent: Optional[str] = None
 
+    def touch(self) -> None:
+        self._last_active_at = time.monotonic()
+
+    def idle_seconds(self, now: float | None = None) -> float:
+        current = now if now is not None else time.monotonic()
+        return current - self._last_active_at
+
     def add_message(self, message: BaseMessage) -> None:
+        self.touch()
         self.messages.append(message)
 
     def get_messages(self) -> List[BaseMessage]:

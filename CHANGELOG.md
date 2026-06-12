@@ -22,11 +22,15 @@ All notable changes to this project will be documented in this file.
 - **部署**
   - `docker-compose.yml` 挂载 `./data/memory`，`DATABASE_URL=sqlite+aiosqlite:////data/memory/memory.db`
 
-**PR1.1 待补充（未在本 PR 交付）**
+### Changed 2026-06-11 — PR1.1：会话驱逐与列表查询优化
 
-- `session_histories` 空闲超时驱逐（进程内会话与 DB 解耦后的内存回收）
-- 编排器在未收到 `project_id` 时 `new_project_id()` 兜底但未写 DB stub 的边界对齐
-- `GET /projects` 列表 `version_count` 的 N+1 查询优化
+- **空闲驱逐**：`SESSION_IDLE_TTL_SECONDS`（默认 30 分钟）；`WritingSessionHistory.last_active_at` + `session_eviction`；访问新 session 时惰性清理；进行中的 SSE 生成会话不驱逐
+- **`GET /projects`**：`version_counts` 批量聚合，消除 N+1
+
+- 编排器解析 `project_id` 后调用 `ensure_project_stub`（与 `POST /projects` 行为对齐，幂等）
+
+**PR1.1 仍待补充**
+
 - L2 长期记忆（跨项目用户偏好）与项目 JSON 索引
 
 ### Changed 2026-06-02

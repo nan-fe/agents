@@ -164,7 +164,7 @@ Docker Compose 中：
 - `frontend-share` 作为唯一公网入口，默认映射 `3000:3000`
 - `frontend`（创作端 Nginx）仅内网暴露，由 `STUDIO_UPSTREAM_URL=http://frontend:80` 接入
 - 生产环境在 GitHub **Settings → Secrets and variables → Actions** 配置 `AUTH_SECRET`（`openssl rand -base64 32` 生成）；CI 部署时会写入服务器 `/root/agents/.env`
-- 错误监控：在 Actions **Secrets** 配置 `SENTRY_DSN`（Better Stack Data ingestion 中的 DSN），在 **Variables** 配置 `SENTRY_APPLICATION_ID`；服务器 `/root/agents/.env` 中同样设置 `SENTRY_DSN`、`NEXT_PUBLIC_SENTRY_DSN`（与 DSN 相同）供运行时服务端上报
+- 错误监控：在 Actions **Secrets** 配置 `SENTRY_DSN`（Better Stack DSN）；CI 构建 `frontend-share` 镜像时注入，**无需**在服务器 `.env` 配置
 - 建议修改 Compose 中 PostgreSQL 默认密码，且勿将 `5432` 对公网开放
 
 ```bash
@@ -178,17 +178,22 @@ docker compose up -d
 
 通过 [@sentry/nextjs](https://docs.sentry.io/platforms/javascript/guides/nextjs/) 将错误上报至 [Better Stack Errors](https://betterstack.com/docs/errors/collecting-errors/sentry-sdk/)（Sentry 兼容 DSN）。
 
-在 `.env` 或 `.env.local` 中配置（**勿提交真实 token**）：
+**生产环境**（仅需 GitHub Actions，不用改服务器 `.env`）：
+
+| 位置 | 名称 | 值 |
+|------|------|-----|
+| Actions **Secrets** | `SENTRY_DSN` | Better Stack 完整 DSN |
+| Actions **Variables**（可选） | `SENTRY_APPLICATION_ID` | 默认 `frontend-share` |
+
+CI 构建镜像时同时注入 `SENTRY_DSN` 与 `NEXT_PUBLIC_SENTRY_DSN`（同一值），并写入最终镜像环境变量，部署后客户端与服务端均可上报。
+
+**本地开发**在 `frontend-share/.env` 中配置（**勿提交真实 token**）：
 
 ```bash
-# DSN 格式：https://$APPLICATION_TOKEN@$INGESTING_HOST/1
-SENTRY_DSN=https://YOUR_TOKEN@s2461160.eu-nbg-2.betterstackdata.com/1
-NEXT_PUBLIC_SENTRY_DSN=https://YOUR_TOKEN@s2461160.eu-nbg-2.betterstackdata.com/1
-SENTRY_APPLICATION_ID=your-application-id
+SENTRY_DSN=https://YOUR_TOKEN@s2461160.eu-nbg-2.betterstackdata.com/2461176
+NEXT_PUBLIC_SENTRY_DSN=https://YOUR_TOKEN@s2461160.eu-nbg-2.betterstackdata.com/2461176
 ```
 
-- `NEXT_PUBLIC_SENTRY_DSN`：客户端错误，需在 **构建时** 注入（Docker `ARG` / CI build-args）
-- `SENTRY_DSN`：服务端 / RSC / API 错误，运行时注入即可
 - 未配置 DSN 时 SDK 自动 `enabled: false`，不影响本地开发
 
 本地验证：配置 DSN 后 `pnpm build && pnpm start`，访问任意会触发错误的页面，在 Better Stack **Errors** 面板查看上报。

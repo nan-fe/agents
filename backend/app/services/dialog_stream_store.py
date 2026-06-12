@@ -97,10 +97,20 @@ class DialogStream:
 class DialogStreamStore:
     def __init__(self, persist_dir: Optional[Path] = None) -> None:
         self._streams: dict[str, DialogStream] = {}
+        self._active_generations: set[str] = set()
         self._lock = asyncio.Lock()
         self._io_lock = asyncio.Lock()
         self._persist_dir = persist_dir or DEFAULT_STREAM_DIR
         self._persist_dir.mkdir(parents=True, exist_ok=True)
+
+    def mark_generation_started(self, session_id: str) -> None:
+        self._active_generations.add(session_id)
+
+    def mark_generation_finished(self, session_id: str) -> None:
+        self._active_generations.discard(session_id)
+
+    def active_generation_session_ids(self) -> frozenset[str]:
+        return frozenset(self._active_generations)
 
     def _persist_path(self, session_id: str) -> Path:
         return self._persist_dir / f"{_safe_session_filename(session_id)}.json"
