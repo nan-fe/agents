@@ -36,6 +36,7 @@ pnpm run start
 ### 本地运行注意事项
 需要将 nginx 文件注释
 如需覆盖后端地址，可在环境变量中设置 `VITE_API_BASE_URL`，默认开发环境为 `http://localhost:8000`
+如需覆盖前端错误监控 DSN，可设置 `VITE_SENTRY_DSN`（默认使用 Better Stack DSN）
 
 
 前端应用将在 `http://localhost:5173` 运行。

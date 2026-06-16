@@ -157,6 +157,10 @@ const poolAction = async (
     };
   }
 
+  if (action.type === 'close-drawer') {
+    return resetDrawerState(prevState);
+  }
+
   if (action.type === 'reset-preview') {
     return {
       ...prevState,
@@ -394,8 +398,15 @@ const ProductPool = () => {
     });
   };
 
+  const isPreviewing =
+    isPending && poolState.drawerOpen && poolState.drawerStep === 'input';
+  const isConfirming =
+    isPending && poolState.drawerOpen && poolState.drawerStep === 'preview';
+  const isDetailLoading = isPending && poolState.pendingDetailId !== null;
+  const drawerBusy = isPreviewing || isConfirming;
+
   const handleCloseDrawer = () => {
-    if (isPending) {
+    if (drawerBusy) {
       return;
     }
     startTransition(() => {
@@ -403,13 +414,6 @@ const ProductPool = () => {
     });
     form.resetFields();
   };
-
-  const isPreviewing =
-    isPending && poolState.drawerOpen && poolState.drawerStep === 'input';
-  const isConfirming =
-    isPending && poolState.drawerOpen && poolState.drawerStep === 'preview';
-  const isDetailLoading = isPending && poolState.pendingDetailId !== null;
-  const drawerBusy = isPreviewing || isConfirming;
 
   const columns: ColumnsType<ProductItem> = [
     {

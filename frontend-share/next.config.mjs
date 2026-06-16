@@ -40,6 +40,14 @@ const nextConfig = {
         source: '/shares/:path*',
         destination: `${apiUpstream}/shares/:path*`,
       },
+      {
+        source: '/product_info',
+        destination: `${apiUpstream}/product_info`,
+      },
+      {
+        source: '/product_info/:path*',
+        destination: `${apiUpstream}/product_info/:path*`,
+      },
     ];
   },
 };

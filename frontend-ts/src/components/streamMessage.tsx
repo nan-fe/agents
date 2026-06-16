@@ -16,6 +16,8 @@ const StreamMessage = ({
   const [content, setContent] = useState('');
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const curIndexRef = useRef(0);
+  // Tracks the displayed content without causing re-renders when computing start index
+  const contentRef = useRef('');
 
   const clearAnimation = () => {
     if (timerRef.current) {
@@ -26,28 +28,33 @@ const StreamMessage = ({
 
   useEffect(() => {
     clearAnimation();
-    if (content.length > streamContent.length) {
-      setContent('');
+
+    const displayed = contentRef.current;
+    let startIndex: number;
+
+    if (
+      displayed.length > streamContent.length ||
+      !streamContent.startsWith(displayed)
+    ) {
+      // Content was reset or changed incompatibly — restart from zero without
+      // a synchronous setState; the interval will overwrite content on first tick.
       curIndexRef.current = 0;
-      if (!streamContent.length) {
-        return;
-      }
+      startIndex = 0;
+    } else {
+      startIndex = displayed.length;
+      curIndexRef.current = startIndex;
     }
-    if (curIndexRef.current === streamContent.length) {
+
+    if (startIndex === streamContent.length) {
       return;
     }
 
-    let startIndex = content.length;
-    if (!streamContent.startsWith(content)) {
-      setContent('');
-      startIndex = 0;
-    }
-
-    curIndexRef.current = startIndex;
     timerRef.current = setInterval(() => {
       const nextIdx = curIndexRef.current + 1;
       if (nextIdx <= streamContent.length) {
-        setContent(streamContent.slice(0, nextIdx));
+        const next = streamContent.slice(0, nextIdx);
+        contentRef.current = next;
+        setContent(next);
         curIndexRef.current = nextIdx;
       } else {
         clearAnimation();
