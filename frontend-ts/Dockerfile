@@ -20,6 +20,10 @@ COPY . .
 ARG VITE_SHARE_BASE_URL=""
 ENV VITE_SHARE_BASE_URL=$VITE_SHARE_BASE_URL
 
+# 构建时注入 Better Stack DSN；未传入时使用代码中的默认值
+ARG VITE_SENTRY_DSN=""
+ENV VITE_SENTRY_DSN=$VITE_SENTRY_DSN
+
 # 构建项目
 RUN pnpm run build
 

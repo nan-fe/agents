@@ -2,9 +2,12 @@ import type { BrowserOptions, EdgeOptions, NodeOptions } from '@sentry/nextjs';
 
 type SentryInitOptions = NodeOptions | BrowserOptions | EdgeOptions;
 
+const DEFAULT_SENTRY_DSN =
+  'https://DYwAS6KnxQkz9CnaCzMWiLNh@s2461160.eu-nbg-2.betterstackdata.com/2461176';
+
 /** Better Stack DSN: https://$TOKEN@$INGESTING_HOST/1 (see Better Stack Data ingestion tab) */
 export const getSentryDsn = (): string | undefined => {
-  const dsn = process.env.SENTRY_DSN ?? process.env.NEXT_PUBLIC_SENTRY_DSN;
+  const dsn = process.env.SENTRY_DSN ?? process.env.NEXT_PUBLIC_SENTRY_DSN ?? DEFAULT_SENTRY_DSN;
   return dsn && dsn.length > 0 ? dsn : undefined;
 };
 
