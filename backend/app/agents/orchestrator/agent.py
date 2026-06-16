@@ -26,7 +26,7 @@ from .session_history import WritingSessionHistory
 from app.memory import project_memory
 from app.services.dialog_stream_store import dialog_stream_store
 from app.memory.project_memory import new_project_id
-from typing import Optional, Callable, Dict, List
+from typing import Optional, Callable, Dict, List, Any
 import time
 from langchain_core.messages import HumanMessage
 from dotenv import load_dotenv
@@ -296,6 +296,21 @@ class DialogOrchestratorAgent:
                 )
                 continue
 
+            if agent_name == "ImageAgent":
+                rag_image_url = self._extract_rag_image_url(context.rag_context)
+                if rag_image_url:
+                    context.set_image(
+                        image_url=rag_image_url,
+                        prompt="RAG_HIT_IMAGE_REUSED",
+                    )
+                    context.record_agent_executed(agent_name)
+                    await emit_log(
+                        log_callback,
+                        "ImageAgent",
+                        "命中 RAG 商品图片，已复用，无需调用大模型生图",
+                    )
+                    continue
+
             agent_input = builder.build(agent_name)
 
             try:
@@ -322,3 +337,19 @@ class DialogOrchestratorAgent:
             context.record_agent_executed(agent_name)
             if result is not None:
                 mapper.map_result(agent_name, result)
+
+    @staticmethod
+    def _extract_rag_image_url(rag_context: Any) -> str:
+        """从 RAG 结果提取可复用的图片 URL。"""
+        if not isinstance(rag_context, dict):
+            return ""
+        products = rag_context.get("retrieved_products")
+        if not isinstance(products, list) or not products:
+            return ""
+        first = products[0]
+        if not isinstance(first, dict):
+            return ""
+        url = str(first.get("url") or "").strip()
+        if not url.startswith(("http://", "https://", "/")):
+            return ""
+        return url

@@ -43,6 +43,7 @@ export default defineConfig(async ({ command }): Promise<UserConfig> => {
         "/dialog": "http://localhost:8000",
         "/session": "http://localhost:8000",
         "/shares": "http://localhost:8000",
+        "/product_info": "http://localhost:8000",
       },
     },
   };

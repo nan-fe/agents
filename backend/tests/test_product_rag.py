@@ -1,5 +1,6 @@
 import asyncio
 import time
+
 from dotenv import load_dotenv
 from app.agents.product_rag_system.agent import ProductRagAgent
 
@@ -22,6 +23,7 @@ async def test_product_rag():
     local_products = [
         {"name": "蓝牙耳机", "description": "无线蓝牙耳机"},
         {"name": "纯棉T恤", "description": "纯棉短袖T恤"},
+        {"name": "枕头", "description": "家纺护颈枕头"},
         # {"name": "iPhone15", "description": "苹果手机"},
         # {"name": "咖啡机", "description": "家用咖啡机"},
         # {"name": "跑步鞋", "description": "运动跑步鞋"},
@@ -36,10 +38,10 @@ async def test_product_rag():
     # 测试用例：本地数据库中不存在的商品（需要网络搜索）
     remote_products = [
         {"name": "防晒霜", "description": "防晒护肤品"},
-        {"name": "智能手表", "description": "智能穿戴设备"},
-        {"name": "笔记本电脑", "description": "便携电脑"},
-        {"name": "口红", "description": "美妆彩妆"},
-        {"name": "BKT护腰坐垫", "description": "人体工学坐垫"},
+        # {"name": "智能手表", "description": "智能穿戴设备"},
+        # {"name": "笔记本电脑", "description": "便携电脑"},
+        # {"name": "口红", "description": "美妆彩妆"},
+        # {"name": "BKT护腰坐垫", "description": "人体工学坐垫"},
     ]
     
     print("\n" + "="*60)

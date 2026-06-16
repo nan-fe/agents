@@ -13,6 +13,10 @@ RUN pip install --no-cache-dir --timeout=120 --index-url https://pypi.tuna.tsing
 # 复制项目代码
 COPY . .
 
+# 预下载 tiktoken 编码文件，避免运行时访问 openaipublic.blob.core.windows.net
+RUN mkdir -p /app/app/data/tiktoken && \
+    python -c "import urllib.request; urllib.request.urlretrieve('https://openaipublic.blob.core.windows.net/encodings/cl100k_base.tiktoken', '/app/app/data/tiktoken/cl100k_base.tiktoken')"
+
 # 设置环境变量
 ENV PYTHONUNBUFFERED=1
 

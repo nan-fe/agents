@@ -157,3 +157,67 @@ class SSEMessage(BaseModel):
 
     type: str  # 'log' or 'result'
     data: Optional[dict] = None
+
+
+class ProductInfoCreateRequest(BaseModel):
+    """从商品链接创建选品池条目"""
+
+    url: str = Field(min_length=8, description="淘宝/天猫/京东商品详情页链接")
+
+
+class ProductInfoPreviewRequest(BaseModel):
+    """识别商品链接中的信息（不入库）"""
+
+    url: str = Field(min_length=8, description="淘宝/天猫/京东商品详情页链接")
+
+
+class ProductInfoConfirmRequest(BaseModel):
+    """确认将已识别的商品加入选品池"""
+
+    preview_token: str = Field(min_length=8, description="预览接口返回的临时令牌")
+
+
+class ProductComment(BaseModel):
+    """商品评论摘要（预览展示用）"""
+
+    content: str
+    nickname: str = ""
+    score: str = ""
+    creation_time: str = ""
+
+
+class ProductItem(BaseModel):
+    """选品池商品条目"""
+
+    id: str
+    name: str
+    category: str
+    price: float
+    description: str
+    sales: int
+    shop_name: str
+    url: Optional[str] = None
+    cover_image: Optional[str] = None
+    comments: List[ProductComment] = Field(default_factory=list)
+
+
+class ProductInfoCreateResponse(BaseModel):
+    """创建商品后的响应"""
+
+    product: ProductItem
+    message: str = "商品已加入选品池并同步至检索索引"
+
+
+class ProductInfoPreviewResponse(BaseModel):
+    """商品链接识别预览（待用户确认）"""
+
+    preview_token: str
+    product: ProductItem
+    message: str = "商品信息识别完成，请确认是否加入选品池"
+
+
+class ProductListResponse(BaseModel):
+    """选品池商品列表"""
+
+    items: List[ProductItem]
+    total: int

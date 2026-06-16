@@ -24,6 +24,7 @@ const getShareBaseUrl = () => {
     return "";
   }
 
+  // 创作台与分享页同域（经 frontend-share 入口），用当前 origin 即可
   return window.location.origin;
 };
 
@@ -53,6 +54,129 @@ export type ShareCreateResponse = {
     created_at: string;
     expires_at?: string | null;
   };
+};
+
+export type ProductComment = {
+  content: string;
+  nickname?: string;
+  score?: string;
+  creation_time?: string;
+};
+
+export type ProductItem = {
+  id: string;
+  name: string;
+  category: string;
+  price: number;
+  description: string;
+  sales: number;
+  shop_name: string;
+  url?: string | null;
+  cover_image?: string | null;
+  comments?: ProductComment[];
+};
+
+export type ProductListResponse = {
+  items: ProductItem[];
+  total: number;
+};
+
+export type ProductInfoCreateResponse = {
+  product: ProductItem;
+  message: string;
+};
+
+export type ProductInfoPreviewResponse = {
+  preview_token: string;
+  product: ProductItem;
+  message: string;
+};
+
+const parseApiError = async (response: Response): Promise<never> => {
+  let detail = `HTTP error! status: ${response.status}`;
+  try {
+    const body = (await response.json()) as {
+      detail?: string | Array<{ msg?: string }>;
+    };
+    if (typeof body.detail === "string") {
+      detail = body.detail;
+    } else if (Array.isArray(body.detail) && body.detail.length > 0) {
+      detail = body.detail
+        .map((item) => item.msg)
+        .filter(Boolean)
+        .join("；");
+    }
+  } catch {
+    // ignore JSON parse errors
+  }
+  throw new Error(detail);
+};
+
+export const listProducts = async (): Promise<ProductListResponse> => {
+  const response = await fetch(`${API_BASE_URL}/product_info/list`);
+  if (!response.ok) {
+    await parseApiError(response);
+  }
+  return response.json();
+};
+
+export const getProductDetail = async (productId: string): Promise<ProductItem> => {
+  const response = await fetch(
+    `${API_BASE_URL}/product_info/${encodeURIComponent(productId)}`,
+  );
+
+  if (!response.ok) {
+    await parseApiError(response);
+  }
+
+  return response.json();
+};
+
+export const previewProductFromUrl = async (
+  url: string,
+): Promise<ProductInfoPreviewResponse> => {
+  const response = await fetch(`${API_BASE_URL}/product_info/preview`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ url }),
+  });
+
+  if (!response.ok) {
+    await parseApiError(response);
+  }
+
+  return response.json();
+};
+
+export const confirmProductPreview = async (
+  previewToken: string,
+): Promise<ProductInfoCreateResponse> => {
+  const response = await fetch(`${API_BASE_URL}/product_info/confirm`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ preview_token: previewToken }),
+  });
+
+  if (!response.ok) {
+    await parseApiError(response);
+  }
+
+  return response.json();
+};
+
+export const deleteProduct = async (productId: string): Promise<void> => {
+  const response = await fetch(
+    `${API_BASE_URL}/product_info/${encodeURIComponent(productId)}`,
+    { method: "DELETE" },
+  );
+
+  if (!response.ok) {
+    await parseApiError(response);
+  }
 };
 
 export type DialogSSEType = {
