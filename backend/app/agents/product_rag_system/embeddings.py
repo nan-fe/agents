@@ -77,19 +77,32 @@ class EmbeddingDatabase:
         return "ip"  # 内积距离
     
     def index_documents(self, ids: list, documents: list, metadatas: list):
-        """批量索引文档到向量库"""
+        """批量索引文档到向量库（仅当集合为空时执行全量索引）。"""
         if self.collection.count() > 0:
-            print(f"已有 {self.collection.count()} 条商品向量，跳过索引")
+            print(f"已有 {self.collection.count()} 条商品向量，跳过全量索引")
             return
-        
+
+        self.add_documents(ids, documents, metadatas)
+        print(f"成功索引 {len(ids)} 条商品向量")
+
+    def add_documents(self, ids: list, documents: list, metadatas: list) -> None:
+        """增量追加文档到向量库。"""
+        if not ids:
+            return
+
         batch_size = 100
         for i in range(0, len(ids), batch_size):
-            self.collection.add(
+            self.collection.upsert(
                 ids=ids[i : i + batch_size],
                 documents=documents[i : i + batch_size],
                 metadatas=metadatas[i : i + batch_size],
             )
-        print(f"成功索引 {len(ids)} 条商品向量")
+
+    def delete_documents(self, ids: list) -> None:
+        """从向量库删除文档。"""
+        if not ids:
+            return
+        self.collection.delete(ids=ids)
     
     def query(self, query_text: str, top_k: int = 3) -> dict:
         """向量相似度查询"""

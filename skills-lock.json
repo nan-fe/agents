@@ -1,6 +1,12 @@
 {
   "version": 1,
   "skills": {
+    "caveman": {
+      "source": "juliusbrussee/caveman",
+      "sourceType": "github",
+      "skillPath": "skills/caveman/SKILL.md",
+      "computedHash": "dfbf85749fd474feeb0bbe60c779795ecd5dbec0083299b56e68916bc3ddd8c9"
+    },
     "changelog-automation": {
       "source": "wshobson/agents",
       "sourceType": "github",
@@ -12,6 +18,12 @@
       "sourceType": "github",
       "skillPath": "changelog-generator/SKILL.md",
       "computedHash": "0facdb5c491a654e3b0f6d300fb8fa14472d811cb715c632dc2862919b277dae"
+    },
+    "fastapi": {
+      "source": "fastapi/fastapi",
+      "sourceType": "github",
+      "skillPath": "fastapi/.agents/skills/fastapi/SKILL.md",
+      "computedHash": "ee23d5285caf055cf164ff45dd34888d381143564666baacab8aa786f22e413a"
     },
     "find-skills": {
       "source": "vercel-labs/skills",

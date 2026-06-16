@@ -264,6 +264,99 @@ def retrieval_copy_matches_category(
     return present / len(chars) >= min_char_overlap_ratio
 
 
+def _has_cjk_text(text: str, min_chars: int = 6) -> bool:
+    return sum(1 for ch in text if "\u4e00" <= ch <= "\u9fff") >= min_chars
+
+
+_BAD_SNIPPET_MARKERS = (
+    "请登录",
+    "免费注册",
+    "淘宝网首页",
+    "site owner hides",
+    "The site owner hides",
+)
+
+
+def _is_usable_product_snippet(text: str) -> bool:
+    blob = (text or "").strip()
+    if len(blob) < 20 or not _has_cjk_text(blob, min_chars=8):
+        return False
+    return not any(marker in blob for marker in _BAD_SNIPPET_MARKERS)
+
+
+def search_product_context_snippets(
+    *,
+    url: str,
+    taobao_item_id: Optional[str] = None,
+    jd_item_id: Optional[str] = None,
+    max_results_per_query: int = 10,
+) -> str:
+    """按商品链接或 ID 检索中文商品摘要，供选品池解析回退使用。"""
+    queries: list[str] = []
+    if taobao_item_id:
+        queries.extend(
+            [
+                f"site:item.taobao.com item.htm id={taobao_item_id}",
+                f"site:detail.tmall.com item.htm id={taobao_item_id}",
+                f"淘宝 商品 id={taobao_item_id}",
+            ]
+        )
+    if jd_item_id:
+        queries.extend(
+            [
+                f"site:item.jd.com {jd_item_id}",
+                f"京东 商品 {jd_item_id}",
+            ]
+        )
+    if url:
+        queries.append(url)
+
+    item_id = taobao_item_id or jd_item_id
+    collected: list[str] = []
+
+    for query in queries:
+        try:
+            with DDGS() as ddgs:
+                gen = ddgs.text(query, max_results=max_results_per_query)
+                if not gen:
+                    continue
+                for result in gen:
+                    title = (result.get("title") or "").strip()
+                    body = (result.get("body") or "").strip()
+                    href = (result.get("href") or "").strip()
+                    blob = f"{title}\n{body}".strip()
+                    if not _is_usable_product_snippet(blob):
+                        continue
+                    if item_id and item_id not in f"{href}\n{blob}":
+                        continue
+                    collected.append(blob)
+                    if len("\n\n".join(collected)) >= 1800:
+                        return "\n\n".join(collected[:3])
+        except Exception as exc:
+            print(f"search_product_context_snippets DDG 失败: {exc}")
+            continue
+
+    if collected:
+        return "\n\n".join(collected[:3])
+
+    # 最后放宽：仅按 URL 查询时接受任意中文摘要
+    if url:
+        try:
+            with DDGS() as ddgs:
+                gen = ddgs.text(url, max_results=max_results_per_query)
+                if gen:
+                    for result in gen:
+                        title = (result.get("title") or "").strip()
+                        body = (result.get("body") or "").strip()
+                        blob = f"{title}\n{body}".strip()
+                        if _is_usable_product_snippet(blob):
+                            return blob
+        except Exception:
+            pass
+
+    return ""
+
+
 def search_taobao_first_item_detail_by_category(
     category: str, max_results_per_query: int = 12
 ) -> Optional[Dict[str, Any]]:

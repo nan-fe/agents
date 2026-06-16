@@ -82,7 +82,7 @@ class OrchestratorLLMService:
 1. 本路由仅用于 new_task / change_topic，须输出完整创作流程：
    通常含 RagAgent（按需）、CopywriterAgent、ImageAgent、ReviewerAgent。
 2. 只要 priority_order 含 CopywriterAgent 或 ImageAgent，必须在末尾包含 ReviewerAgent。
-3. 考虑任务依赖关系，确定合理的调用顺序；RagAgent 仅在需要商品检索时使用。
+3. 考虑任务依赖关系，确定合理的调用顺序；RagAgent 仅在需要商品检索时使用，且如果用户输入有详细/更多，优先使用 RagAgent
 4. 如果任务简单，可以跳过 RagAgent。
 5. agents_to_call 和 priority_order 必须从可用 Agent 中选择，且顺序合理。
 6. 输出内容仅输出 JSON 对象，不要附加任何解释""",

@@ -13,6 +13,7 @@ import asyncio
 from typing import Optional, Callable
 
 from .product_database import ProductDatabase
+from .product_scrape_database import ProductScrapeDatabase
 from .embeddings import EmbeddingDatabase
 from .retrievers.retriever import HybridRetriever
 from .retrievers.ranker import Ranker
@@ -32,6 +33,7 @@ class ProductRagAgent:
         """
         # 1. 初始化产品数据库
         self.products_db = ProductDatabase(data_path)
+        self.scrape_db = ProductScrapeDatabase(products_csv_path=data_path)
         
         # 2. 初始化嵌入数据库（向量索引延后到 ensure_index_ready，避免阻塞进程启动）
         self.embedding_db = EmbeddingDatabase()
@@ -60,6 +62,29 @@ class ProductRagAgent:
             documents=self.products_db.get_documents(),
             metadatas=self.products_db.get_metadata(),
         )
+
+    def add_product_to_index(self, product: dict) -> None:
+        """将单条商品写入向量库并刷新 BM25 语料。"""
+        product_id = str(product["id"])
+        metadata = {
+            "name": product["name"],
+            "category": product["category"],
+            "price": product["price"],
+            "sales": product["sales"],
+            "shop_name": product["shop_name"],
+            "url": product.get("url", ""),
+        }
+        self.embedding_db.add_documents(
+            ids=[product_id],
+            documents=[product["search_text"]],
+            metadatas=[metadata],
+        )
+        self.retriever.refresh_corpus()
+
+    def remove_product_from_index(self, product_id: str) -> None:
+        """从向量库移除商品并刷新 BM25 语料。"""
+        self.embedding_db.delete_documents([str(product_id)])
+        self.retriever.refresh_corpus()
 
     async def ensure_index_ready(self) -> None:
         """确保 Chroma 索引已就绪；并发安全，可重复调用。"""
@@ -126,7 +151,7 @@ class ProductRagAgent:
         
         # ===== 阶段2：混合检索 + 重排 =====
         products = self.retrieve_and_rank(query, top_k=3)
-        print(f"[RagAgent] 检索到 {len(products)} 条商品")
+        print(f"[RagAgent] 检索到 {len(products)} 条商品, 商品列表: {products}")
         
         # ===== 阶段3：质量评估 & 决策 =====
         product_similarity = 0

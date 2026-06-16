@@ -4,9 +4,11 @@ from contextlib import asynccontextmanager
 from datetime import datetime
 from typing import AsyncIterator, Optional
 
+import httpx
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from sse_starlette.sse import EventSourceResponse
 
 from app.agents.orchestrator.agent import DialogOrchestratorAgent
@@ -22,6 +24,13 @@ from app.models.schemas import (
     ProjectListResponse,
     ProjectFinalizeRequest,
     ProjectFinalizeResponse,
+    ProductInfoCreateRequest,
+    ProductInfoCreateResponse,
+    ProductInfoConfirmRequest,
+    ProductInfoPreviewRequest,
+    ProductInfoPreviewResponse,
+    ProductItem,
+    ProductListResponse,
     ShareCreateRequest,
     ShareCreateResponse,
     ShareSnapshot,
@@ -29,6 +38,8 @@ from app.models.schemas import (
     SSEMessage,
     VersionSnapshot,
 )
+from app.services.product_info_service import ProductInfoService
+from app.services.product_page_scraper import get_product_screenshot_dir
 from app.security.input_guard import check_input_security, safety_rejection_payload
 from app.services.dialog_stream_store import DialogStream, dialog_stream_store
 from app.services.share_service import share_store
@@ -44,6 +55,10 @@ logger = logging.getLogger(__name__)
 
 # 编排器单例（向量索引在 ProductRagAgent 内延后构建，避免 import 即阻塞）
 orchestrator = DialogOrchestratorAgent()
+product_info_service = ProductInfoService(orchestrator.rag_agent)
+
+# 限制同时跑 orchestrator 的生成任务数；超额任务在 acquire 处排队等待
+_dialog_generation_sem = asyncio.Semaphore(settings.MAX_ACTIVE_DIALOG_GENERATIONS)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -77,6 +92,12 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+)
+
+app.mount(
+    "/product-screenshots",
+    StaticFiles(directory=str(get_product_screenshot_dir())),
+    name="product-screenshots",
 )
 
 
@@ -175,6 +196,36 @@ async def _schedule_stream_cleanup(session_id: str, stream_token: int) -> None:
     await dialog_stream_store.remove_stream(session_id)
 
 
+async def _append_result_event(stream: DialogStream, data: dict) -> None:
+    result_message = SSEMessage(type="result", data=data)
+    await stream.append_event(
+        {"event": "message", "data": result_message.model_dump_json()}
+    )
+
+
+def _timeout_error_result() -> dict:
+    return {
+        "title": "",
+        "content": "",
+        "hashtags": [],
+        "image_url": "",
+        "message": (
+            "生成失败：执行超时（常见于规划、模型调用等环节超过等待上限），请稍后重试。"
+        ),
+        "error_code": "TIMEOUT",
+    }
+
+
+def _error_result(message: str) -> dict:
+    return {
+        "title": "",
+        "content": "",
+        "hashtags": [],
+        "image_url": "",
+        "message": message,
+    }
+
+
 async def _run_dialog_generation(
     stream: DialogStream,
     user_input: str,
@@ -196,63 +247,41 @@ async def _run_dialog_generation(
         )
 
     try:
-        await stream.append_event(
-            {
-                "event": "message",
-                "data": _build_meta_message().model_dump_json(),
-            }
-        )
-
-        safety_result = await check_input_security(user_input)
-        if not safety_result.allowed:
-            await log_callback("SafetyGuard", safety_result.reason)
-            result_message = SSEMessage(
-                type="result", data=safety_rejection_payload(safety_result)
-            )
+        async with _dialog_generation_sem:
             await stream.append_event(
-                {"event": "message", "data": result_message.model_dump_json()}
+                {
+                    "event": "message",
+                    "data": _build_meta_message().model_dump_json(),
+                }
             )
-            return
 
-        try:
-            final_result = await orchestrator.run(
-                user_input,
-                session_id,
-                log_callback,
-                project_id=project_id,
-                user_id=user_id,
-            )
-        except asyncio.CancelledError:
-            raise
-        except Exception as e:
-            if isinstance(e, TimeoutError):
-                error_text = (
-                    "生成失败：执行超时（常见于规划、模型调用等环节超过等待上限），请稍后重试。"
+            try:
+                final_result = await orchestrator.run(
+                    user_input,
+                    session_id,
+                    log_callback,
+                    project_id=project_id,
+                    user_id=user_id,
                 )
-            else:
-                # detail = (str(e) or "").strip()
-                # if not detail and getattr(e, "args", None):
-                #     detail = " ".join(
-                #         str(a) for a in e.args if a is not None and str(a).strip()
-                #     ).strip()
-                # if not detail:
-                #     detail = type(e).__name__
-                error_text = f"生成失败: {classify_agent_failure(e)}"
-            await log_callback("Orchestrator", error_text)
-            final_result = {
-                "title": "",
-                "content": "",
-                "hashtags": [],
-                "image_url": "",
-                "message": error_text,
-            }
-            if isinstance(e, TimeoutError):
-                final_result["error_code"] = "TIMEOUT"
+            except asyncio.CancelledError:
+                raise
+            except TimeoutError:
+                final_result = _timeout_error_result()
+            except Exception:
+                try:
+                    final_result = await orchestrator.run(
+                        user_input, session_id, log_callback
+                    )
+                except asyncio.CancelledError:
+                    raise
+                except TimeoutError:
+                    final_result = _timeout_error_result()
+                except Exception as e:
+                    error_text = f"生成失败: {classify_agent_failure(e)}"
+                    await log_callback("Orchestrator", error_text)
+                    final_result = _error_result(error_text)
 
-        result_message = SSEMessage(type="result", data=final_result)
-        await stream.append_event(
-            {"event": "message", "data": result_message.model_dump_json()}
-        )
+            await _append_result_event(stream, final_result)
     finally:
         dialog_stream_store.mark_generation_finished(session_id)
         stream.is_complete = True
@@ -547,6 +576,84 @@ async def generateDialog(request: Request, user_input: UserInput):
             "Content-Type": "text/event-stream",
         },
     )
+
+
+@app.get("/product_info/list", response_model=ProductListResponse)
+def list_product_info():
+    """获取选品池商品列表。"""
+    return product_info_service.list_products()
+
+
+@app.post("/product_info/preview", response_model=ProductInfoPreviewResponse)
+async def preview_product_info(payload: ProductInfoPreviewRequest):
+    """识别商品链接信息，返回预览供用户确认（不入库）。"""
+    try:
+        return await product_info_service.preview_from_url(payload.url)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except httpx.HTTPError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail="无法访问商品页面，请稍后重试或更换链接",
+        ) from exc
+    except Exception as exc:
+        logger.exception("识别选品池商品失败")
+        raise HTTPException(
+            status_code=500,
+            detail="商品信息解析失败，请稍后重试",
+        ) from exc
+
+
+@app.post("/product_info/confirm", response_model=ProductInfoCreateResponse)
+async def confirm_product_info(payload: ProductInfoConfirmRequest):
+    """确认将已识别的商品加入选品池与 RAG 索引。"""
+    try:
+        return await product_info_service.confirm_preview(payload.preview_token)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.exception("确认选品池商品失败")
+        raise HTTPException(
+            status_code=500,
+            detail="商品入库失败，请稍后重试",
+        ) from exc
+
+
+@app.post("/product_info/create", response_model=ProductInfoCreateResponse)
+async def create_product_info(payload: ProductInfoCreateRequest):
+    """从商品链接抓取信息并加入选品池与 RAG 索引。"""
+    try:
+        return await product_info_service.create_from_url(payload.url)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except httpx.HTTPError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail="无法访问商品页面，请稍后重试或更换链接",
+        ) from exc
+    except Exception as exc:
+        logger.exception("创建选品池商品失败")
+        raise HTTPException(
+            status_code=500,
+            detail="商品信息解析失败，请稍后重试",
+        ) from exc
+
+
+@app.get("/product_info/{product_id}", response_model=ProductItem)
+def get_product_info(product_id: str):
+    """获取选品池商品详情（含头图与评论）。"""
+    product = product_info_service.get_product(product_id)
+    if not product:
+        raise HTTPException(status_code=404, detail="商品不存在")
+    return product
+
+
+@app.delete("/product_info/{product_id}")
+def delete_product_info(product_id: str):
+    """从选品池删除商品。"""
+    if not product_info_service.delete_product(product_id):
+        raise HTTPException(status_code=404, detail="商品不存在")
+    return {"ok": True}
 
 
 @app.post("/shares", response_model=ShareCreateResponse)

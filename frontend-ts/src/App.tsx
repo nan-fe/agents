@@ -2,12 +2,14 @@ import React, { useState } from 'react';
 import {
   LogoutOutlined,
   PlusOutlined,
-  UserOutlined,
+  ShoppingOutlined,
   VideoCameraOutlined,
 } from '@ant-design/icons';
 import { Layout, Menu, Modal, message } from 'antd';
 import DialogContent from './pages/dialog-content';
 import { startNewConversation } from './utils/new-conversation';
+import ProductPool from './pages/product-pool';
+import { resetSessionId } from './utils/session';
 
 import './App.css';
 
@@ -17,9 +19,6 @@ enum PageMenu {
   PRODUCT_MARKETING,
 }
 
-/**
- * TODO: 菜单后续会新增选品池，目前仅支持内容生成
- */
 const App: React.FC = () => {
   const [activeMenu, setActiveMenu] = useState(String(PageMenu.DIALOG_CONTENT));
   const [chatSessionKey, setChatSessionKey] = useState(0);
@@ -80,9 +79,8 @@ const App: React.FC = () => {
             },
             {
               key: String(PageMenu.PRODUCT_MARKETING),
-              icon: <UserOutlined />,
-              label: '选品池（待建设）',
-              disabled: true,
+              icon: <ShoppingOutlined />,
+              label: '选品池',
             },
           ]}
         />
@@ -95,7 +93,10 @@ const App: React.FC = () => {
       </Sider>
       <Layout className="min-h-0 min-w-0 flex-1 bg-transparent">
         <Content className="flex h-screen min-h-0 min-w-0 flex-col overflow-hidden p-0">
-          <DialogContent key={chatSessionKey} />
+          {activeMenu === String(PageMenu.DIALOG_CONTENT) && (
+            <DialogContent key={chatSessionKey} />
+          )}
+          {activeMenu === String(PageMenu.PRODUCT_MARKETING) && <ProductPool />}
         </Content>
       </Layout>
     </Layout>

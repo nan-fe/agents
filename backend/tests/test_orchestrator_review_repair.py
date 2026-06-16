@@ -111,3 +111,32 @@ def test_run_review_repair_loop_skips_on_review_error(
     asyncio.run(orchestrator._run_review_repair_loop(context, "input", None))
 
     orchestrator._execute_agent_pipeline.assert_not_called()
+
+
+def test_execute_agent_pipeline_skips_image_agent_when_rag_has_url(
+    orchestrator: DialogOrchestratorAgent,
+) -> None:
+    context = ExecutionContext()
+    context.set_rag_context(
+        {
+            "retrieved_products": [
+                {"id": "1", "name": "测试商品", "url": "https://img.example/cover.jpg"}
+            ]
+        }
+    )
+
+    orchestrator.agent_executor.execute = AsyncMock()
+    orchestrator.agent_map["ImageAgent"] = MagicMock()
+
+    asyncio.run(
+        orchestrator._execute_agent_pipeline(
+            ["ImageAgent"],
+            context,
+            "生成图片",
+            None,
+        )
+    )
+
+    orchestrator.agent_executor.execute.assert_not_called()
+    assert context.image.image_url == "https://img.example/cover.jpg"
+    assert context.image.prompt == "RAG_HIT_IMAGE_REUSED"

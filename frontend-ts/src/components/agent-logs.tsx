@@ -2,6 +2,7 @@ import { useCallback, useLayoutEffect, useRef, useState } from 'react';
 import { DownOutlined, UpOutlined } from '@ant-design/icons';
 import { formatTimestamp } from '../utils/helper';
 import type { AgentLogEntry } from '../types/conversation';
+// import StreamMessage from './streamMessage';
 
 const prefersReducedMotion = () =>
   typeof window !== 'undefined' &&
@@ -126,6 +127,11 @@ const AgentLogs = (param: IAgentLog) => {
                           </time>
                         </div>
                         <p className="agent-logs__step-message">{log.message}</p>
+                        {/* <StreamMessage
+                          variant="inline"
+                          className="agent-logs__step-message"
+                          streamContent={log.message}
+                        /> */}
                       </div>
                     </li>
                   );

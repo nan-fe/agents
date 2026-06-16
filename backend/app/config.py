@@ -51,6 +51,8 @@ class Settings(BaseSettings):
 
     # Project Memory（SQLite 默认；生产可改为 postgresql+asyncpg://...）
     DATABASE_URL: str = f"sqlite+aiosqlite:///{_DEFAULT_MEMORY_DB}"
+    # 同时进行中的对话生成任务上限（Semaphore）；续传/回放不占槽位
+    MAX_ACTIVE_DIALOG_GENERATIONS: int = 25
 
     # 意图/路由等外层有 wait_for 的编排 LLM：默认不重试，避免退避 sleep 先于外层超时触发「生成失败」
     LLM_ORCHESTRATION_HTTP_RETRY_MAX_ATTEMPTS: int = 1
@@ -66,6 +68,11 @@ class Settings(BaseSettings):
     SEARCH_HTTP_RETRY_MAX_ATTEMPTS: int = 3
     SEARCH_HTTP_RETRY_BASE_DELAY: float = 0.5
     SEARCH_HTTP_RETRY_MAX_DELAY: float = 12.0
+
+    # 选品池商品页抓取
+    PRODUCT_SCRAPER_USE_PLAYWRIGHT: bool = True
+    PRODUCT_PLAYWRIGHT_TIMEOUT_MS: int = 35000
+    PRODUCT_VISION_MODEL: Optional[str] = None
 
     # LangSmith
     LANGCHAIN_TRACING_V2: bool = True
