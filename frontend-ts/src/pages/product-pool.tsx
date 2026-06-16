@@ -30,6 +30,7 @@ import {
   getProductDetail,
   listProducts,
   previewProductFromUrl,
+  reportError,
   API_BASE_URL,
   type ProductComment,
   type ProductItem,
@@ -99,6 +100,7 @@ const poolAction = async (
       return { ...prevState, items, loaded: true };
     } catch (error) {
       console.error('加载选品池失败:', error);
+      reportError(error, 'product-pool/load');
       message.error('加载选品池失败，请稍后重试');
       return { ...prevState, loaded: true };
     }
@@ -116,6 +118,7 @@ const poolAction = async (
       };
     } catch (error) {
       console.error('识别商品失败:', error);
+      reportError(error, 'product-pool/preview', { url: action.url });
       message.error(error instanceof Error ? error.message : '识别商品失败，请稍后重试');
       return prevState;
     }
@@ -129,6 +132,7 @@ const poolAction = async (
       return resetDrawerState({ ...prevState, items });
     } catch (error) {
       console.error('添加商品失败:', error);
+      reportError(error, 'product-pool/confirm');
       message.error(error instanceof Error ? error.message : '添加商品失败，请稍后重试');
       return prevState;
     }
@@ -142,6 +146,7 @@ const poolAction = async (
       return { ...prevState, items };
     } catch (error) {
       console.error('删除商品失败:', error);
+      reportError(error, 'product-pool/delete', { productId: action.productId });
       message.error('删除失败，请稍后重试');
       return prevState;
     }
@@ -187,6 +192,7 @@ const poolAction = async (
       };
     } catch (error) {
       console.error('加载商品详情失败:', error);
+      reportError(error, 'product-pool/open-detail', { productId: action.productId });
       message.error(error instanceof Error ? error.message : '加载商品详情失败');
       return { ...prevState, pendingDetailId: null };
     }

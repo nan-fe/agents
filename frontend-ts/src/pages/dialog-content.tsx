@@ -13,6 +13,7 @@ import {
   createProject,
   finalizeProjectBeacon,
   generateDialogContent,
+  reportError,
   type UserInput,
 } from '../services/api';
 import AgentLogs from '../components/agent-logs';
@@ -210,6 +211,7 @@ const runDialogGeneration = async (
     if (getCancelled()) {
       return { kind: 'cancelled' };
     }
+    reportError(error, 'dialog/generateContent', { prompt: payload.prompt });
     return {
       kind: 'error',
       error: error instanceof Error ? error.message : '生成内容失败',
@@ -474,6 +476,7 @@ const DialogContent = () => {
         }
       } catch (error) {
         console.error('创建项目失败:', error);
+        reportError(error, 'dialog/createProject');
         message.error('创建项目失败，请稍后重试');
         return;
       }

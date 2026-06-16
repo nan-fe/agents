@@ -4,6 +4,7 @@ import ReactMarkdown from 'react-markdown';
 import {
   buildShareUrl,
   createShare,
+  reportError,
   type ShareResult,
 } from '../services/api';
 
@@ -47,6 +48,7 @@ const shareResultAction = async (
     return { shareUrl: url };
   } catch (error) {
     console.error('创建分享链接失败:', error);
+    reportError(error, 'result/createShare');
     message.error('创建分享链接失败，请稍后重试');
     return prevState;
   }

@@ -2,9 +2,25 @@
  * API服务 - 封装SSE连接
  */
 
+import * as Sentry from "@sentry/react";
 import type { components } from "../api/schema";
 import { parseSSEStream } from "../utils/sse-parser";
 import type { StreamIngestor } from "../utils/sse-stream-ingest";
+
+/**
+ * 上报已捕获错误到 Better Stack，附上操作名和可选上下文。
+ * 在 try/catch 中用于不应静默吞掉的接口/业务错误。
+ */
+export const reportError = (
+  error: unknown,
+  operation: string,
+  extra?: Record<string, unknown>,
+): void => {
+  Sentry.captureException(error, {
+    tags: { operation },
+    extra,
+  });
+};
 
 
 export const API_BASE_URL =
@@ -321,6 +337,7 @@ export const generateDialogContent = async (
     return finalResult;
   } catch (error) {
     console.error("SSE连接错误:", error);
+    reportError(error, "generateDialogContent");
     throw error;
   }
 };
@@ -374,6 +391,7 @@ export const rollbackToVersion = async (
     return await response.json();
   } catch (error) {
     console.error("回退版本失败:", error);
+    reportError(error, "rollbackToVersion", { session_id, version });
     throw error;
   }
 };
@@ -399,6 +417,7 @@ export const compareVersions = async (
     return await response.json();
   } catch (error) {
     console.error("比较版本失败:", error);
+    reportError(error, "compareVersions", { session_id, version1, version2 });
     throw error;
   }
 };
