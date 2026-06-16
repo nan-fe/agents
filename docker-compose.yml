@@ -59,7 +59,6 @@ services:
       - STUDIO_UPSTREAM_URL=http://frontend:80
       - AUTH_SECRET=${AUTH_SECRET:-change-me-in-production}
       - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/xhs_auth
-      # Sentry DSN 在 CI 构建 frontend-share 镜像时注入，无需在服务器 .env 配置
     depends_on:
       postgres:
         condition: service_healthy
