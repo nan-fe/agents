@@ -1,4 +1,4 @@
-import { getProjects, type ProjectListItem } from '../services/api';
+import { getProjects, reportError, type ProjectListItem } from '../services/api';
 import type { ThreadItem } from '../types/conversation';
 import { parseApiDateTime } from './format';
 import { loadProjectConversationState, type LoadedProjectState } from './project-conversation';
@@ -57,6 +57,7 @@ export const bootstrapInitialConversation =
       return loadBoundProject(activeProject.project_id);
     } catch (error) {
       console.error('加载项目列表失败:', error);
+      reportError(error, 'session/bootstrapConversation');
       return { status: 'error' };
     }
   };
@@ -69,6 +70,7 @@ export const switchHistoryProject = async (
     return { status: 'success', projectId, loaded };
   } catch (error) {
     console.error('切换对话失败:', error);
+    reportError(error, 'session/switchHistoryProject', { projectId });
     return { status: 'error' };
   }
 };
@@ -90,6 +92,7 @@ export const loadHistoryProjectList = async (): Promise<ProjectListItem[]> => {
     );
   } catch (error) {
     console.error('加载历史对话失败:', error);
+    reportError(error, 'session/loadHistoryProjectList');
     return [];
   }
 };
