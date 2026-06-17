@@ -24,6 +24,7 @@ const nextConfig = {
         destination: `${studioUpstream}/studio/:path*`,
       },
       // /dialog/generate 由 app/dialog/generate/route.ts 流式代理（rewrite 会缓冲 SSE）
+      // /product_info/* 由 app/product_info/[...path]/route.ts 长超时代理（rewrite 约 30s 超时）
       {
         source: '/projects',
         destination: `${apiUpstream}/projects`,
@@ -39,14 +40,6 @@ const nextConfig = {
       {
         source: '/shares/:path*',
         destination: `${apiUpstream}/shares/:path*`,
-      },
-      {
-        source: '/product_info',
-        destination: `${apiUpstream}/product_info`,
-      },
-      {
-        source: '/product_info/:path*',
-        destination: `${apiUpstream}/product_info/:path*`,
       },
     ];
   },
