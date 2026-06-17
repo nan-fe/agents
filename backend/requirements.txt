@@ -24,4 +24,3 @@ rank-bm25
 sqlalchemy>=2.0
 aiosqlite
 playwright
-chromium

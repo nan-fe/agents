@@ -7,8 +7,12 @@ WORKDIR /app
 # 复制 requirements.txt 文件
 COPY requirements.txt .
 
-# 安装依赖
+# 安装 Python 依赖
 RUN pip install --no-cache-dir --timeout=120 --index-url https://pypi.tuna.tsinghua.edu.cn/simple -r requirements.txt
+
+# Playwright 商品页抓取需要 Chromium 及系统库（pip install playwright 不会自动装浏览器）
+RUN python -m playwright install-deps chromium \
+    && python -m playwright install chromium
 
 # 复制项目代码
 COPY . .
