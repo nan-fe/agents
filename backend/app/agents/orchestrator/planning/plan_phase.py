@@ -119,7 +119,7 @@ class PlanPhaseRunner:
             context, session_history, intent, log_callback
         )
 
-        await emit_log(log_callback, "Orchestrator", "规划阶段：解析 pipeline…")
+        await emit_log(log_callback, "Orchestrator", "规划阶段：解析工作流程")
         resolution = await resolve_pipeline(
             intent, user_input, context.get_planning(), self.llm_service
         )

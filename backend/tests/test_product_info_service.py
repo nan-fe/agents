@@ -30,6 +30,7 @@ from app.services.product_info_service import (
     _normalize_optional_url,
     _preview_comments,
     _preview_cover_image,
+    _resolve_product_name,
     _validate_extracted_product_fields,
     build_scrape_payload,
     compose_product_context,
@@ -43,9 +44,12 @@ from app.services.product_page_scraper import (
     ProductPageCapture,
     _normalize_jd_comment_items,
     _parse_jd_comments_response,
+    _parse_jd_document_title,
+    _parse_jd_mgets_payload,
     _parse_numeric_price,
     _parse_price_from_visible_text,
     _parse_sales_from_visible_text,
+    is_jd_blocked_page,
     is_playwright_available,
     is_usable_product_page_text,
     playwright_setup_hint,
@@ -111,6 +115,18 @@ def test_extract_jd_item_id_from_url():
     assert _extract_jd_item_id("https://item.jd.com/100012043978.html") == "100012043978"
 
 
+def test_parse_jd_document_title():
+    assert _parse_jd_document_title("米家智能除湿机 22L - 京东") == "米家智能除湿机 22L"
+    assert _parse_jd_document_title("  请登录 - 京东  ") == ""
+    assert _parse_jd_document_title("") == ""
+
+
+def test_is_jd_blocked_page():
+    assert is_jd_blocked_page("https://pc-frequent-pro.pf.jd.com/?from=pc_item&reason=403")
+    assert is_jd_blocked_page("https://item.jd.com/1.html", title="PC频控页")
+    assert not is_jd_blocked_page("https://item.jd.com/1.html", title="华为FreeBuds 5i")
+
+
 def test_resolve_jd_url_keeps_item_id_from_query_params():
     normalized = asyncio.run(resolve_product_url(JD_E2E_URL))
     assert normalized == "https://item.jd.com/100045686996.html"
@@ -124,6 +140,18 @@ def test_validate_extracted_product_fields_rejects_placeholder_name():
                 "description": "无法从页面文本中提取有效商品信息。",
             }
         )
+
+
+def test_resolve_product_name_uses_capture_title_as_fallback():
+    capture = ProductPageCapture(final_url="https://item.jd.com/1.html", title="米家智能除湿机 22L")
+    name = _resolve_product_name("未知商品", capture)
+    assert name == "米家智能除湿机 22L"
+
+
+def test_resolve_product_name_keeps_valid_llm_name():
+    capture = ProductPageCapture(final_url="https://item.jd.com/1.html", title="米家智能除湿机 22L")
+    name = _resolve_product_name("小米米家除湿机", capture)
+    assert name == "小米米家除湿机"
 
 
 def test_normalize_optional_url_handles_nan():
@@ -207,6 +235,57 @@ def test_parse_price_from_jd_product_price_value():
     assert _parse_numeric_price("159") == 159.0
     assert _parse_numeric_price("159.00") == 159.0
     assert _parse_numeric_price("￥159.00") == 159.0
+
+
+def test_parse_jd_mgets_payload():
+    assert _parse_jd_mgets_payload([{"p": "159.00", "op": "199.00"}]) == 159.0
+    assert _parse_jd_mgets_payload([{"op": "199.00"}]) == 199.0
+    assert _parse_jd_mgets_payload([]) is None
+    assert _parse_jd_mgets_payload({}) is None
+
+
+def test_is_valid_jd_price_text_rejects_masked():
+    from app.services.product_page_scraper import _is_valid_jd_price_text
+
+    assert _is_valid_jd_price_text("159") is True
+    assert _is_valid_jd_price_text("¥159.00") is True
+    assert _is_valid_jd_price_text("1??") is False
+    assert _is_valid_jd_price_text("登录查看价格") is False
+
+
+def test_parse_jd_ware_business_payload():
+    from app.services.product_page_scraper import _parse_jd_ware_business_payload
+
+    payload = {
+        "price": {"p": "299.00", "jdPrice": "299.00"},
+        "comment": {"commentCountStr": "1.2万+"},
+    }
+    price, sales = _parse_jd_ware_business_payload(payload)
+    assert price == 299.0
+    assert sales == 12000
+
+
+def test_enrich_capture_price_sales_uses_prefetched():
+    from app.services.product_page_scraper import _enrich_capture_price_sales
+
+    async def _run() -> None:
+        capture = ProductPageCapture(
+            final_url="https://item.jd.com/100045686996.html",
+            visible_text="亚朵星球枕头",
+            platform="jd",
+        )
+        await _enrich_capture_price_sales(
+            capture,
+            "https://item.jd.com/100045686996.html",
+            "jd",
+            page=None,
+            prefetched_price=159.0,
+            prefetched_sales=500000,
+        )
+        assert capture.price == 159.0
+        assert capture.sales == 500000
+
+    asyncio.run(_run())
 
 
 def test_normalize_jd_comment_items_limits_to_ten():

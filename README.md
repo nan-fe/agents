@@ -14,9 +14,9 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                    前端层 (React + TypeScript + Vite)             │
+│                    前端层 (Next.js + React + TypeScript)            │
 │  ┌───────────────────────────────────────────────────────────┐   │
-│  │ UI Components │ API Services │ SSE Client │ Virtual List │   │
+│  │ Portal / Auth │ Studio SPA │ Share ISR │ API Proxy/SSE  │   │
 │  └───────────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────┬───────────────────────────┘
                                       │ HTTP/SSE
@@ -68,15 +68,10 @@
 │  │  └──────────────┘  └──────────────┘  │  Registry (ACR)  │   │   │
 │  │                                      └──────────────────┘   │   │
 │  │  ┌──────────────┐  ┌──────────────┐  ┌──────────────────┐   │   │
-│  │  │ Vite Build   │→│  Nginx Image │→│  Push to Aliyun  │   │   │
-│  │  │ dist Assets  │  │  (Frontend)  │  │  Container       │   │   │
-│  │  └──────────────┘  └──────────────┘  │  Registry (ACR)  │   │   │
-│  │                                      └──────────────────┘   │   │
-│  │  ┌──────────────┐  ┌──────────────┐  ┌──────────────────┐   │   │
 │  │  │ Next Build   │→│ Standalone   │→│ Push to Aliyun   │   │   │
-│  │  │ Share Pages  │  │  Image       │  │ Container        │   │   │
-│  │  └──────────────┘  └──────────────┘  │ Registry (ACR)   │   │   │
-│  │                                      └──────────────────┘   │   │
+│  │  │ Portal+Studio│  │  Image       │  │ Container        │   │   │
+│  │  │ + Share      │  │(frontend-share)│ Registry (ACR)   │   │   │
+│  │  └──────────────┘  └──────────────┘  └──────────────────┘   │   │
 │  └──────────────────────────────────────────────────────────────┘   │
 └────────────────────────────────────────┬────────────────────────────┘
                                          │ SSH Deploy
@@ -85,9 +80,9 @@
 │  ┌──────────────────────────────────────────────────────────────┐   │
 │  │  Docker Compose Orchestration                                │   │
 │  │  ┌──────────────┐  ┌──────────────┐  ┌──────────────────┐   │   │
-│  │  │   Backend    │  │   Frontend   │  │ Frontend Share   │   │   │
-│  │  │   :8000      │  │   :3000      │  │     :3001        │   │   │
-│  │  │ Share Store  │  │ Nginx Proxy  │  │ Next Standalone  │   │   │
+│  │  │   Backend    │  │  PostgreSQL  │  │ Frontend Share   │   │   │
+│  │  │   :8000      │  │   :5432      │  │  :3000 (唯一入口) │   │   │
+│  │  │ Share Store  │  │  users DB    │  │ Next Standalone  │   │   │
 │  │  └──────────────┘  └──────────────┘  └──────────────────┘   │   │
 │  └──────────────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────────────┘
@@ -181,28 +176,34 @@ backend/
 
 详见 [backend/README.md](backend/README.md)。
 
-### 前端结构 (`frontend-ts/`)
+### 前端结构 (`frontend-share/`)
+
+创作台已从 `frontend-ts`（Vite SPA）迁入 Next.js 应用，**门户、鉴权、创作台、分享页统一由 `frontend-share` 提供**。
 
 ```
-frontend-ts/README.md
+frontend-share/
+├── src/app/studio/          # 创作台（Client SPA，dynamic ssr:false）
+├── src/app/share/           # 公开分享页（ISR）
+├── src/app/dialog/generate/ # SSE Route Handler
+├── src/app/product_info/    # 商品识别长超时代理
+├── src/services/api.ts      # 浏览器 API + OpenAPI 类型
+└── README.md                # 本地开发与部署说明
 ```
+
+`frontend-ts/` 进入维护阶段，新功能请在 `frontend-share` 开发。详见 [frontend-share/README.md](frontend-share/README.md)。
 
 ### 分享页结构 (`frontend-share/`)
 
-```
-frontend-share/README.md
-```
+公开分享页与创作台同属 `frontend-share`，见 [frontend-share/README.md](frontend-share/README.md)。
 
 ## 🔧 技术栈
 
 | 层级 | 技术 | 版本 |
 |------|------|------|
 | 后端框架 | FastAPI | ^0.100 |
-| 前端框架 | React | ^19 |
-| 分享页框架 | Next.js | latest |
+| 前端框架 | Next.js App Router + React | latest / ^19 |
 | 前端语言 | TypeScript | ^5 |
-| 前端构建 | Vite | ^8 |
-| 样式框架 | Tailwind CSS | ^3 |
+| 样式框架 | Tailwind CSS | v4（frontend-share） |
 | 大模型框架 | LangChain | ^0.1 |
 | 向量数据库 | ChromaDB | ^0.4 |
 | 图片生成 | Replicate / SiliconFlow | - |
@@ -245,18 +246,16 @@ LANGCHAIN_API_KEY=your_langchain_key
 LANGCHAIN_PROJECT=XHS-Multi-Agent
 ```
 
-在 `frontend-ts` 中配置分享页公开地址：
+在 `frontend-share/.env` 中配置（本地开发示例）：
 
 ```env
-VITE_SHARE_BASE_URL=https://share.example.com
+API_UPSTREAM_URL=http://localhost:8000
+API_BASE_URL=http://localhost:8000
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/xhs_auth
+NEXT_PUBLIC_SITE_URL=http://localhost:3000
 ```
 
-在 `frontend-share` 中配置后端 API 地址：
-
-```env
-API_BASE_URL=https://api.example.com
-NEXT_PUBLIC_API_BASE_URL=https://api.example.com
-```
+生产环境浏览器 API 使用同域相对路径；容器内 SSR / Route Handler 使用 `http://backend:8000`。
 
 ### 启动服务
 
@@ -269,50 +268,46 @@ docker compose up -d
 **方式二：本地开发**
 
 ```bash
+# PostgreSQL（用户鉴权）
+docker compose up postgres -d
+
 # 启动后端
 cd backend
 pip install -r requirements.txt
 pnpm run start
 
-# 启动前端
-cd ../frontend-ts
-pnpm install
-pnpm run start
-
-# 启动公开分享页
+# 启动 frontend-share（门户 + 创作台 + 分享）
 cd ../frontend-share
 pnpm install
+cp .env.example .env
+pnpm db:migrate:deploy
 pnpm dev
 ```
 
 ### 访问服务
 
-- 门户 / 分享 / 创作台入口（`frontend-share`）：http://localhost:3000
+- 唯一 Web 入口（`frontend-share`）：http://localhost:3000
 - 门户首页：http://localhost:3000/
 - 登录页：http://localhost:3000/login
 - 创作台（需登录）：http://localhost:3000/studio
 - 分享详情：http://localhost:3000/share/[shareId]
-- 本地直连 Vite 创作端（开发调试）：http://localhost:5173/studio/
 - 后端 API：http://localhost:8000
 
 **响应：** SSE (Server-Sent Events) 流式响应
 
-### 分享功能部署
-
-分享功能已接入现有 Docker Compose 和 GitHub Actions 部署链路：
+### 分享与 Web 部署
 
 - 后端 `POST /shares` 保存生成结果快照，`GET /shares/{share_id}` 供公开分享页读取。
-- 主创作端 `frontend-ts` 使用 `VITE_SHARE_BASE_URL` 生成分享链接，例如 `https://share.example.com/share/abc123`。
-- 主前端 Nginx 已代理 `/shares` 到后端，支持生产环境从结果页创建分享快照。
-- 独立分享页 `frontend-share` 使用 Next.js standalone 镜像部署，在 `docker-compose.yml` 中默认映射到 `3001:3000`。
-- GitHub Actions 会构建并推送 `agents:frontend-share` 镜像，部署阶段通过 `docker compose pull && docker compose up -d` 拉起。
+- 创作台在 `/studio` 内生成分享链接，使用当前站点 origin（如 `https://example.com/share/abc123`）。
+- `frontend-share` 为**唯一公网 Web 入口**，Docker Compose 映射 `3000:3000`；API 经 Next rewrites / Route Handler 代理到 `backend:8000`。
+- GitHub Actions 构建并推送 `agents:backend`、`agents:frontend-share`、`agents:postgres` 镜像。
 
 生产部署时请确认：
 
-- GitHub Repository Variable `VITE_SHARE_BASE_URL` 指向分享页公开域名，供 `frontend-ts` 镜像构建时注入。
-- `frontend-share` 的 `API_BASE_URL` 指向服务端可访问的后端地址；Compose 默认使用 `http://backend:8000`。
-- 后端允许分享页域名跨域访问分享接口。
-- `SHARE_STORE_PATH` 或默认分享数据目录已挂载持久化卷；Compose 默认挂载 `./data/shares:/data/shares`，避免重新部署后已有分享链接失效。
+- GitHub Actions **Secrets**：`AUTH_SECRET`、`SENTRY_DSN`
+- `frontend-share` 构建期 `API_UPSTREAM_URL=http://backend:8000`；运行期 `API_BASE_URL` / `API_UPSTREAM_URL` 指向容器内 backend
+- `SHARE_STORE_PATH` 或 `./data/shares` 持久化卷已挂载，避免重新部署后分享链接失效
+- **不再部署** `frontend-ts` Nginx 容器；无需 `VITE_SHARE_BASE_URL` / `STUDIO_UPSTREAM_URL`
 
 ## 🧪 测试
 
@@ -327,7 +322,7 @@ python3  test_xxxx.py
 可以使用 `knip` 分析前端未使用的文件和导出：
 
 ```bash
-cd frontend-ts
+cd frontend-share
 npx knip
 ```
 

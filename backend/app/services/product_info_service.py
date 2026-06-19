@@ -44,14 +44,18 @@ from app.services.product_page_scraper import (
     ProductPageCapture,
     build_vision_image_payload,
     capture_product_page,
+    is_jd_blocked_page,
     is_playwright_available,
     is_usable_product_page_text,
     playwright_setup_hint,
+    _parse_price_from_visible_text,
+    _parse_sales_from_visible_text,
 )
 from app.utils.llm_factory import llm_factory
 from app.utils.search_tool import (
     canonical_taobao_item_url,
     search_duckduckgo_langchain_async,
+    search_jd_product_price_snippets,
     search_product_context_snippets,
 )
 from app.utils.token_counter import token_counter
@@ -107,9 +111,12 @@ _VISION_PROMPT = """你是电商商品详情识别助手。请阅读商品详情
 要求：
 1. 用中文输出纯文本，不要 JSON。
 2. 重点识别：商品名、品牌、品类、核心卖点、规格参数、功能特性、适用人群与使用场景、差异化特点、店铺名（若可见）。
-3. 忽略导航、登录提示、广告横幅等无关信息。
-4. 总长度控制在 500 字以内，信息尽量具体、可写入商品摘要。
-5. 商品详情包含详细描述、参数、功能、使用方法等，请提炼为可读的卖点与特性描述。
+3. 若截图中可见价格（￥数字）或销量/评价数（如「xx条评价」「已售xx」），请单独一行写出：
+   - 价格：数字（仅写阿拉伯数字，不含货币符号）
+   - 销量：整数（评价数/销量均可）
+4. 忽略导航、登录提示、广告横幅等无关信息。
+5. 总长度控制在 500 字以内，信息尽量具体、可写入商品摘要。
+6. 商品详情包含详细描述、参数、功能、使用方法等，请提炼为可读的卖点与特性描述。
 
 商品链接：{url}
 """
@@ -453,6 +460,72 @@ async def _search_product_context(url: str) -> str:
     return ""
 
 
+async def _enrich_jd_price_sales_from_search(
+    capture: ProductPageCapture,
+    url: str,
+) -> str:
+    """京东价格/销量缺失时，用检索摘要补充并写回 capture。"""
+    jd_id = _extract_jd_item_id(url) or _extract_jd_item_id(capture.final_url)
+    if not jd_id:
+        return ""
+
+    need_price = capture.price is None or capture.price <= 0
+    need_sales = capture.sales is None or capture.sales <= 0
+    if not need_price and not need_sales:
+        return ""
+
+    snippet = search_jd_product_price_snippets(
+        title=capture.title or "",
+        jd_item_id=jd_id,
+    )
+    if not snippet.strip():
+        return ""
+
+    if need_price:
+        parsed_price = _parse_price_from_visible_text(snippet)
+        if parsed_price is not None and parsed_price > 0:
+            capture.price = parsed_price
+            print(
+                f"[ProductInfoService] 检索回退命中京东价格 price={parsed_price} "
+                f"sku={jd_id}"
+            )
+    if need_sales:
+        parsed_sales = _parse_sales_from_visible_text(snippet)
+        if parsed_sales is not None and parsed_sales > 0:
+            capture.sales = parsed_sales
+            print(
+                f"[ProductInfoService] 检索回退命中京东销量 sales={parsed_sales} "
+                f"sku={jd_id}"
+            )
+    return snippet.strip()
+
+
+def _parse_price_sales_from_vision_text(vision_text: str) -> tuple[float | None, int | None]:
+    price = None
+    sales = None
+    for line in (vision_text or "").splitlines():
+        cleaned = line.strip()
+        if cleaned.startswith("价格：") or cleaned.startswith("价格:"):
+            match = re.search(r"(\d+(?:\.\d+)?)", cleaned)
+            if match:
+                try:
+                    price = float(match.group(1))
+                except ValueError:
+                    price = None
+        if cleaned.startswith("销量：") or cleaned.startswith("销量:"):
+            match = re.search(r"(\d+)", cleaned.replace(",", ""))
+            if match:
+                try:
+                    sales = int(match.group(1))
+                except ValueError:
+                    sales = None
+    if price is None:
+        price = _parse_price_from_visible_text(vision_text)
+    if sales is None:
+        sales = _parse_sales_from_visible_text(vision_text)
+    return price, sales
+
+
 async def extract_vision_product_context(url: str, capture: ProductPageCapture) -> str:
     """用多模态大模型识别截图与详情图中的商品信息。"""
     started = time.perf_counter()
@@ -509,6 +582,23 @@ _LOW_QUALITY_PRODUCT_NAMES = frozenset(
 )
 
 
+def _resolve_product_name(parsed_name: str, capture: ProductPageCapture | None) -> str:
+    candidate = (parsed_name or "").strip()
+    if candidate and candidate not in _LOW_QUALITY_PRODUCT_NAMES:
+        return candidate
+
+    fallback = (capture.title or "").strip() if capture else ""
+    if fallback and fallback not in _LOW_QUALITY_PRODUCT_NAMES:
+        if capture and capture.platform == "jd" and is_jd_blocked_page("", title=fallback):
+            return candidate
+        print(
+            f"[ProductInfoService] 使用页面标题兜底商品名 parsed={candidate!r} "
+            f"fallback={fallback[:80]!r}"
+        )
+        return fallback
+    return candidate
+
+
 def _validate_extracted_product_fields(fields: dict[str, Any]) -> None:
     name = str(fields.get("name", "")).strip()
     description = str(fields.get("description", "")).strip()
@@ -535,6 +625,11 @@ async def gather_product_context(url: str) -> ProductGatherResult:
     scrape_started = time.perf_counter()
     capture = await capture_product_page(url)
     print(f"[ProductInfoService] Playwright 阶段完成 +{_elapsed_ms(scrape_started)}ms")
+    if capture is None and "jd" in urlparse(url).netloc.lower():
+        raise ValueError(
+            "京东页面访问被限流或需登录，请在 backend/.env 配置 PRODUCT_JD_COOKIE"
+            "（浏览器 jd.com 的 Cookie 字符串）后重试"
+        )
     if capture:
         candidate_text = (capture.visible_text or "").strip()
         if _is_usable_page_text(candidate_text, product_title=capture.title or ""):
@@ -555,14 +650,28 @@ async def gather_product_context(url: str) -> ProductGatherResult:
                 f"[ProductInfoService] 视觉识别阶段完成 vision_len={len(vision_text)} "
                 f"+{_elapsed_ms(vision_started)}ms"
             )
+            if capture.platform == "jd":
+                vision_price, vision_sales = _parse_price_sales_from_vision_text(vision_text)
+                if (capture.price is None or capture.price <= 0) and vision_price:
+                    capture.price = vision_price
+                    print(f"[ProductInfoService] 视觉识别命中价格 price={vision_price}")
+                if (capture.sales is None or capture.sales <= 0) and vision_sales:
+                    capture.sales = vision_sales
+                    print(f"[ProductInfoService] 视觉识别命中销量 sales={vision_sales}")
     elif settings.PRODUCT_SCRAPER_USE_PLAYWRIGHT and not is_playwright_available():
         print(
             f"[ProductInfoService] Playwright 未安装，商品页将仅能使用检索回退。"
             f" 建议执行: {playwright_setup_hint()}"
         )
 
+    price_search_text = ""
+    if capture and capture.platform == "jd":
+        price_search_text = await _enrich_jd_price_sales_from_search(capture, url)
+
     if not page_text and not vision_text:
         search_text = await _search_product_context(url)
+    elif price_search_text:
+        search_text = price_search_text
 
     context = compose_product_context(
         url=url,
@@ -657,7 +766,7 @@ async def extract_product_fields(
             sales = capture.sales
 
     fields = {
-        "name": str(parsed.get("name", "")).strip(),
+        "name": _resolve_product_name(str(parsed.get("name", "")).strip(), capture),
         "category": str(parsed.get("category", "")).strip() or "未分类",
         "description": str(parsed.get("description", "")).strip(),
         "shop_name": str(parsed.get("shop_name", "")).strip() or "未知店铺",

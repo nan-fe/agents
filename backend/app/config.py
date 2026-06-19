@@ -73,6 +73,8 @@ class Settings(BaseSettings):
     PRODUCT_SCRAPER_USE_PLAYWRIGHT: bool = True
     PRODUCT_PLAYWRIGHT_TIMEOUT_MS: int = 35000
     PRODUCT_VISION_MODEL: Optional[str] = None
+    # 可选：浏览器 Cookie 字符串（含 pt_key 等），用于京东登录态下抓取价格/销量
+    PRODUCT_JD_COOKIE: str = ""
 
     # LangSmith
     LANGCHAIN_TRACING_V2: bool = True

@@ -38,15 +38,6 @@ services:
       - app-network
     restart: unless-stopped
 
-  frontend:
-    image: crpi-qeygpng4u8e2ezh6.cn-shanghai.personal.cr.aliyuncs.com/nan-fe/agents:frontend
-    container_name: agents-frontend
-    depends_on:
-      - backend
-    networks:
-      - app-network
-    restart: unless-stopped
-
   frontend-share:
     image: crpi-qeygpng4u8e2ezh6.cn-shanghai.personal.cr.aliyuncs.com/nan-fe/agents:frontend-share
     container_name: agents-frontend-share
@@ -54,9 +45,7 @@ services:
       - "3000:3000"
     environment:
       - API_BASE_URL=http://backend:8000
-      - NEXT_PUBLIC_API_BASE_URL=http://backend:8000
       - API_UPSTREAM_URL=http://backend:8000
-      - STUDIO_UPSTREAM_URL=http://frontend:80
       - AUTH_SECRET=${AUTH_SECRET:-change-me-in-production}
       - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/xhs_auth
       - SENTRY_DSN=${SENTRY_DSN:-https://DYwAS6KnxQkz9CnaCzMWiLNh@s2461160.eu-nbg-2.betterstackdata.com/2461176}
@@ -65,8 +54,6 @@ services:
       postgres:
         condition: service_healthy
       backend:
-        condition: service_started
-      frontend:
         condition: service_started
     networks:
       - app-network
