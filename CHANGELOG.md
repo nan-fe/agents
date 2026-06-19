@@ -2,6 +2,36 @@
 
 All notable changes to this project will be documented in this file.
 
+### Changed 2026-06-19 — 创作台迁入 frontend-share（frontend-ts → Next.js）
+
+将主创作台从 Vite SPA（`frontend-ts`）合并进 Next.js 应用（`frontend-share`），**统一门户、鉴权、创作台、分享页于同一域名与端口**，降低双前端维护成本。迁移目标为 Client SPA 迁入 App Router，而非 SSR 化创作台。
+
+- **frontend-share（创作台 `/studio`）**
+  - 新增 `src/app/studio/`：`studio-app` 壳层、对话流（`dialog-content`）、选品池、项目历史抽屉、结果分享等，自 `frontend-ts` 迁入
+  - `/studio` 入口使用 `dynamic(() => import('./studio-app'), { ssr: false })`，避免 `sessionStorage` / `window` 在 SSR 阶段报错
+  - 新增共享层：`src/services/api.ts`、`src/lib/sse/*`、`src/types/conversation.ts`、`src/theme/atelier-theme.ts`
+  - Ant Design 根节点 `<ConfigProvider><App>` 包裹；`modal.confirm` / `message` 改走 `App.useApp()`
+  - 修复停止生成后按钮状态不恢复、SSE `disconnect` 无法中断重连循环、`App.useApp()` 误用于 plain async 函数等问题
+  - 生产环境浏览器 API 使用同域相对路径（`API_BASE_URL=""`）；分享链接基于 `window.location.origin` 生成
+
+- **API 与代理（仍由 frontend-share 接管）**
+  - `/dialog/generate`：`app/dialog/generate/route.ts` SSE 流式透传（不可用普通 rewrite，会缓冲日志）
+  - `/product_info/*`：`app/product_info/[...path]/route.ts` 长超时代理
+  - `/projects`、`/session`、`/shares`：`next.config.mjs` rewrite → `API_UPSTREAM_URL`
+
+- **部署**
+  - `docker-compose.yml` 移除 `frontend`（Vite + Nginx）服务；仅保留 `postgres`、`backend`、`frontend-share`
+  - GitHub Actions 停止构建 `frontend-ts` 镜像，CI 只构建并推送 `frontend-share`
+  - 移除 `/studio` → Vite 的 Next rewrite；**无需**将 `frontend-ts/nginx.conf` 迁移到 Next 镜像
+  - `frontend-share` 继续使用 `output: 'standalone'`，容器内 `prisma migrate deploy && node server.js`
+
+- **frontend-ts**
+  - 进入维护/退役阶段；新功能在 `frontend-share` 开发。本地开发默认只需启动 `backend` + `frontend-share`
+
+**迁移注意事项（编写）**：Client Component 仍会 SSR 一次；Hooks 不可在 async 工具函数中调用；Tailwind v4 与 Vite v3 工具链不同；import 路径优先使用 `@/` alias。
+
+**迁移注意事项（部署）**：`API_UPSTREAM_URL` 需在镜像**构建期**传入（rewrites 固化）；Route Handler 与 SSR 在**运行期**读取同名变量；`POST /shares` 需精确 rewrite（`/shares/:path*` 不匹配无子路径请求）。
+
 ### Changed 2026-06-11 — PR1：编排短期记忆（L1）
 
 为内容创作对话补充 **L1 短期记忆**：在现有 `session_histories` + `ExecutionContext` 状态机之上，增加 SQLite 持久化的 `projects` / `versions` 表，使多轮对话可跨刷新恢复、可在历史项目中切换。
