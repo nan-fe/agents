@@ -207,6 +207,309 @@ def _parse_numeric_price(raw: str) -> float | None:
     return value if value > 0 else None
 
 
+def _is_jd_mgets_price_url(url: str) -> bool:
+    lowered = (url or "").lower()
+    return "prices/mgets" in lowered or (
+        "p.3.cn" in lowered and "skuids" in lowered
+    )
+
+
+def _is_jd_ware_business_url(url: str) -> bool:
+    return "api.m.jd.com" in (url or "") and "warebusiness" in (url or "").lower()
+
+
+def _is_valid_jd_price_text(text: str) -> bool:
+    cleaned = (text or "").strip()
+    if not cleaned or "?" in cleaned:
+        return False
+    if any(marker in cleaned for marker in ("登录查看", "登录后", "请登录")):
+        return False
+    return _parse_numeric_price(cleaned) is not None
+
+
+def _parse_jd_mgets_payload(payload: Any) -> float | None:
+    """解析 p.3.cn/prices/mgets 返回的 JSON 列表。"""
+    if not isinstance(payload, list) or not payload:
+        return None
+    first = payload[0]
+    if not isinstance(first, dict):
+        return None
+    return _parse_numeric_price(str(first.get("p") or first.get("op") or ""))
+
+
+def _parse_jd_ware_business_payload(payload: Any) -> tuple[float | None, int | None]:
+    """从 pc_detailpage_wareBusiness 响应中提取价格/评价数。"""
+    price: float | None = None
+    sales: int | None = None
+
+    def walk(node: Any, depth: int = 0) -> None:
+        nonlocal price, sales
+        if depth > 8 or node is None:
+            return
+        if isinstance(node, dict):
+            for key, value in node.items():
+                key_lower = str(key).lower()
+                if price is None and key_lower in {"p", "jdprice", "op", "price", "finalprice"}:
+                    if isinstance(value, (str, int, float)):
+                        candidate = _parse_numeric_price(str(value))
+                        if candidate is not None:
+                            price = candidate
+                if sales is None and key_lower in {
+                    "commentcount",
+                    "commentcountstr",
+                    "allcommentcount",
+                    "evaluatecount",
+                }:
+                    if isinstance(value, (str, int, float)):
+                        parsed = _parse_sales_count(str(value))
+                        if parsed is not None:
+                            sales = parsed
+                        elif str(value).isdigit():
+                            sales = int(value)
+                walk(value, depth + 1)
+        elif isinstance(node, list):
+            for item in node[:20]:
+                walk(item, depth + 1)
+
+    walk(payload)
+    return price, sales
+
+
+def _parse_jd_mobile_item_info(payload: Any) -> tuple[float | None, int | None]:
+    """解析移动端 window._itemInfo 中的价格/销量线索。"""
+    if not isinstance(payload, dict):
+        return None, None
+    price: float | None = None
+    sales: int | None = None
+
+    def walk(node: Any, depth: int = 0) -> None:
+        nonlocal price, sales
+        if depth > 8 or node is None:
+            return
+        if isinstance(node, dict):
+            for key, value in node.items():
+                key_lower = str(key).lower()
+                if price is None and key_lower in {"p", "jdprice", "op", "price"}:
+                    if isinstance(value, (str, int, float)):
+                        text = str(value)
+                        if _is_valid_jd_price_text(text):
+                            price = _parse_numeric_price(text)
+                if sales is None and key_lower in {
+                    "commentcount",
+                    "commentcountstr",
+                    "allcommentcount",
+                    "evaluatecount",
+                    "allnum",
+                }:
+                    if isinstance(value, (str, int, float)):
+                        parsed = _parse_sales_count(str(value))
+                        if parsed is not None and parsed > 0:
+                            sales = parsed
+                walk(value, depth + 1)
+        elif isinstance(node, list):
+            for item in node[:20]:
+                walk(item, depth + 1)
+
+    walk(payload)
+    return price, sales
+
+
+@dataclass
+class _JdNetworkCapture:
+    price: float | None = None
+    sales: int | None = None
+
+
+def _jd_playwright_cookies() -> list[dict[str, Any]]:
+    raw = (settings.PRODUCT_JD_COOKIE or "").strip()
+    if not raw:
+        return []
+    cookies: list[dict[str, Any]] = []
+    for part in raw.split(";"):
+        part = part.strip()
+        if not part or "=" not in part:
+            continue
+        name, value = part.split("=", 1)
+        name = name.strip()
+        value = value.strip()
+        if not name:
+            continue
+        cookies.append(
+            {
+                "name": name,
+                "value": value,
+                "domain": ".jd.com",
+                "path": "/",
+            }
+        )
+    return cookies
+
+
+def _attach_jd_network_listeners(page, capture: _JdNetworkCapture) -> None:
+    async def on_response(response) -> None:
+        url = response.url
+        try:
+            if not response.ok:
+                return
+            if _is_jd_mgets_price_url(url):
+                network_price = _parse_jd_mgets_payload(await response.json())
+                if network_price is not None:
+                    capture.price = network_price
+                    print(
+                        f"[ProductPageScraper] 京东价格接口(网络监听) price={network_price}"
+                    )
+                return
+            if _is_jd_ware_business_url(url):
+                ware_price, ware_sales = _parse_jd_ware_business_payload(
+                    await response.json()
+                )
+                if ware_price is not None:
+                    capture.price = ware_price
+                    print(
+                        f"[ProductPageScraper] 京东 wareBusiness 价格 price={ware_price}"
+                    )
+                if ware_sales is not None:
+                    capture.sales = ware_sales
+                    print(
+                        f"[ProductPageScraper] 京东 wareBusiness 销量 sales={ware_sales}"
+                    )
+        except Exception:
+            return
+
+    page.on("response", on_response)
+
+
+async def _jd_page_requires_login_for_price(page) -> bool:
+    try:
+        return bool(
+            await page.evaluate(
+                """() => {
+                    const text = document.body?.innerText || '';
+                    return text.includes('登录查看更多图片')
+                        || text.includes('登录查看价格')
+                        || text.includes('登录后查看价格');
+                }"""
+            )
+        )
+    except Exception:
+        return False
+
+
+async def _fetch_jd_price_via_page_xhr(page, item_id: str) -> float | None:
+    """在页面上下文中用 XHR 请求价格（与页面 JS 同源）。"""
+    try:
+        result = await page.evaluate(
+            """async (sku) => {
+                const urls = [
+                    `https://p.3.cn/prices/mgets?skuIds=J_${sku}&type=1`,
+                    `https://p.3.cn/prices/mgets?skuIds=J_${sku}`,
+                ];
+                for (const url of urls) {
+                    try {
+                        const response = await new Promise((resolve) => {
+                            const xhr = new XMLHttpRequest();
+                            xhr.open('GET', url, true);
+                            xhr.withCredentials = true;
+                            xhr.onload = () => resolve({status: xhr.status, body: xhr.responseText || ''});
+                            xhr.onerror = () => resolve({error: 'xhr-error'});
+                            xhr.send();
+                        });
+                        if (response?.status === 200 && response.body) {
+                            return {url, body: response.body};
+                        }
+                    } catch (e) {}
+                }
+                return null;
+            }""",
+            item_id,
+        )
+        if not isinstance(result, dict):
+            return None
+        body = str(result.get("body") or "").strip()
+        if not body:
+            return None
+        payload = json.loads(body)
+        price = _parse_jd_mgets_payload(payload)
+        if price is not None:
+            print(f"[ProductPageScraper] 京东价格接口(页面XHR) sku={item_id} price={price}")
+        return price
+    except Exception as exc:
+        print(
+            f"[ProductPageScraper] 京东价格 XHR 失败 sku={item_id} "
+            f"{type(exc).__name__}: {exc!r}"
+        )
+        return None
+
+
+async def _fetch_jd_mobile_price_sales(context, item_id: str) -> tuple[float | None, int | None]:
+    """移动端详情页回退：部分商品在 m.jd.com 的 _itemInfo 中含价格/销量。"""
+    mobile_page = await context.new_page()
+    price: float | None = None
+    sales: int | None = None
+    try:
+        await mobile_page.goto(
+            f"https://item.m.jd.com/product/{item_id}.html",
+            wait_until="domcontentloaded",
+            timeout=20_000,
+        )
+        await mobile_page.wait_for_timeout(2500)
+        payload = await mobile_page.evaluate(
+            """() => {
+                try {
+                    return window._itemInfo || null;
+                } catch (e) {
+                    return null;
+                }
+            }"""
+        )
+        price, sales = _parse_jd_mobile_item_info(payload)
+        dom_price = await mobile_page.evaluate(
+            """() => {
+                const nodes = [
+                    document.querySelector('#priceSale2'),
+                    document.querySelector('#priceSale1'),
+                    document.querySelector('.price'),
+                ];
+                for (const node of nodes) {
+                    const text = (node?.textContent || '').replace(/\\s+/g, '').trim();
+                    if (text) return text;
+                }
+                return '';
+            }"""
+        )
+        if price is None and _is_valid_jd_price_text(str(dom_price or "")):
+            price = _parse_numeric_price(str(dom_price))
+        if price is not None or sales is not None:
+            print(
+                f"[ProductPageScraper] 京东移动端回退 sku={item_id} "
+                f"price={price} sales={sales}"
+            )
+    except Exception as exc:
+        print(
+            f"[ProductPageScraper] 京东移动端回退失败 sku={item_id} "
+            f"{type(exc).__name__}: {exc!r}"
+        )
+    finally:
+        await mobile_page.close()
+    return price, sales
+
+
+async def _try_capture_jd_price_from_network(page, *, timeout_ms: int) -> float | None:
+    """等待页面发起的 p.3.cn/prices/mgets 响应（与页面 JS 共用 Cookie/会话）。"""
+    try:
+        response = await page.wait_for_response(
+            lambda r: _is_jd_mgets_price_url(r.url) and r.ok,
+            timeout=timeout_ms,
+        )
+        payload = await response.json()
+        price = _parse_jd_mgets_payload(payload)
+        if price is not None:
+            print(f"[ProductPageScraper] 京东价格接口(页面XHR) price={price}")
+        return price
+    except Exception:
+        return None
+
+
 def _parse_price_from_visible_text(text: str) -> float | None:
     for pattern in (
         r"页面价格[：:\s]*([\d,.]+)",
@@ -526,38 +829,43 @@ async def _fetch_jd_comments_via_page(
         return [], "error"
 
 
-async def _fetch_jd_price_sales_via_page(page, item_id: str) -> tuple[float | None, int | None]:
+async def _fetch_jd_price_sales_via_page(
+    page,
+    item_id: str,
+    *,
+    skip_price: bool = False,
+) -> tuple[float | None, int | None]:
     """在 Playwright 浏览器上下文中请求京东价格/评价接口（比 httpx 直连更稳定）。"""
     price: float | None = None
     sales: int | None = None
     referer = f"https://item.jd.com/{item_id}.html"
     headers = {"Referer": referer}
 
-    try:
-        price_resp = await page.request.get(
-            "https://p.3.cn/prices/mgets",
-            params={"skuIds": f"J_{item_id}", "type": "1"},
-            headers=headers,
-            timeout=12_000,
-        )
-        if price_resp.ok:
-            payload = await price_resp.json()
-            if isinstance(payload, list) and payload:
-                price = _parse_numeric_price(
-                    str(payload[0].get("p") or payload[0].get("op") or "")
+    if not skip_price:
+        price = await _fetch_jd_price_via_page_xhr(page, item_id)
+        if price is None:
+            try:
+                price_resp = await page.request.get(
+                    "https://p.3.cn/prices/mgets",
+                    params={"skuIds": f"J_{item_id}", "type": "1"},
+                    headers=headers,
+                    timeout=12_000,
                 )
-                print(f"[ProductPageScraper] 京东价格接口(浏览器) sku={item_id} price={price}")
-        else:
-            body = (await price_resp.text())[:160]
-            print(
-                f"[ProductPageScraper] 京东价格接口 HTTP {price_resp.status} "
-                f"sku={item_id} body={body!r}"
-            )
-    except Exception as exc:
-        print(
-            f"[ProductPageScraper] 京东价格接口(浏览器)失败 sku={item_id} "
-            f"{type(exc).__name__}: {exc!r}"
-        )
+                if price_resp.ok:
+                    payload = await price_resp.json()
+                    price = _parse_jd_mgets_payload(payload)
+                    print(f"[ProductPageScraper] 京东价格接口(浏览器) sku={item_id} price={price}")
+                else:
+                    body = (await price_resp.text())[:160]
+                    print(
+                        f"[ProductPageScraper] 京东价格接口 HTTP {price_resp.status} "
+                        f"sku={item_id} body={body!r}"
+                    )
+            except Exception as exc:
+                print(
+                    f"[ProductPageScraper] 京东价格接口(浏览器)失败 sku={item_id} "
+                    f"{type(exc).__name__}: {exc!r}"
+                )
 
     try:
         comment_resp = await page.request.get(
@@ -622,10 +930,8 @@ async def _fetch_jd_price_sales(item_id: str) -> tuple[float | None, int | None]
             )
             if price_resp.status_code == 200:
                 payload = price_resp.json()
-                if isinstance(payload, list) and payload:
-                    price = _parse_numeric_price(
-                        str(payload[0].get("p") or payload[0].get("op") or "")
-                    )
+                price = _parse_jd_mgets_payload(payload)
+                if price is not None:
                     print(
                         f"[ProductPageScraper] 京东价格接口(httpx) sku={item_id} price={price}"
                     )
@@ -668,6 +974,8 @@ async def _enrich_capture_price_sales(
     platform: str,
     *,
     page=None,
+    prefetched_price: float | None = None,
+    prefetched_sales: int | None = None,
 ) -> None:
     price = _parse_price_from_visible_text(capture.visible_text)
     sales = _parse_sales_from_visible_text(capture.visible_text)
@@ -677,17 +985,29 @@ async def _enrich_capture_price_sales(
         if dom_price is not None:
             price = dom_price
 
+    if prefetched_price is not None and price is None:
+        price = prefetched_price
+    if prefetched_sales is not None and sales is None:
+        sales = prefetched_sales
+
     if platform == "jd":
         item_id = _extract_jd_item_id(url) or _extract_jd_item_id(capture.final_url)
         if item_id:
-            if page is not None:
-                api_price, api_sales = await _fetch_jd_price_sales_via_page(page, item_id)
-            else:
-                api_price, api_sales = await _fetch_jd_price_sales(item_id)
-            if price is None:
-                price = api_price
-            if sales is None:
-                sales = api_sales
+            need_price = price is None
+            need_sales = sales is None
+            if need_price or need_sales:
+                if page is not None:
+                    api_price, api_sales = await _fetch_jd_price_sales_via_page(
+                        page,
+                        item_id,
+                        skip_price=not need_price,
+                    )
+                else:
+                    api_price, api_sales = await _fetch_jd_price_sales(item_id)
+                if need_price and api_price is not None:
+                    price = api_price
+                if need_sales and api_sales is not None:
+                    sales = api_sales
 
     capture.price = price
     capture.sales = sales
@@ -701,6 +1021,11 @@ async def _enrich_capture_price_sales(
             f"{_extract_jd_item_id(url) or _extract_jd_item_id(capture.final_url)} "
             f"price_text={capture.price_text[:40]!r}"
         )
+        if page is not None and await _jd_page_requires_login_for_price(page):
+            print(
+                "[ProductPageScraper] 京东页面提示需登录后查看价格/图片；"
+                "可在 backend/.env 配置 PRODUCT_JD_COOKIE（浏览器 jd.com 的 Cookie 字符串）"
+            )
 
 
 async def _enrich_capture_comments(
@@ -806,32 +1131,47 @@ async def _wait_for_product_shell(page, timeout_ms: int) -> str:
     return ""
 
 
-async def _wait_for_jd_price(page, timeout_ms: int = 8000) -> str:
-    """等待京东新版价格节点（product-price--value）渲染。"""
+async def _wait_for_jd_price(
+    page,
+    item_id: str = "",
+    timeout_ms: int = 8000,
+) -> str:
+    """等待京东价格节点渲染（新版 product-price--value + 旧版 .J-p-skuId）。"""
     deadline = time.perf_counter() + timeout_ms / 1000
     while time.perf_counter() < deadline:
         price_text = await page.evaluate(
-            """() => {
+            """(skuId) => {
                 const readPrice = (node) => {
                     if (!node) return '';
                     const attr = node.getAttribute('product-price--value');
                     const text = (attr || node.textContent || '').replace(/\\s/g, '');
-                    if (text && !text.includes('?')) return text;
-                    return '';
+                    if (!text || text.includes('?') || text.includes('登录')) return '';
+                    if (!/\\d/.test(text)) return '';
+                    return text;
                 };
-                for (const selector of [
+                const selectors = [
                     '.product-price--value',
                     '[class*="product-price--value"]',
                     '[product-price--value]',
-                ]) {
+                ];
+                if (skuId) {
+                    selectors.push(
+                        `.price.J-p-${skuId}`,
+                        `.J-p-${skuId}`,
+                        `#J_FinalPrice`,
+                    );
+                }
+                selectors.push('.p-price .price', '.summary-price .price', '.p-price span.price');
+                for (const selector of selectors) {
                     const node = document.querySelector(selector);
                     const value = readPrice(node);
                     if (value) return value;
                 }
                 return '';
-            }"""
+            }""",
+            item_id,
         )
-        if price_text:
+        if price_text and _is_valid_jd_price_text(str(price_text)):
             return str(price_text).strip()
         await page.wait_for_timeout(400)
     return ""
@@ -841,7 +1181,9 @@ async def _extract_structured_product_text(page, platform: str) -> dict[str, str
     """从渲染后的 DOM 提取结构化字段（优先于纯 body 文本）。"""
     try:
         payload = await page.evaluate(
-            """(platform) => {
+            """(args) => {
+                const platform = args.platform;
+                const skuId = args.skuId || '';
                 const pick = (selectors) => {
                     for (const selector of selectors) {
                         const node = document.querySelector(selector);
@@ -856,22 +1198,29 @@ async def _extract_structured_product_text(page, platform: str) -> dict[str, str
                         if (!node) return '';
                         const attr = node.getAttribute('product-price--value');
                         const text = (attr || node.textContent || '').trim();
-                        if (text && !text.includes('?')) return text;
-                        return '';
+                        if (!text || text.includes('?') || text.includes('登录')) return '';
+                        if (!/\\d/.test(text)) return '';
+                        return text;
                     };
-                    for (const selector of [
+                    const selectors = [
                         '.product-price--value',
                         '[class*="product-price--value"]',
                         '[product-price--value]',
-                    ]) {
+                    ];
+                    if (skuId) {
+                        selectors.push(
+                            `.price.J-p-${skuId}`,
+                            `.J-p-${skuId}`,
+                            `#J_FinalPrice`,
+                        );
+                    }
+                    selectors.push('.p-price .price', '.summary-price .price', '.p-price span.price');
+                    for (const selector of selectors) {
                         const node = document.querySelector(selector);
                         const value = readPrice(node);
                         if (value) return value;
                     }
-                    return pick([
-                        '.p-price .price',
-                        '.summary-price .price',
-                    ]);
+                    return '';
                 };
                 const titleSelectors = platform === 'jd'
                     ? ['.sku-name', '.itemInfo-wrap .sku-name', 'div.sku-name', 'h1']
@@ -887,7 +1236,7 @@ async def _extract_structured_product_text(page, platform: str) -> dict[str, str
                     shop: pick(shopSelectors),
                 };
             }""",
-            platform,
+            {"platform": platform, "skuId": _extract_jd_item_id(page.url) or ""},
         )
         if isinstance(payload, dict):
             return {
@@ -1007,10 +1356,54 @@ async def capture_product_page(url: str) -> Optional[ProductPageCapture]:
                     if use_mobile
                     else {"width": 1366, "height": 900},
                 )
+                jd_cookies = _jd_playwright_cookies()
+                if jd_cookies:
+                    await context.add_cookies(jd_cookies)
+                    print(
+                        f"[ProductPageScraper] 已注入京东 Cookie count={len(jd_cookies)}"
+                    )
                 page = await context.new_page()
 
+                jd_item_id = _extract_jd_item_id(url) if platform == "jd" else None
+                jd_network_price: float | None = None
+                jd_prefetched_price: float | None = None
+                jd_prefetched_sales: int | None = None
+                jd_network_capture = _JdNetworkCapture()
+                if jd_item_id:
+                    _attach_jd_network_listeners(page, jd_network_capture)
+
                 goto_started = time.perf_counter()
-                await page.goto(url, wait_until="domcontentloaded", timeout=timeout_ms)
+                if jd_item_id:
+                    try:
+                        async with page.expect_response(
+                            lambda r: _is_jd_mgets_price_url(r.url) and r.ok,
+                            timeout=min(timeout_ms, 15000),
+                        ) as price_resp_info:
+                            await page.goto(
+                                url, wait_until="domcontentloaded", timeout=timeout_ms
+                            )
+                        try:
+                            price_resp = await price_resp_info.value
+                            jd_network_price = _parse_jd_mgets_payload(
+                                await price_resp.json()
+                            )
+                            if jd_network_price is not None:
+                                print(
+                                    f"[ProductPageScraper] 京东价格接口(页面XHR) "
+                                    f"sku={jd_item_id} price={jd_network_price} "
+                                    f"+{_elapsed_ms(goto_started)}ms"
+                                )
+                        except Exception:
+                            print(
+                                f"[ProductPageScraper] 京东价格 XHR 未在导航期间返回 "
+                                f"sku={jd_item_id}（将回退 API/DOM）"
+                            )
+                    except Exception:
+                        await page.goto(
+                            url, wait_until="domcontentloaded", timeout=timeout_ms
+                        )
+                else:
+                    await page.goto(url, wait_until="domcontentloaded", timeout=timeout_ms)
                 print(
                     f"[ProductPageScraper] 页面 domcontentloaded final_url={page.url} "
                     f"+{_elapsed_ms(goto_started)}ms"
@@ -1036,8 +1429,57 @@ async def capture_product_page(url: str) -> Optional[ProductPageCapture]:
                         f"+{_elapsed_ms(idle_started)}ms"
                     )
 
+                if jd_item_id:
+                    await page.wait_for_timeout(800)
+
+                if jd_item_id and jd_network_price is None:
+                    late_network_price = await _try_capture_jd_price_from_network(
+                        page, timeout_ms=3000
+                    )
+                    if late_network_price is not None:
+                        jd_network_price = late_network_price
+                        print(
+                            f"[ProductPageScraper] 京东价格接口(页面XHR/networkidle后) "
+                            f"sku={jd_item_id} price={jd_network_price}"
+                        )
+
+                if jd_item_id and jd_network_capture.price is not None:
+                    jd_network_price = jd_network_capture.price
+
+                if jd_item_id:
+                    prefetch_started = time.perf_counter()
+                    skip_price_prefetch = (
+                        jd_network_price is not None or jd_network_capture.price is not None
+                    )
+                    api_price, api_sales = await _fetch_jd_price_sales_via_page(
+                        page,
+                        jd_item_id,
+                        skip_price=skip_price_prefetch,
+                    )
+                    jd_prefetched_price = (
+                        jd_network_price
+                        if jd_network_price is not None
+                        else jd_network_capture.price
+                        if jd_network_capture.price is not None
+                        else api_price
+                    )
+                    jd_prefetched_sales = api_sales or jd_network_capture.sales
+                    if jd_prefetched_price is None or jd_prefetched_sales is None:
+                        mobile_price, mobile_sales = await _fetch_jd_mobile_price_sales(
+                            context, jd_item_id
+                        )
+                        if jd_prefetched_price is None:
+                            jd_prefetched_price = mobile_price
+                        if jd_prefetched_sales is None:
+                            jd_prefetched_sales = mobile_sales
+                    print(
+                        f"[ProductPageScraper] 京东价格预取完成 price={jd_prefetched_price} "
+                        f"sales={jd_prefetched_sales} +{_elapsed_ms(prefetch_started)}ms"
+                    )
+
+                # 懒加载滚动：主要用于详情图与评论区，不作为价格主路径
                 scroll_started = time.perf_counter()
-                for i in range(3):
+                for _ in range(3):
                     await page.mouse.wheel(0, 1200)
                     await page.wait_for_timeout(600)
                 print(
@@ -1048,7 +1490,11 @@ async def capture_product_page(url: str) -> Optional[ProductPageCapture]:
                 jd_price_text = ""
                 if platform == "jd":
                     price_started = time.perf_counter()
-                    jd_price_text = await _wait_for_jd_price(page, timeout_ms=10000)
+                    jd_price_text = await _wait_for_jd_price(
+                        page,
+                        item_id=jd_item_id or "",
+                        timeout_ms=10000,
+                    )
                     if jd_price_text:
                         print(
                             f"[ProductPageScraper] 京东价格已出现 product-price--value={jd_price_text!r} "
@@ -1123,7 +1569,14 @@ async def capture_product_page(url: str) -> Optional[ProductPageCapture]:
                     price_text=collected.get("price_text", ""),
                     shop=collected.get("shop", ""),
                 )
-                await _enrich_capture_price_sales(capture, url, platform, page=page)
+                await _enrich_capture_price_sales(
+                    capture,
+                    url,
+                    platform,
+                    page=page,
+                    prefetched_price=jd_prefetched_price,
+                    prefetched_sales=jd_prefetched_sales,
+                )
                 await _enrich_capture_comments(capture, url, platform, page=page)
                 return capture
             finally:

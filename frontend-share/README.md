@@ -141,12 +141,6 @@ pnpm db:push           # 快速同步 schema（仅开发调试）
 pnpm db:generate       # 重新生成 Prisma Client
 ```
 
-## 与主创作端的关系
-
-- `frontend-ts` 构建时使用 `base: '/studio/'`
-- 主创作端生成分享链接时使用 `VITE_SHARE_BASE_URL` 指向本应用域名，例如 `https://www.example.com`
-- 分享链接格式：`https://www.example.com/share/[shareId]`
-
 ## 构建与部署
 
 ```bash

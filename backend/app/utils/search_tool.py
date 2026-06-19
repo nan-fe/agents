@@ -357,6 +357,58 @@ def search_product_context_snippets(
     return ""
 
 
+def search_jd_product_price_snippets(
+    *,
+    title: str = "",
+    jd_item_id: str = "",
+    max_results_per_query: int = 8,
+) -> str:
+    """检索京东商品标题/ID 相关摘要，供价格与销量解析回退。"""
+    queries: list[str] = []
+    if jd_item_id:
+        queries.extend(
+            [
+                f"site:item.jd.com {jd_item_id} 价格",
+                f"京东 {jd_item_id} 京东价",
+            ]
+        )
+    cleaned_title = re.sub(r"\s+", " ", (title or "").strip())
+    if cleaned_title and len(cleaned_title) >= 6:
+        short_title = cleaned_title[:40]
+        queries.extend(
+            [
+                f"{short_title} site:item.jd.com 价格",
+                f"{short_title} 京东价 ￥",
+            ]
+        )
+
+    collected: list[str] = []
+    for query in queries:
+        try:
+            with DDGS() as ddgs:
+                gen = ddgs.text(query, max_results=max_results_per_query)
+                if not gen:
+                    continue
+                for result in gen:
+                    title_text = (result.get("title") or "").strip()
+                    body = (result.get("body") or "").strip()
+                    href = (result.get("href") or "").strip()
+                    blob = f"{title_text}\n{body}\n{href}".strip()
+                    if not _is_usable_product_snippet(blob):
+                        continue
+                    if jd_item_id and jd_item_id not in blob and "jd.com" not in href:
+                        continue
+                    if "￥" not in blob and "京东价" not in blob and "条评价" not in blob:
+                        continue
+                    collected.append(blob)
+                    if len("\n\n".join(collected)) >= 1200:
+                        return "\n\n".join(collected[:3])
+        except Exception as exc:
+            print(f"search_jd_product_price_snippets DDG 失败: {exc}")
+            continue
+    return "\n\n".join(collected[:3]) if collected else ""
+
+
 def search_taobao_first_item_detail_by_category(
     category: str, max_results_per_query: int = 12
 ) -> Optional[Dict[str, Any]]:
