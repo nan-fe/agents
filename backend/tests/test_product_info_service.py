@@ -44,10 +44,12 @@ from app.services.product_page_scraper import (
     ProductPageCapture,
     _normalize_jd_comment_items,
     _parse_jd_comments_response,
+    _parse_jd_document_title,
     _parse_jd_mgets_payload,
     _parse_numeric_price,
     _parse_price_from_visible_text,
     _parse_sales_from_visible_text,
+    is_jd_blocked_page,
     is_playwright_available,
     is_usable_product_page_text,
     playwright_setup_hint,
@@ -111,6 +113,18 @@ def test_validate_product_url_accepts_short_link_host():
 
 def test_extract_jd_item_id_from_url():
     assert _extract_jd_item_id("https://item.jd.com/100012043978.html") == "100012043978"
+
+
+def test_parse_jd_document_title():
+    assert _parse_jd_document_title("米家智能除湿机 22L - 京东") == "米家智能除湿机 22L"
+    assert _parse_jd_document_title("  请登录 - 京东  ") == ""
+    assert _parse_jd_document_title("") == ""
+
+
+def test_is_jd_blocked_page():
+    assert is_jd_blocked_page("https://pc-frequent-pro.pf.jd.com/?from=pc_item&reason=403")
+    assert is_jd_blocked_page("https://item.jd.com/1.html", title="PC频控页")
+    assert not is_jd_blocked_page("https://item.jd.com/1.html", title="华为FreeBuds 5i")
 
 
 def test_resolve_jd_url_keeps_item_id_from_query_params():

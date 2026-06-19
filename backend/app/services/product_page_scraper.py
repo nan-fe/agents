@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import json
 import re
@@ -37,6 +38,27 @@ _TITLE_SELECTORS = (
     ".itemInfo-wrap h1",
     "h1",
 )
+
+_JD_TITLE_SELECTORS = (
+    ".sku-name",
+    ".itemInfo-wrap .sku-name",
+    "div.sku-name",
+    "[class*='goods-name']",
+    "[class*='product-intro'] h1",
+    ".p-name",
+    "h1",
+)
+
+_TAOBAO_TITLE_SELECTORS = (
+    ".tb-main-title",
+    "[class*='MainTitle']",
+    "[class*='ItemTitle']",
+    "#J_Title",
+    "h1",
+)
+
+_JD_XHR_TIMEOUT_MS = 8000
+_JD_PAGE_EVAL_TIMEOUT_SEC = 20.0
 
 _DETAIL_IMAGE_SELECTORS = (
     "#description img",
@@ -86,6 +108,20 @@ _JD_HOMEPAGE_MARKERS = (
     "京东JD.COM-专业的综合网上购物商城",
 )
 
+_JD_BLOCKED_URL_MARKERS = (
+    "pc-frequent-pro.pf.jd.com",
+    "reason=403",
+    "risk_handler",
+    "passport.jd.com/new/login",
+)
+
+_JD_BLOCKED_TITLE_MARKERS = (
+    "PC频控页",
+    "访问受限",
+    "验证",
+    "请登录",
+)
+
 
 def is_usable_product_page_text(
     text: str,
@@ -115,6 +151,74 @@ def _is_usable_visible_text(text: str, min_chars: int = 80, *, product_title: st
         product_title=product_title,
         min_chars=min_chars,
     )
+
+
+def _parse_jd_document_title(raw_title: str) -> str:
+    """从 document.title 提取商品名（常见格式：「商品名 - 京东」）。"""
+    title = re.sub(r"\s+", " ", (raw_title or "").strip())
+    if not title:
+        return ""
+    for suffix in (
+        r"\s*[-–—|｜]\s*京东.*$",
+        r"\s*[-–—|｜]\s*JD\.COM.*$",
+        r"\s*【.*?】\s*京东.*$",
+    ):
+        stripped = re.sub(suffix, "", title, flags=re.IGNORECASE).strip()
+        if stripped and stripped != title:
+            title = stripped
+            break
+    if len(title) >= 4 and not any(marker in title for marker in _BLOCKED_TEXT_MARKERS):
+        if not is_jd_blocked_page("", title=title):
+            return title
+    return ""
+
+
+def is_jd_blocked_page(url: str, *, title: str = "") -> bool:
+    """判断京东是否跳转到频控/登录/403 拦截页。"""
+    lowered_url = (url or "").lower()
+    if any(marker in lowered_url for marker in _JD_BLOCKED_URL_MARKERS):
+        return True
+    normalized_title = (title or "").strip()
+    if normalized_title and any(
+        marker in normalized_title for marker in _JD_BLOCKED_TITLE_MARKERS
+    ):
+        return True
+    return False
+
+
+def _jd_mobile_item_url(item_id: str) -> str:
+    return f"https://item.m.jd.com/product/{item_id}.html"
+
+
+async def _ensure_jd_product_page(
+    page,
+    item_id: str,
+    timeout_ms: int,
+    *,
+    stage: str,
+) -> bool:
+    """若当前为京东拦截页则尝试切到移动端详情页。"""
+    if not item_id or not is_jd_blocked_page(page.url):
+        return True
+
+    mobile_url = _jd_mobile_item_url(item_id)
+    print(
+        f"[ProductPageScraper] 京东 {stage} 检测到拦截页 final_url={page.url} "
+        f"回退移动端 url={mobile_url}"
+    )
+    started = time.perf_counter()
+    await page.goto(
+        mobile_url,
+        wait_until="domcontentloaded",
+        timeout=timeout_ms,
+    )
+    await page.wait_for_timeout(2500)
+    blocked = is_jd_blocked_page(page.url)
+    print(
+        f"[ProductPageScraper] 京东移动端 {stage} final_url={page.url} "
+        f"blocked={blocked} +{_elapsed_ms(started)}ms"
+    )
+    return not blocked
 
 
 def is_playwright_available() -> bool:
@@ -398,30 +502,46 @@ async def _jd_page_requires_login_for_price(page) -> bool:
 async def _fetch_jd_price_via_page_xhr(page, item_id: str) -> float | None:
     """在页面上下文中用 XHR 请求价格（与页面 JS 同源）。"""
     try:
-        result = await page.evaluate(
-            """async (sku) => {
-                const urls = [
-                    `https://p.3.cn/prices/mgets?skuIds=J_${sku}&type=1`,
-                    `https://p.3.cn/prices/mgets?skuIds=J_${sku}`,
-                ];
-                for (const url of urls) {
-                    try {
-                        const response = await new Promise((resolve) => {
-                            const xhr = new XMLHttpRequest();
-                            xhr.open('GET', url, true);
-                            xhr.withCredentials = true;
-                            xhr.onload = () => resolve({status: xhr.status, body: xhr.responseText || ''});
-                            xhr.onerror = () => resolve({error: 'xhr-error'});
-                            xhr.send();
-                        });
-                        if (response?.status === 200 && response.body) {
-                            return {url, body: response.body};
-                        }
-                    } catch (e) {}
-                }
-                return null;
-            }""",
-            item_id,
+        result = await asyncio.wait_for(
+            page.evaluate(
+                """async (args) => {
+                    const sku = args.sku;
+                    const timeoutMs = args.timeoutMs;
+                    const fetchOne = (url) => new Promise((resolve) => {
+                        const xhr = new XMLHttpRequest();
+                        const timer = setTimeout(() => {
+                            try { xhr.abort(); } catch (e) {}
+                            resolve({error: 'timeout'});
+                        }, timeoutMs);
+                        xhr.open('GET', url, true);
+                        xhr.withCredentials = true;
+                        xhr.onload = () => {
+                            clearTimeout(timer);
+                            resolve({status: xhr.status, body: xhr.responseText || ''});
+                        };
+                        xhr.onerror = () => {
+                            clearTimeout(timer);
+                            resolve({error: 'xhr-error'});
+                        };
+                        xhr.send();
+                    });
+                    const urls = [
+                        `https://p.3.cn/prices/mgets?skuIds=J_${sku}&type=1`,
+                        `https://p.3.cn/prices/mgets?skuIds=J_${sku}`,
+                    ];
+                    for (const url of urls) {
+                        try {
+                            const response = await fetchOne(url);
+                            if (response?.status === 200 && response.body) {
+                                return {url, body: response.body};
+                            }
+                        } catch (e) {}
+                    }
+                    return null;
+                }""",
+                {"sku": item_id, "timeoutMs": _JD_XHR_TIMEOUT_MS},
+            ),
+            timeout=_JD_PAGE_EVAL_TIMEOUT_SEC,
         )
         if not isinstance(result, dict):
             return None
@@ -433,6 +553,12 @@ async def _fetch_jd_price_via_page_xhr(page, item_id: str) -> float | None:
         if price is not None:
             print(f"[ProductPageScraper] 京东价格接口(页面XHR) sku={item_id} price={price}")
         return price
+    except asyncio.TimeoutError:
+        print(
+            f"[ProductPageScraper] 京东价格 XHR 超时 sku={item_id} "
+            f"timeout_sec={_JD_PAGE_EVAL_TIMEOUT_SEC}"
+        )
+        return None
     except Exception as exc:
         print(
             f"[ProductPageScraper] 京东价格 XHR 失败 sku={item_id} "
@@ -714,25 +840,40 @@ async def _fetch_jd_comments_via_browser_fetch(
     """在商品页上下文中 fetch 评论接口（携带页面 Cookie）。"""
     referer = f"https://item.jd.com/{item_id}.html"
     try:
-        body = await page.evaluate(
-            """async ({ itemId, limit, referer }) => {
-                const params = new URLSearchParams({
-                    productId: itemId,
-                    score: '0',
-                    sortType: '5',
-                    page: '0',
-                    pageSize: String(limit),
-                    isShadowSku: '0',
-                    fold: '1',
-                });
-                const url = `https://club.jd.com/comment/productPageComments.action?${params}`;
-                const resp = await fetch(url, {
-                    credentials: 'include',
-                    headers: { Referer: referer },
-                });
-                return await resp.text();
-            }""",
-            {"itemId": item_id, "limit": limit, "referer": referer},
+        body = await asyncio.wait_for(
+            page.evaluate(
+                """async ({ itemId, limit, referer, timeoutMs }) => {
+                    const params = new URLSearchParams({
+                        productId: itemId,
+                        score: '0',
+                        sortType: '5',
+                        page: '0',
+                        pageSize: String(limit),
+                        isShadowSku: '0',
+                        fold: '1',
+                    });
+                    const url = `https://club.jd.com/comment/productPageComments.action?${params}`;
+                    const controller = new AbortController();
+                    const timer = setTimeout(() => controller.abort(), timeoutMs);
+                    try {
+                        const resp = await fetch(url, {
+                            credentials: 'include',
+                            headers: { Referer: referer },
+                            signal: controller.signal,
+                        });
+                        return await resp.text();
+                    } finally {
+                        clearTimeout(timer);
+                    }
+                }""",
+                {
+                    "itemId": item_id,
+                    "limit": limit,
+                    "referer": referer,
+                    "timeoutMs": _JD_XHR_TIMEOUT_MS,
+                },
+            ),
+            timeout=_JD_PAGE_EVAL_TIMEOUT_SEC,
         )
     except Exception as exc:
         print(
@@ -787,12 +928,14 @@ async def _fetch_jd_comments_via_page(
                         f"sku={item_id} status={status} body={body[:160]!r}"
                     )
 
-            if attempt < _JD_COMMENT_RETRY_COUNT:
+            if attempt < _JD_COMMENT_RETRY_COUNT and last_status == "api_blocked":
                 print(
                     f"[ProductPageScraper] 京东评论接口被限流 sku={item_id}，"
                     f" 重试 {attempt + 1}/{_JD_COMMENT_RETRY_COUNT}"
                 )
                 await page.wait_for_timeout(int(_JD_COMMENT_RETRY_SLEEP_SEC * 1000))
+            elif last_status.startswith("http_"):
+                break
 
         comments_list, status = await _fetch_jd_comments_via_browser_fetch(
             page, item_id, limit
@@ -976,6 +1119,7 @@ async def _enrich_capture_price_sales(
     page=None,
     prefetched_price: float | None = None,
     prefetched_sales: int | None = None,
+    skip_jd_api: bool = False,
 ) -> None:
     price = _parse_price_from_visible_text(capture.visible_text)
     sales = _parse_sales_from_visible_text(capture.visible_text)
@@ -995,7 +1139,7 @@ async def _enrich_capture_price_sales(
         if item_id:
             need_price = price is None
             need_sales = sales is None
-            if need_price or need_sales:
+            if (need_price or need_sales) and not skip_jd_api:
                 if page is not None:
                     api_price, api_sales = await _fetch_jd_price_sales_via_page(
                         page,
@@ -1036,6 +1180,9 @@ async def _enrich_capture_comments(
     page=None,
 ) -> None:
     if platform != "jd" or page is None:
+        return
+    if is_jd_blocked_page(capture.final_url, title=capture.title):
+        capture.comments_status = "page_blocked"
         return
     item_id = _extract_jd_item_id(url) or _extract_jd_item_id(capture.final_url)
     if not item_id:
@@ -1115,17 +1262,27 @@ async def _download_image_base64(url: str) -> str:
         return f"data:{mime};base64,{encoded}"
 
 
-async def _wait_for_product_shell(page, timeout_ms: int) -> str:
+def _title_selectors_for_platform(platform: str) -> tuple[str, ...]:
+    if platform == "jd":
+        return _JD_TITLE_SELECTORS
+    if platform in {"taobao", "tmall"}:
+        return _TAOBAO_TITLE_SELECTORS
+    return _TITLE_SELECTORS
+
+
+async def _wait_for_product_shell(page, timeout_ms: int, *, platform: str = "") -> str:
     """等待商品标题区域出现，返回命中的选择器（空串表示超时后兜底等待）。"""
-    for selector in _TITLE_SELECTORS:
+    selectors = _title_selectors_for_platform(platform)
+    per_selector_ms = min(2500, max(800, timeout_ms // 4))
+    for selector in selectors:
         try:
-            await page.wait_for_selector(selector, timeout=timeout_ms)
+            await page.wait_for_selector(selector, timeout=per_selector_ms)
             return selector
         except Exception:
             continue
     print(
-        f"[ProductPageScraper] 未匹配标题选择器，兜底等待 1500ms "
-        f"timeout_ms={timeout_ms}"
+        f"[ProductPageScraper] 未匹配标题选择器 platform={platform or 'unknown'} "
+        f"兜底等待 1500ms per_selector_ms={per_selector_ms}"
     )
     await page.wait_for_timeout(1500)
     return ""
@@ -1223,13 +1380,37 @@ async def _extract_structured_product_text(page, platform: str) -> dict[str, str
                     return '';
                 };
                 const titleSelectors = platform === 'jd'
-                    ? ['.sku-name', '.itemInfo-wrap .sku-name', 'div.sku-name', 'h1']
+                    ? [
+                        '.sku-name',
+                        '.itemInfo-wrap .sku-name',
+                        'div.sku-name',
+                        '[class*="goods-name"]',
+                        '[class*="product-intro"] h1',
+                        '.p-name',
+                        'h1',
+                    ]
                     : ['.tb-main-title', '[class*="MainTitle"]', '#J_Title', 'h1'];
                 const shopSelectors = platform === 'jd'
                     ? ['.name a', '.shop-name', '[class*="shopName"]']
                     : ['.shop-name', '[class*="ShopName"]', '.slogo-shopname'];
+                let title = pick(titleSelectors);
+                if (!title && platform === 'jd') {
+                    try {
+                        const itemInfo = window._itemInfo;
+                        title = (
+                            itemInfo?.product?.name
+                            || itemInfo?.wareInfo?.name
+                            || itemInfo?.wareInfo?.wname
+                            || ''
+                        ).trim();
+                    } catch (e) {}
+                }
+                if (!title && platform === 'jd') {
+                    const docTitle = (document.title || '').trim();
+                    title = docTitle.replace(/\\s*[-–—|｜]\\s*京东.*$/i, '').trim();
+                }
                 return {
-                    title: pick(titleSelectors),
+                    title,
                     price: platform === 'jd' ? pickJdPrice() : pick([
                         '.tm-price', '.price', '[class*="Price"]',
                     ]),
@@ -1254,13 +1435,20 @@ async def _collect_visible_text(page, platform: str) -> dict[str, str]:
 
     title = structured.get("title", "")
     if not title:
-        for selector in _TITLE_SELECTORS:
+        selectors = _title_selectors_for_platform(platform)
+        for selector in selectors:
             try:
                 title = (await page.locator(selector).first.inner_text(timeout=1500)).strip()
                 if title:
                     break
             except Exception:
                 continue
+    if not title and platform == "jd":
+        try:
+            doc_title = (await page.title()).strip()
+        except Exception:
+            doc_title = ""
+        title = _parse_jd_document_title(doc_title)
 
     try:
         body_text = (await page.locator("body").inner_text(timeout=5000)).strip()
@@ -1409,8 +1597,21 @@ async def capture_product_page(url: str) -> Optional[ProductPageCapture]:
                     f"+{_elapsed_ms(goto_started)}ms"
                 )
 
+                if jd_item_id and is_jd_blocked_page(page.url):
+                    if not await _ensure_jd_product_page(
+                        page,
+                        jd_item_id,
+                        timeout_ms,
+                        stage="PC导航后",
+                    ):
+                        return None
+
                 shell_started = time.perf_counter()
-                matched_selector = await _wait_for_product_shell(page, min(timeout_ms, 12000))
+                matched_selector = await _wait_for_product_shell(
+                    page,
+                    min(timeout_ms, 12000),
+                    platform=platform,
+                )
                 if matched_selector:
                     print(
                         f"[ProductPageScraper] 标题区域已出现 selector={matched_selector!r} "
@@ -1431,6 +1632,13 @@ async def capture_product_page(url: str) -> Optional[ProductPageCapture]:
 
                 if jd_item_id:
                     await page.wait_for_timeout(800)
+                    if not await _ensure_jd_product_page(
+                        page,
+                        jd_item_id,
+                        timeout_ms,
+                        stage="networkidle后",
+                    ):
+                        return None
 
                 if jd_item_id and jd_network_price is None:
                     late_network_price = await _try_capture_jd_price_from_network(
@@ -1479,13 +1687,25 @@ async def capture_product_page(url: str) -> Optional[ProductPageCapture]:
 
                 # 懒加载滚动：主要用于详情图与评论区，不作为价格主路径
                 scroll_started = time.perf_counter()
-                for _ in range(3):
-                    await page.mouse.wheel(0, 1200)
-                    await page.wait_for_timeout(600)
+                if not (jd_item_id and "item.m.jd.com" in page.url):
+                    for _ in range(3):
+                        await page.mouse.wheel(0, 1200)
+                        await page.wait_for_timeout(600)
+                else:
+                    await page.evaluate("window.scrollTo(0, document.body.scrollHeight / 2)")
+                    await page.wait_for_timeout(800)
                 print(
                     f"[ProductPageScraper] 懒加载滚动完成 rounds=3 "
                     f"+{_elapsed_ms(scroll_started)}ms"
                 )
+
+                if jd_item_id and not await _ensure_jd_product_page(
+                    page,
+                    jd_item_id,
+                    timeout_ms,
+                    stage="滚动后",
+                ):
+                    return None
 
                 jd_price_text = ""
                 if platform == "jd":
@@ -1557,6 +1777,13 @@ async def capture_product_page(url: str) -> Optional[ProductPageCapture]:
                     f"[ProductPageScraper] 抓取完成 final_url={page.url} "
                     f"total_ms={_elapsed_ms(started)}"
                 )
+                if platform == "jd" and is_jd_blocked_page(page.url, title=title):
+                    print(
+                        f"[ProductPageScraper] 京东页面仍被拦截 title={title[:60]!r} "
+                        f"final_url={page.url}"
+                    )
+                    return None
+
                 capture = ProductPageCapture(
                     final_url=page.url,
                     visible_text=visible_text,
@@ -1576,6 +1803,7 @@ async def capture_product_page(url: str) -> Optional[ProductPageCapture]:
                     page=page,
                     prefetched_price=jd_prefetched_price,
                     prefetched_sales=jd_prefetched_sales,
+                    skip_jd_api=bool(jd_item_id),
                 )
                 await _enrich_capture_comments(capture, url, platform, page=page)
                 return capture

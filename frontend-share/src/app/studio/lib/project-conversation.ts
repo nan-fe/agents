@@ -81,7 +81,7 @@ export const loadProjectConversationState = async (
   const thread = buildThreadFromVersions(castStoredVersions(conversation?.versions ?? []));
   return {
     thread,
-    latestVersionIndex: conversation?.versions?.length ?? 0 - 1,
+    latestVersionIndex: (conversation?.versions?.length ?? 0) - 1,
   };
 };
 

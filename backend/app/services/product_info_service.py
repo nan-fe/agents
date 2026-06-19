@@ -44,6 +44,7 @@ from app.services.product_page_scraper import (
     ProductPageCapture,
     build_vision_image_payload,
     capture_product_page,
+    is_jd_blocked_page,
     is_playwright_available,
     is_usable_product_page_text,
     playwright_setup_hint,
@@ -588,6 +589,8 @@ def _resolve_product_name(parsed_name: str, capture: ProductPageCapture | None) 
 
     fallback = (capture.title or "").strip() if capture else ""
     if fallback and fallback not in _LOW_QUALITY_PRODUCT_NAMES:
+        if capture and capture.platform == "jd" and is_jd_blocked_page("", title=fallback):
+            return candidate
         print(
             f"[ProductInfoService] 使用页面标题兜底商品名 parsed={candidate!r} "
             f"fallback={fallback[:80]!r}"
@@ -622,6 +625,11 @@ async def gather_product_context(url: str) -> ProductGatherResult:
     scrape_started = time.perf_counter()
     capture = await capture_product_page(url)
     print(f"[ProductInfoService] Playwright 阶段完成 +{_elapsed_ms(scrape_started)}ms")
+    if capture is None and "jd" in urlparse(url).netloc.lower():
+        raise ValueError(
+            "京东页面访问被限流或需登录，请在 backend/.env 配置 PRODUCT_JD_COOKIE"
+            "（浏览器 jd.com 的 Cookie 字符串）后重试"
+        )
     if capture:
         candidate_text = (capture.visible_text or "").strip()
         if _is_usable_page_text(candidate_text, product_title=capture.title or ""):
