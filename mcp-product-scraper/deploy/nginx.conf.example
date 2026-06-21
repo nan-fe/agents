@@ -1,0 +1,27 @@
+# Nginx 反代示例：将 HTTPS /mcp 转发到本地 MCP 服务（Claude Connectors 需要 HTTPS）
+
+upstream mcp_product_scraper {
+    server 127.0.0.1:3100;
+}
+
+server {
+    listen 443 ssl;
+    server_name mcp.example.com;
+
+    # ssl_certificate /path/to/fullchain.pem;
+    # ssl_certificate_key /path/to/privkey.pem;
+
+    location /mcp {
+        proxy_pass http://mcp_product_scraper;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header Authorization $http_authorization;
+        proxy_read_timeout 300s;
+        proxy_send_timeout 300s;
+    }
+
+    location /health {
+        proxy_pass http://mcp_product_scraper;
+    }
+}

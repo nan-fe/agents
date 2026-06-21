@@ -24,3 +24,5 @@ rank-bm25
 sqlalchemy>=2.0
 aiosqlite
 playwright
+
+# 本地开发：pip install -e ../mcp-lark

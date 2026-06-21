@@ -69,12 +69,27 @@ class Settings(BaseSettings):
     SEARCH_HTTP_RETRY_BASE_DELAY: float = 0.5
     SEARCH_HTTP_RETRY_MAX_DELAY: float = 12.0
 
+    # 向量库路径（backend 与 mcp-product-scraper 应指向同一路径）
+    CHROMA_DB_PATH: str = "./chroma_taobao_v1"
+
     # 选品池商品页抓取
     PRODUCT_SCRAPER_USE_PLAYWRIGHT: bool = True
     PRODUCT_PLAYWRIGHT_TIMEOUT_MS: int = 35000
     PRODUCT_VISION_MODEL: Optional[str] = None
     # 可选：浏览器 Cookie 字符串（含 pt_key 等），用于京东登录态下抓取价格/销量
     PRODUCT_JD_COOKIE: str = ""
+
+    # 飞书 IM / 审核通过通知
+    LARK_APP_ID: Optional[str] = None
+    LARK_APP_SECRET: Optional[str] = None
+    LARK_NOTIFY_CHAT_ID: Optional[str] = None
+    LARK_NOTIFY_ENABLED: bool = False
+    # 个人账号推荐 user；企业机器人用 bot
+    LARK_DEFAULT_IDENTITY: str = "user"
+    LARK_USER_ACCESS_TOKEN: Optional[str] = None
+    # 个人账号：未配置 APP 凭证时自动走本机 lark-cli（None=自动，True/False=强制）
+    LARK_USE_CLI: Optional[bool] = None
+    LARK_CLI_PATH: str = "lark-cli"
 
     # LangSmith
     LANGCHAIN_TRACING_V2: bool = True

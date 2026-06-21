@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "product-scraper": {
+      "url": "http://127.0.0.1:3100/mcp",
+      "headers": {
+        "Authorization": "Bearer 5289e32374cf49a17359101fca5a583b00c19b049bd999f133fa720196b9a8a0"
+      }
+    },
+    "lark-im": {
+      "url": "http://127.0.0.1:3101/mcp",
+      "headers": {
+        "Authorization": "Bearer 5289e32374cf49a17359101fca5a583b00c19b049bd999f133fa720196b9a8a0"
+      }
+    }
+  }
+}

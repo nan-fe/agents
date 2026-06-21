@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lark-im"
+version = "0.1.0"
+description = "Feishu/Lark IM SDK and MCP server for agents"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "httpx>=0.28",
+    "pydantic-settings>=2.0",
+    "python-dotenv>=1.0",
+]
+
+[project.optional-dependencies]
+mcp = ["fastmcp>=3.4.0"]
+
+[project.scripts]
+lark-im-mcp = "server.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["lark_im*", "server*"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
