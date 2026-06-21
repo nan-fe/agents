@@ -19,6 +19,7 @@ import {
   } from '@/services/api';
   import AgentLogs from './agent-logs';
   import ProjectHistoryDrawer from './project-history-drawer';
+  // import StudioFeishuAuth from './studio-feishu-auth';
   import ChatMessage from './chat-message';
   import ConversationTurn from './conversation-turn';
   import PendingTurn from './pending-turn';
@@ -659,6 +660,7 @@ import {
               }}
               disabled={isGenerating || isRestoring}
             />
+            {/* <StudioFeishuAuth /> */}
           </div>
         </header>
   

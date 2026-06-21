@@ -27,6 +27,7 @@ from app.memory import project_memory
 from app.services.dialog_stream_store import dialog_stream_store
 from app.memory.project_memory import new_project_id
 from lark_im import get_lark_im_service
+from lark_im.notify import build_lark_notification_meta
 from lark_im.settings import lark_settings
 from typing import Optional, Callable, Dict, List, Any
 import logging
@@ -196,18 +197,32 @@ class DialogOrchestratorAgent:
             session_history.update_plan(context.get_planning())
             final_result["project_id"] = resolved_project_id
 
-        if (
-            lark_settings.LARK_NOTIFY_ENABLED
-            and context.review.review_status == "passed"
-        ):
-            try:
-                await get_lark_im_service().send_review_notification(
-                    final_result
-                )
-            except Exception as exc:
-                logger.warning(
-                    "飞书通知失败（不影响生成结果）: %s", exc
-                )
+        notify_mode = (lark_settings.LARK_NOTIFY_MODE or "auto").strip().lower()
+        review_passed = (
+            context.review.review_executed and context.review.approved
+        )
+        auto_sent = False
+        notify_error: str | None = None
+
+        if review_passed and notify_mode != "off":
+            if notify_mode == "auto" and lark_settings.LARK_NOTIFY_ENABLED:
+                try:
+                    await get_lark_im_service().send_review_notification(
+                        final_result
+                    )
+                    auto_sent = True
+                except Exception as exc:
+                    notify_error = str(exc)
+                    logger.warning(
+                        "飞书通知失败（不影响生成结果）: %s", exc
+                    )
+
+        if review_passed:
+            final_result["lark_notification"] = build_lark_notification_meta(
+                review_passed=True,
+                auto_sent=auto_sent,
+                error=notify_error,
+            )
 
         await emit_log(log_callback, "Orchestrator", "多 Agent 协作完成，正在整理结果")
 

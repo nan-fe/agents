@@ -63,3 +63,39 @@ def markdown_to_post_content(markdown: str, title: str | None = None) -> str:
 
 def text_message_content(text: str) -> str:
     return json.dumps({"text": text}, ensure_ascii=False)
+
+
+_LARK_PROMPT_DEFAULT = "审核已通过。是否推送到飞书？"
+
+
+def is_lark_notify_configured() -> bool:
+    """是否已配置 OpenAPI Bot 推送所需的应用凭证与通知群。"""
+    from lark_im.settings import lark_settings
+
+    app_id = (lark_settings.LARK_APP_ID or "").strip()
+    secret = (lark_settings.LARK_APP_SECRET or "").strip()
+    chat_id = (lark_settings.LARK_NOTIFY_CHAT_ID or "").strip()
+    return bool(app_id and secret and chat_id)
+
+
+def build_lark_notification_meta(
+    *,
+    review_passed: bool,
+    auto_sent: bool = False,
+    error: str | None = None,
+) -> dict[str, Any]:
+    """构建 SSE/API 结果中的 lark_notification 元数据。"""
+    from lark_im.settings import lark_settings
+
+    mode = (lark_settings.LARK_NOTIFY_MODE or "auto").strip().lower()
+    if mode not in {"auto", "prompt", "off"}:
+        mode = "auto"
+
+    return {
+        "eligible": review_passed,
+        "mode": mode,
+        "configured": is_lark_notify_configured(),
+        "auto_sent": auto_sent,
+        "error": error,
+        "prompt": _LARK_PROMPT_DEFAULT,
+    }

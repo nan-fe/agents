@@ -83,3 +83,36 @@ class VersionRow(Base):
     created_at: Mapped[datetime] = mapped_column(
         _utc_datetime, nullable=False, default=_utcnow
     )
+
+
+class LarkOAuthClientRow(Base):
+    """OAuth 动态注册的第三方客户端（本系统 DCR，非飞书开放平台）。"""
+
+    __tablename__ = "lark_oauth_clients"
+
+    client_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    client_secret: Mapped[str] = mapped_column(String(128), nullable=False)
+    client_name: Mapped[str] = mapped_column(String(128), nullable=False, default="")
+    redirect_uris: Mapped[list[str]] = mapped_column(JSON, nullable=False)
+    scopes: Mapped[str] = mapped_column(String(512), nullable=False, default="")
+    created_at: Mapped[datetime] = mapped_column(
+        _utc_datetime, nullable=False, default=_utcnow
+    )
+
+
+class LarkUserTokenRow(Base):
+    """用户飞书 OAuth 授权后的 user_access_token。"""
+
+    __tablename__ = "lark_user_tokens"
+
+    user_id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    access_token: Mapped[str] = mapped_column(Text, nullable=False)
+    refresh_token: Mapped[str | None] = mapped_column(Text, nullable=True)
+    expires_at: Mapped[datetime] = mapped_column(_utc_datetime, nullable=False)
+    refresh_expires_at: Mapped[datetime | None] = mapped_column(
+        _utc_datetime, nullable=True
+    )
+    scope: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(
+        _utc_datetime, nullable=False, default=_utcnow
+    )

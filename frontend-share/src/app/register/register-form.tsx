@@ -4,18 +4,21 @@ import { useActionState, useEffect, useRef } from 'react';
 import { signIn } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 
+import OAuthSignInButtons from '@/components/oauth-sign-in-buttons';
 import {
   registerAction,
   type RegisterActionState,
 } from '@/lib/actions/register-action';
+import type { OAuthProviderId } from '@/lib/oauth-providers';
 
 const initialState: RegisterActionState = { error: null, success: false };
 
 type RegisterFormProps = {
   returnUrl: string;
+  oauthProviders: OAuthProviderId[];
 };
 
-const RegisterForm = ({ returnUrl }: RegisterFormProps) => {
+const RegisterForm = ({ returnUrl, oauthProviders }: RegisterFormProps) => {
   const router = useRouter();
   const pendingCredentials = useRef<{ username: string; password: string } | null>(
     null,
@@ -57,7 +60,13 @@ const RegisterForm = ({ returnUrl }: RegisterFormProps) => {
   }, [router, returnUrl, state.success]);
 
   return (
-    <form action={formAction} className="space-y-5">
+    <div className="space-y-6">
+      <OAuthSignInButtons
+        registerMode
+        returnUrl={returnUrl}
+        providers={oauthProviders}
+      />
+      <form action={formAction} className="space-y-5">
       <div className="space-y-2">
         <label className="atelier-label" htmlFor="username">
           账号
@@ -133,6 +142,7 @@ const RegisterForm = ({ returnUrl }: RegisterFormProps) => {
         {isPending ? '注册中…' : '注册并进入创作台'}
       </button>
     </form>
+    </div>
   );
 };
 

@@ -3,6 +3,9 @@
 import { useActionState } from 'react';
 import { signIn } from 'next-auth/react';
 
+import OAuthSignInButtons from '@/components/oauth-sign-in-buttons';
+import type { OAuthProviderId } from '@/lib/oauth-providers';
+
 type LoginState = {
   error: string | null;
 };
@@ -11,6 +14,7 @@ const initialState: LoginState = { error: null };
 
 type LoginFormProps = {
   returnUrl: string;
+  oauthProviders: OAuthProviderId[];
 };
 
 const loginAction = async (
@@ -39,14 +43,16 @@ const loginAction = async (
   return { error: null };
 };
 
-const LoginForm = ({ returnUrl }: LoginFormProps) => {
+const LoginForm = ({ returnUrl, oauthProviders }: LoginFormProps) => {
   const [state, formAction, isPending] = useActionState(
     loginAction,
     initialState,
   );
 
   return (
-    <form action={formAction} className="space-y-5">
+    <div className="space-y-6">
+      <OAuthSignInButtons returnUrl={returnUrl} providers={oauthProviders} />
+      <form action={formAction} className="space-y-5">
       <input name="returnUrl" type="hidden" value={returnUrl} />
       <div className="space-y-2">
         <label className="atelier-label" htmlFor="username">
@@ -91,6 +97,7 @@ const LoginForm = ({ returnUrl }: LoginFormProps) => {
         {isPending ? '登录中…' : '登录并进入创作台'}
       </button>
     </form>
+    </div>
   );
 };
 

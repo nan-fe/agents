@@ -1,3 +1,12 @@
+export type LarkNotificationMeta = {
+  eligible: boolean;
+  mode: 'auto' | 'prompt' | 'off' | string;
+  configured: boolean;
+  auto_sent: boolean;
+  error?: string | null;
+  prompt?: string;
+};
+
 export type DialogResultData = {
   content: string;
   title: string;
@@ -9,6 +18,9 @@ export type DialogResultData = {
   version_id?: string;
   version?: string;
   version_number?: number;
+  review_approved?: boolean;
+  review_feedback?: string;
+  lark_notification?: LarkNotificationMeta;
 };
 
 export type AgentLogEntry = {

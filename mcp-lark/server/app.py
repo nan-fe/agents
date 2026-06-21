@@ -14,10 +14,12 @@ from server.auth import build_static_bearer_auth
 from server.bootstrap import get_lark_im_service_singleton, init_lark_stack
 from server.settings import McpSettings, load_settings
 
-MCP_INSTRUCTIONS = """你是飞书即时通讯助手。支持向群聊发消息、回复、搜索群、读取群消息。
+from lark_im.setup_guide import get_lark_setup_guide_payload
+
+MCP_INSTRUCTIONS = """你是飞书即时通讯助手。支持向群聊发消息、回复、搜索群、读取群消息，以及审核通过后的飞书推送。
 
 安全约束（必须遵守）：
-- 调用 send_message / reply_message 前，必须向用户确认：收件人（群 chat_id）、消息内容、发送身份（bot/user）。
+- 调用 send_message / reply_message / notify_review_passed 前，必须向用户确认收件人与内容。
 - 不要未经用户明确同意发送消息。
 
 个人账号（无企业自建应用）：
@@ -30,8 +32,16 @@ MCP_INSTRUCTIONS = """你是飞书即时通讯助手。支持向群聊发消息�
 - list_chat_messages：读取群最近消息。
 - search_chats：按名称搜索群。
 - get_lark_auth_status：检查 bot/user 凭证是否可用。
+- notify_review_passed：发送审核通过通知到配置的通知群（仅用户明确确认后调用）。
+- get_lark_setup_guide：返回飞书开放平台配置步骤（不含 Secret）。
 
-审核通过通知由 backend 在 ReviewerAgent 质检通过时自动发送，无需通过 MCP 触发。"""
+Reviewer 审核通过后的工作流：
+1. 检测生成结果中的 review_approved 与 lark_notification 元数据。
+2. 若 eligible 且未 auto_sent，向用户展示 prompt 并询问是否推送到飞书。
+3. 调用 get_lark_auth_status，确认 bot.available 为 true。
+4. 用户确认后调用 notify_review_passed（参数与生成结果字段对齐）。
+
+创作台 backend 在 LARK_NOTIFY_MODE=auto 时会自动推送；MCP 用于百炼等外部 Agent 按需触发。"""
 
 
 def _json_text(payload: Any) -> str:
@@ -176,6 +186,63 @@ def create_mcp(settings: McpSettings) -> FastMCP:
     async def get_lark_auth_status() -> str:
         service = get_lark_im_service_singleton()
         return _json_text(await service.get_auth_status())
+
+    @mcp.tool(
+        name="notify_review_passed",
+        description=(
+            "将审核通过的内容推送到 LARK_NOTIFY_CHAT_ID 配置的飞书群。"
+            "参数与生成结果字段对齐。仅当用户明确确认推送后调用；"
+            "调用前建议先 get_lark_auth_status 确认 bot.available。"
+        ),
+        annotations={
+            "readOnlyHint": False,
+            "destructiveHint": False,
+            "openWorldHint": True,
+        },
+    )
+    async def notify_review_passed(
+        title: str,
+        content: str,
+        project_id: str | None = None,
+        version: str | None = None,
+        version_id: str | None = None,
+        image_url: str | None = None,
+        review_feedback: str | None = None,
+    ) -> str:
+        service = get_lark_im_service_singleton()
+        result_dict: dict[str, Any] = {
+            "title": title,
+            "content": content,
+        }
+        if project_id:
+            result_dict["project_id"] = project_id
+        if version:
+            result_dict["version"] = version
+        if version_id:
+            result_dict["version_id"] = version_id
+        if image_url:
+            result_dict["image_url"] = image_url
+        if review_feedback:
+            result_dict["review_feedback"] = review_feedback
+        try:
+            data = await service.send_review_notification(result_dict)
+        except ValueError as exc:
+            return _json_text({"error": str(exc)})
+        return _json_text(data)
+
+    @mcp.tool(
+        name="get_lark_setup_guide",
+        description=(
+            "返回飞书开放平台接入步骤、权限 scope、环境变量清单与 MCP URL 示例（不含 Secret）。"
+        ),
+        annotations={
+            "readOnlyHint": True,
+            "destructiveHint": False,
+            "openWorldHint": False,
+        },
+    )
+    async def get_lark_setup_guide() -> str:
+        return _json_text(get_lark_setup_guide_payload())
 
     return mcp
 

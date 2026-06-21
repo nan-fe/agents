@@ -36,22 +36,9 @@ lark-im-mcp
 
 ## MCP Client 连接
 
-任意 MCP Client（Cursor、自研 Agent）：
+任意 MCP Client（Cursor、自研 Agent、百炼）：
 
-```json
-{
-  "mcpServers": {
-    "lark-im": {
-      "url": "http://127.0.0.1:3101/mcp",
-      "headers": {
-        "Authorization": "Bearer <MCP_BEARER_TOKEN>"
-      }
-    }
-  }
-}
-```
-
-调用方式为 MCP 规范 `tools/call`，不是 REST。
+详见 **[对外接入手册](docs/INTEGRATION.md)** 与 [`docs/BAILEIAN_EXAMPLE.json`](docs/BAILEIAN_EXAMPLE.json)。
 
 ## 作为 Python SDK 使用（同进程）
 
@@ -166,6 +153,8 @@ asyncio.run(main())
 | `list_chat_messages` | 拉取群消息 |
 | `search_chats` | 搜群 |
 | `get_lark_auth_status` | 检查 bot/user 凭证 |
+| `notify_review_passed` | 发送审核通过通知（须用户确认） |
+| `get_lark_setup_guide` | 接入配置引导 |
 
 ## 开发
 
