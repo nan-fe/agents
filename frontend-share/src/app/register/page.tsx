@@ -1,5 +1,7 @@
 import Link from 'next/link';
 
+import { OAUTH_PROVIDERS } from '@/lib/oauth-providers';
+
 import RegisterForm from './register-form';
 
 type RegisterPageProps = {
@@ -27,7 +29,7 @@ const RegisterPage = async ({ searchParams }: RegisterPageProps) => {
             创建账号后即可进入多智能体写作台，开始生成小红书文案与配图。
           </p>
           <div className="mt-8">
-            <RegisterForm returnUrl={returnUrl} />
+            <RegisterForm oauthProviders={OAUTH_PROVIDERS} returnUrl={returnUrl} />
           </div>
           <p className="mt-8 text-center font-body text-sm text-ink-muted">
             已有账号？

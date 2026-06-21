@@ -1,5 +1,7 @@
 import Link from 'next/link';
 
+import { OAUTH_PROVIDERS } from '@/lib/oauth-providers';
+
 import LoginForm from './login-form';
 
 type LoginPageProps = {
@@ -27,7 +29,7 @@ const LoginPage = async ({ searchParams }: LoginPageProps) => {
             登录后可进入多智能体写作台，开始生成小红书文案与配图。
           </p>
           <div className="mt-8">
-            <LoginForm returnUrl={returnUrl} />
+            <LoginForm oauthProviders={OAUTH_PROVIDERS} returnUrl={returnUrl} />
           </div>
           <p className="mt-8 text-center font-body text-sm text-ink-muted">
             还没有账号？

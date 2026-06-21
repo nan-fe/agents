@@ -52,6 +52,10 @@ services:
       - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/xhs_auth
       - SENTRY_DSN=${SENTRY_DSN:-https://DYwAS6KnxQkz9CnaCzMWiLNh@s2461160.eu-nbg-2.betterstackdata.com/2461176}
       - NEXT_PUBLIC_SENTRY_DSN=${NEXT_PUBLIC_SENTRY_DSN:-https://DYwAS6KnxQkz9CnaCzMWiLNh@s2461160.eu-nbg-2.betterstackdata.com/2461176}
+      - AUTH_SECRET=${AUTH_SECRET:-change-me-in-production}
+      - AUTH_GITHUB_ID=${AUTH_GITHUB_ID:-}
+      - AUTH_GITHUB_SECRET=${AUTH_GITHUB_SECRET:-}
+      - AUTH_URL=${AUTH_URL:-}
     depends_on:
       postgres:
         condition: service_healthy
