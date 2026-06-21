@@ -29,11 +29,13 @@ services:
       - PYTHONUNBUFFERED=1
       - SHARE_STORE_PATH=/data/shares/shares.json
       - DATABASE_URL=sqlite+aiosqlite:////data/memory/memory.db
+      - CHROMA_DB_PATH=/data/chroma_taobao_v1
     env_file:
       - ./backend/.env
     volumes:
       - ./data/shares:/data/shares
       - ./data/memory:/data/memory
+      - ./data/chroma:/data/chroma_taobao_v1
     networks:
       - app-network
     restart: unless-stopped

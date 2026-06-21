@@ -44,14 +44,15 @@ class CustomEmbeddingFunction(EmbeddingFunction[Documents]):
 class EmbeddingDatabase:
     """嵌入数据库类 - 管理向量存储"""
     
-    def __init__(self, 
-                 embedding_model: str = None, 
-                 distance_type: str = "cosine",
-                 db_path: str = "./chroma_taobao_v1"):
-        
+    def __init__(
+        self,
+        embedding_model: str = None,
+        distance_type: str = "cosine",
+        db_path: str | None = None,
+    ):
         self.embedding_model = embedding_model or settings.EMBEDING_MODEL
         self.distance_type = self._determine_distance_type(embedding_model)
-        self.db_path = db_path
+        self.db_path = db_path or settings.CHROMA_DB_PATH
         
         self.embedding_fn = CustomEmbeddingFunction(
             api_key=settings.SILICONFLOW_API_KEY,

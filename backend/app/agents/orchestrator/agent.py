@@ -26,12 +26,17 @@ from .session_history import WritingSessionHistory
 from app.memory import project_memory
 from app.services.dialog_stream_store import dialog_stream_store
 from app.memory.project_memory import new_project_id
+from lark_im import get_lark_im_service
+from lark_im.settings import lark_settings
 from typing import Optional, Callable, Dict, List, Any
+import logging
 import time
 from langchain_core.messages import HumanMessage
 from dotenv import load_dotenv
 
 load_dotenv()
+
+logger = logging.getLogger(__name__)
 
 # 兼容既有测试与导入
 __all__ = [
@@ -190,6 +195,19 @@ class DialogOrchestratorAgent:
             })
             session_history.update_plan(context.get_planning())
             final_result["project_id"] = resolved_project_id
+
+        if (
+            lark_settings.LARK_NOTIFY_ENABLED
+            and context.review.review_status == "passed"
+        ):
+            try:
+                await get_lark_im_service().send_review_notification(
+                    final_result
+                )
+            except Exception as exc:
+                logger.warning(
+                    "飞书通知失败（不影响生成结果）: %s", exc
+                )
 
         await emit_log(log_callback, "Orchestrator", "多 Agent 协作完成，正在整理结果")
 
