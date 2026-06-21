@@ -2,7 +2,11 @@ import asyncio
 import tempfile
 from pathlib import Path
 
-from app.services.dialog_stream_store import DialogStream, dialog_stream_store
+from app.services.dialog_stream_store import (
+    DialogStream,
+    StreamSubscriber,
+    dialog_stream_store,
+)
 
 
 async def _test_append_event_assigns_incremental_ids() -> None:
@@ -35,14 +39,14 @@ async def _test_snapshot_events_after_replays_and_subscribes() -> None:
     await stream.append_event({"event": "message", "data": "first"})
     await stream.append_event({"event": "message", "data": "second"})
 
-    replay, queue = await stream.snapshot_events_after("1")
+    replay, subscriber = await stream.snapshot_events_after("1")
 
     assert [event.event_id for event in replay] == ["2"]
     await stream.append_event({"event": "message", "data": "third"})
-    queued = await asyncio.wait_for(queue.get(), timeout=1)
+    queued = await asyncio.wait_for(subscriber.queue.get(), timeout=1)
 
     assert queued.event_id == "3"
-    await stream.unsubscribe(queue)
+    await stream.unsubscribe(subscriber)
 
 
 async def _test_create_stream_replaces_existing_session() -> None:
@@ -102,6 +106,37 @@ async def _test_hydrate_marks_complete_when_result_present() -> None:
         await store.remove_stream("session_done")
 
 
+async def _test_reap_stale_subscribers_on_complete_stream() -> None:
+    stream = DialogStream(session_id="session_stale", prompt="hello")
+    stale = StreamSubscriber(last_activity=0.0)
+    active = StreamSubscriber()
+    stream._subscribers.extend([stale, active])
+
+    reaped = await stream.reap_stale_subscribers(60.0, now=100.0)
+
+    assert reaped == 1
+    assert stale not in stream._subscribers
+    assert active in stream._subscribers
+
+
+async def _test_reap_skips_active_generation() -> None:
+    stream = DialogStream(session_id="session_running", prompt="hello")
+    stream.task = asyncio.create_task(asyncio.sleep(60))
+    stale = StreamSubscriber(last_activity=0.0)
+    stream._subscribers.append(stale)
+
+    try:
+        reaped = await stream.reap_stale_subscribers(60.0, now=100.0)
+        assert reaped == 0
+        assert stale in stream._subscribers
+    finally:
+        stream.task.cancel()
+        try:
+            await stream.task
+        except asyncio.CancelledError:
+            pass
+
+
 def test_dialog_stream_store() -> None:
     asyncio.run(_test_append_event_assigns_incremental_ids())
     asyncio.run(_test_get_events_after_last_event_id())
@@ -109,3 +144,5 @@ def test_dialog_stream_store() -> None:
     asyncio.run(_test_create_stream_replaces_existing_session())
     asyncio.run(_test_persist_and_restore_stream())
     asyncio.run(_test_hydrate_marks_complete_when_result_present())
+    asyncio.run(_test_reap_stale_subscribers_on_complete_stream())
+    asyncio.run(_test_reap_skips_active_generation())

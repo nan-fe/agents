@@ -54,7 +54,11 @@ from app.models.schemas import (
 from app.services.product_info_service import ProductInfoService
 from app.services.product_page_scraper import get_product_screenshot_dir
 from app.security.input_guard import check_input_security, safety_rejection_payload
-from app.services.dialog_stream_store import DialogStream, dialog_stream_store
+from app.services.dialog_stream_store import (
+    DialogStream,
+    StreamSubscriber,
+    dialog_stream_store,
+)
 from app.services.share_service import share_store
 from app.services.sse_resume import ResumePhase, resolve_resume_phase
 from app.utils.display_labels import (
@@ -74,6 +78,8 @@ from app.memory.db import get_session
 from app.memory.models import VersionRow
 
 logger = logging.getLogger(__name__)
+
+_SSE_HEARTBEAT_PAYLOAD = {"comment": "heartbeat"}
 
 # 编排器单例（向量索引在 ProductRagAgent 内延后构建，避免 import 即阻塞）
 orchestrator = DialogOrchestratorAgent()
@@ -100,13 +106,36 @@ async def lifespan(app: FastAPI):
         except Exception:
             logger.exception("RAG 索引后台预热失败")
 
+    async def _reap_stale_sse_subscribers() -> None:
+        interval = settings.SSE_SUBSCRIBER_REAP_INTERVAL_SECONDS
+        ttl = settings.SSE_SUBSCRIBER_IDLE_TTL_SECONDS
+        while True:
+            await asyncio.sleep(interval)
+            try:
+                reaped = await dialog_stream_store.reap_stale_subscribers(
+                    idle_seconds=ttl,
+                )
+                if reaped:
+                    logger.info("SSE 订阅回收扫描完成 reaped=%d", reaped)
+            except Exception:
+                logger.exception("SSE 订阅回收扫描失败")
+
     app.state.rag_warm_task = asyncio.create_task(_warm_rag())
+    sse_reaper_task = None
+    if settings.SSE_SUBSCRIBER_IDLE_TTL_SECONDS > 0:
+        sse_reaper_task = asyncio.create_task(_reap_stale_sse_subscribers())
     yield
     t = getattr(app.state, "rag_warm_task", None)
     if t is not None and not t.done():
         t.cancel()
         try:
             await t
+        except asyncio.CancelledError:
+            pass
+    if sse_reaper_task is not None and not sse_reaper_task.done():
+        sse_reaper_task.cancel()
+        try:
+            await sse_reaper_task
         except asyncio.CancelledError:
             pass
     await close_db()
@@ -321,26 +350,43 @@ async def _run_dialog_generation(
 async def _stream_subscribed_events(
     request: Request,
     stream: DialogStream,
-    subscriber_queue: asyncio.Queue,
+    subscriber: StreamSubscriber,
 ):
+    heartbeat_interval = settings.SSE_HEARTBEAT_INTERVAL_SECONDS
+
+    def _should_stop() -> bool:
+        if subscriber.queue.empty() and (
+            stream.is_complete
+            or (stream.task is not None and stream.task.done())
+        ):
+            return True
+        return False
+
     try:
         while True:
             if await request.is_disconnected():
                 break
 
-            if stream.is_complete and subscriber_queue.empty():
+            if _should_stop():
                 break
 
             try:
-                event = await asyncio.wait_for(subscriber_queue.get(), timeout=0.25)
+                event = await asyncio.wait_for(
+                    subscriber.queue.get(),
+                    timeout=heartbeat_interval,
+                )
+                subscriber.touch()
                 yield _sanitize_sse_payload(event.sse_payload)
-                subscriber_queue.task_done()
+                subscriber.queue.task_done()
             except asyncio.TimeoutError:
-                if stream.is_complete and subscriber_queue.empty():
+                if _should_stop():
                     break
-                continue
+                if await request.is_disconnected():
+                    break
+                subscriber.touch()
+                yield _SSE_HEARTBEAT_PAYLOAD
     finally:
-        await stream.unsubscribe(subscriber_queue)
+        await stream.unsubscribe(subscriber)
 
 
 async def _start_generation_on_stream(
@@ -350,9 +396,9 @@ async def _start_generation_on_stream(
     *,
     project_id: Optional[str] = None,
     user_id: Optional[str] = None,
-) -> asyncio.Queue:
+) -> StreamSubscriber:
     stream.is_complete = False
-    subscriber_queue = await stream.subscribe()
+    subscriber = await stream.subscribe()
     stream.task = asyncio.create_task(
         _run_dialog_generation(
             stream,
@@ -362,7 +408,7 @@ async def _start_generation_on_stream(
             user_id=user_id,
         )
     )
-    return subscriber_queue
+    return subscriber
 
 
 async def generate_dialog_event_stream(
@@ -400,7 +446,7 @@ async def generate_dialog_event_stream(
                 yield event
             return
 
-        replay_events, subscriber_queue = await stream.snapshot_events_after(
+        replay_events, subscriber = await stream.snapshot_events_after(
             last_event_id
         )
         logger.info(
@@ -415,11 +461,11 @@ async def generate_dialog_event_stream(
 
         phase = resolve_resume_phase(stream)
         if phase is ResumePhase.REPLAY_DONE:
-            await stream.unsubscribe(subscriber_queue)
+            await stream.unsubscribe(subscriber)
             return
 
         if phase is ResumePhase.ORPHAN_RESTART_FULL:
-            await stream.unsubscribe(subscriber_queue)
+            await stream.unsubscribe(subscriber)
             logger.warning(
                 "SSE 续传：后台任务已丢失，兜底重走全流程 session_id=%s last_event_id=%s replay=%d",
                 session_id,
@@ -427,7 +473,7 @@ async def generate_dialog_event_stream(
                 len(replay_events),
             )
             stream = await dialog_stream_store.create_stream(session_id, user_input)
-            subscriber_queue = await _start_generation_on_stream(
+            subscriber = await _start_generation_on_stream(
                 stream,
                 user_input,
                 session_id,
@@ -435,7 +481,7 @@ async def generate_dialog_event_stream(
                 user_id=user_id,
             )
             async for event in _stream_subscribed_events(
-                request, stream, subscriber_queue
+                request, stream, subscriber
             ):
                 yield event
             return
@@ -446,7 +492,7 @@ async def generate_dialog_event_stream(
             last_event_id,
         )
         async for event in _stream_subscribed_events(
-            request, stream, subscriber_queue
+            request, stream, subscriber
         ):
             yield event
         return
@@ -468,7 +514,7 @@ async def generate_dialog_event_stream(
         return
 
     stream = await dialog_stream_store.create_stream(session_id, user_input)
-    subscriber_queue = await _start_generation_on_stream(
+    subscriber = await _start_generation_on_stream(
         stream,
         user_input,
         session_id,
@@ -476,7 +522,7 @@ async def generate_dialog_event_stream(
         user_id=user_id,
     )
 
-    async for event in _stream_subscribed_events(request, stream, subscriber_queue):
+    async for event in _stream_subscribed_events(request, stream, subscriber):
         yield event
 
 
@@ -597,6 +643,8 @@ async def generateDialog(request: Request, user_input: UserInput):
             user_id=user_input.user_id,
         ),
         media_type="text/event-stream",
+        ping=settings.SSE_HEARTBEAT_INTERVAL_SECONDS,
+        send_timeout=settings.SSE_SEND_TIMEOUT_SECONDS,
         headers={
             "Cache-Control": "no-cache",
             "Connection": "keep-alive",

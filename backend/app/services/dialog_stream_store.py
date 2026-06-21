@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import re
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Optional
@@ -22,6 +23,15 @@ class StreamEvent:
 
 
 @dataclass
+class StreamSubscriber:
+    queue: asyncio.Queue = field(default_factory=asyncio.Queue)
+    last_activity: float = field(default_factory=time.monotonic)
+
+    def touch(self) -> None:
+        self.last_activity = time.monotonic()
+
+
+@dataclass
 class DialogStream:
     session_id: str
     prompt: str
@@ -29,7 +39,7 @@ class DialogStream:
     next_event_id: int = 1
     task: Optional[asyncio.Task] = None
     is_complete: bool = False
-    _subscriber_queues: list[asyncio.Queue] = field(default_factory=list)
+    _subscribers: list[StreamSubscriber] = field(default_factory=list)
     _lock: asyncio.Lock = field(default_factory=asyncio.Lock)
     _store: Optional["DialogStreamStore"] = field(default=None, repr=False)
 
@@ -67,31 +77,81 @@ class DialogStream:
             sse_payload.pop("sep", None)
             stream_event = StreamEvent(event_id=event_id, sse_payload=sse_payload)
             self.events.append(stream_event)
-            for queue in self._subscriber_queues:
-                await queue.put(stream_event)
+            for subscriber in self._subscribers:
+                await subscriber.queue.put(stream_event)
         if self._store is not None:
             # 落盘不阻塞 SSE 推送（同步 write_text 会卡住 event loop）
             asyncio.create_task(self._store._persist_stream(self))
         return stream_event
-        
 
-    async def subscribe(self) -> asyncio.Queue:
-        queue: asyncio.Queue = asyncio.Queue()
+    async def subscribe(self) -> StreamSubscriber:
+        subscriber = StreamSubscriber()
         async with self._lock:
-            self._subscriber_queues.append(queue)
-        return queue
+            self._subscribers.append(subscriber)
+        return subscriber
 
-    async def unsubscribe(self, queue: asyncio.Queue) -> None:
+    async def unsubscribe(self, subscriber: StreamSubscriber) -> None:
         async with self._lock:
-            if queue in self._subscriber_queues:
-                self._subscriber_queues.remove(queue)
+            if subscriber in self._subscribers:
+                self._subscribers.remove(subscriber)
 
-    async def snapshot_events_after(self, last_event_id: str) -> tuple[list[StreamEvent], asyncio.Queue]:
+    async def snapshot_events_after(
+        self, last_event_id: str
+    ) -> tuple[list[StreamEvent], StreamSubscriber]:
         async with self._lock:
             events = self.get_events_after(last_event_id)
-            queue: asyncio.Queue = asyncio.Queue()
-            self._subscriber_queues.append(queue)
-            return events, queue
+            subscriber = StreamSubscriber()
+            self._subscribers.append(subscriber)
+            return events, subscriber
+
+    def _should_reap_subscriber(
+        self,
+        subscriber: StreamSubscriber,
+        *,
+        idle_seconds: float,
+        now: float,
+    ) -> bool:
+        if now - subscriber.last_activity < idle_seconds:
+            return False
+        if not self.is_complete and self.task is not None and not self.task.done():
+            return False
+        return True
+
+    async def reap_stale_subscribers(
+        self,
+        idle_seconds: float,
+        *,
+        now: float | None = None,
+    ) -> int:
+        if idle_seconds <= 0:
+            return 0
+
+        current = now if now is not None else time.monotonic()
+        reaped = 0
+        async with self._lock:
+            stale = [
+                subscriber
+                for subscriber in self._subscribers
+                if self._should_reap_subscriber(
+                    subscriber,
+                    idle_seconds=idle_seconds,
+                    now=current,
+                )
+            ]
+            for subscriber in stale:
+                self._subscribers.remove(subscriber)
+                while not subscriber.queue.empty():
+                    subscriber.queue.get_nowait()
+                    subscriber.queue.task_done()
+                reaped += 1
+
+        if reaped:
+            logger.info(
+                "回收僵尸 SSE 订阅 session_id=%s count=%d",
+                self.session_id,
+                reaped,
+            )
+        return reaped
 
 
 class DialogStreamStore:
@@ -210,6 +270,26 @@ class DialogStreamStore:
     async def mark_complete(self, stream: DialogStream) -> None:
         stream.is_complete = True
         await self._persist_stream(stream)
+
+    async def reap_stale_subscribers(
+        self,
+        *,
+        idle_seconds: float,
+        now: float | None = None,
+    ) -> int:
+        if idle_seconds <= 0:
+            return 0
+
+        async with self._lock:
+            streams = list(self._streams.values())
+
+        reaped = 0
+        for stream in streams:
+            reaped += await stream.reap_stale_subscribers(
+                idle_seconds,
+                now=now,
+            )
+        return reaped
 
 
 dialog_stream_store = DialogStreamStore()

@@ -6,7 +6,8 @@ from unittest.mock import AsyncMock
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-from app.main import _run_dialog_generation, app
+import app.main as main_module
+from app.main import app
 from app.models.schemas import SSEMessage
 from app.services.dialog_stream_store import dialog_stream_store
 
@@ -38,6 +39,8 @@ async def _collect_sse_events(response) -> list[dict[str, Any]]:
     current_data: str | None = None
 
     async for line in response.aiter_lines():
+        if line.startswith(":"):
+            continue
         if line.startswith("id:"):
             current_id = line.split(":", 1)[1].strip()
             continue
@@ -161,6 +164,7 @@ async def _test_resume_subscribes_running_task_without_duplicating_replay(
         await target_stream.append_event(
             {"event": "message", "data": _result_payload()}
         )
+        target_stream.is_complete = True
 
     monkeypatch.setattr(
         "app.main._run_dialog_generation",
@@ -171,19 +175,25 @@ async def _test_resume_subscribes_running_task_without_duplicating_replay(
         AsyncMock(return_value=type("R", (), {"allowed": True})()),
     )
 
-    stream.task = asyncio.create_task(_run_dialog_generation(stream, prompt, session_id))
+    stream.task = asyncio.create_task(
+        main_module._run_dialog_generation(stream, prompt, session_id)
+    )
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
-        response = await client.post(
-            "/dialog/generate",
-            json={
-                "prompt": prompt,
-                "session_id": session_id,
-                "last_event_id": "5",
-            },
+        response_task = asyncio.create_task(
+            client.post(
+                "/dialog/generate",
+                json={
+                    "prompt": prompt,
+                    "session_id": session_id,
+                    "last_event_id": "5",
+                },
+            )
         )
+        await asyncio.sleep(0.05)
         gate.set()
+        response = await response_task
         events = await _collect_sse_events(response)
 
     if stream.task is not None and not stream.task.done():
