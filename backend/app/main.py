@@ -1,3 +1,12 @@
+"""FastAPI 应用入口。"""
+
+from pathlib import Path
+
+from dotenv import load_dotenv
+
+# 尽早加载 backend/.env，确保 lark_im.settings 能读到 LARK_OAUTH_* 等变量
+load_dotenv(Path(__file__).resolve().parents[1] / ".env")
+
 import asyncio
 import logging
 from contextlib import asynccontextmanager
@@ -7,7 +16,7 @@ from typing import AsyncIterator, Optional
 import httpx
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from sse_starlette.sse import EventSourceResponse
 
@@ -31,6 +40,10 @@ from app.models.schemas import (
     ProductInfoPreviewResponse,
     ProductItem,
     ProductListResponse,
+    LarkPushReviewRequest,
+    LarkStatusResponse,
+    LarkOAuthRegisterRequest,
+    LarkOAuthRegisterResponse,
     ShareCreateRequest,
     ShareCreateResponse,
     ShareSnapshot,
@@ -50,6 +63,15 @@ from app.utils.display_labels import (
     intent_display_label,
 )
 from app.utils.retry_policy import classify_agent_failure
+from app.services.lark_oauth_service import lark_oauth_registry
+from lark_im import get_lark_im_service
+from lark_im.client import LarkClient
+from lark_im.im_service import LarkImService
+from lark_im.notify import is_lark_notify_configured
+from lark_im.oauth import LarkOAuthError
+from lark_im.settings import lark_settings as lark_im_settings
+from app.memory.db import get_session
+from app.memory.models import VersionRow
 
 logger = logging.getLogger(__name__)
 
@@ -64,6 +86,13 @@ _dialog_generation_sem = asyncio.Semaphore(settings.MAX_ACTIVE_DIALOG_GENERATION
 async def lifespan(app: FastAPI):
     """后台预热 RAG 向量索引，便于就绪探针与首包体验。"""
     await init_db()
+
+    studio_uris = (lark_im_settings.LARK_OAUTH_STUDIO_REDIRECT_URIS or "").strip()
+    if studio_uris:
+        try:
+            await lark_oauth_registry.ensure_studio_default_client()
+        except Exception:
+            logger.exception("飞书 OAuth 默认 Studio 客户端注册失败")
 
     async def _warm_rag():
         try:
@@ -672,6 +701,166 @@ async def get_share(share_id: str):
     if snapshot is None:
         raise HTTPException(status_code=404, detail="Share not found")
     return snapshot
+
+
+@app.post("/lark/oauth/register", response_model=LarkOAuthRegisterResponse)
+async def lark_oauth_register(payload: LarkOAuthRegisterRequest):
+    """动态客户端注册（DCR）：登记 redirect_uri 后用于 OAuth 授权回流。"""
+    try:
+        row = await lark_oauth_registry.register_client(
+            client_name=payload.client_name,
+            redirect_uris=payload.redirect_uris,
+            scopes=payload.scope,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    issued_at = int(row.created_at.timestamp())
+    return LarkOAuthRegisterResponse(
+        client_id=row.client_id,
+        client_secret=row.client_secret,
+        client_id_issued_at=issued_at,
+        redirect_uris=list(row.redirect_uris or []),
+        scope=row.scopes,
+    )
+
+
+@app.get("/lark/oauth/authorize")
+async def lark_oauth_authorize(
+    user_id: str,
+    return_url: str,
+    client_id: Optional[str] = None,
+):
+    """跳转飞书授权页（浏览器 302）。授权完成后回到 return_url。"""
+    try:
+        url = await lark_oauth_registry.start_authorize(
+            client_id=client_id,
+            user_id=user_id,
+            return_url=return_url,
+        )
+    except LarkOAuthError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return RedirectResponse(url, status_code=302)
+
+
+@app.get("/lark/oauth/callback")
+async def lark_oauth_callback(
+    code: Optional[str] = None,
+    state: Optional[str] = None,
+    error: Optional[str] = None,
+):
+    """飞书 OAuth 回调：用 code 换 user_access_token 并跳回业务页。"""
+    if error:
+        raise HTTPException(status_code=400, detail=f"飞书授权被拒绝: {error}")
+    if not code or not state:
+        raise HTTPException(status_code=400, detail="缺少 code 或 state")
+
+    try:
+        return_url = await lark_oauth_registry.complete_callback(code, state)
+    except LarkOAuthError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    separator = "&" if "?" in return_url else "?"
+    target = f"{return_url}{separator}lark_oauth=connected"
+    return RedirectResponse(target, status_code=302)
+
+
+@app.get("/lark/oauth/user")
+async def lark_oauth_user_status(user_id: str):
+    """查询用户是否已完成飞书 OAuth 授权。"""
+    uid = (user_id or "").strip()
+    if not uid:
+        raise HTTPException(status_code=400, detail="user_id 不能为空")
+    return await lark_oauth_registry.user_status(uid)
+
+
+@app.delete("/lark/oauth/user")
+async def lark_oauth_disconnect(user_id: str):
+    """解除用户飞书 OAuth 绑定。"""
+    uid = (user_id or "").strip()
+    if not uid:
+        raise HTTPException(status_code=400, detail="user_id 不能为空")
+    removed = await lark_oauth_registry.disconnect_user(uid)
+    return {"ok": removed}
+
+
+@app.get("/lark/status", response_model=LarkStatusResponse)
+async def lark_status(user_id: Optional[str] = None):
+    """飞书 bot 鉴权状态与通知群是否已配置。"""
+    service = get_lark_im_service()
+    auth = await service.get_auth_status()
+    mode = (lark_im_settings.LARK_NOTIFY_MODE or "auto").strip().lower()
+    user_oauth = None
+    if user_id and user_id.strip():
+        user_oauth = await lark_oauth_registry.user_status(user_id.strip())
+    return LarkStatusResponse(
+        auth=auth,
+        notify_chat_configured=is_lark_notify_configured(),
+        notify_enabled=lark_im_settings.LARK_NOTIFY_ENABLED,
+        notify_mode=mode if mode in {"auto", "prompt", "off"} else "auto",
+        user_oauth=user_oauth,
+    )
+
+
+@app.post("/lark/push-review")
+async def lark_push_review(payload: LarkPushReviewRequest):
+    """将审核通过内容推送到飞书通知群（须服务端已配置 LARK_*）。"""
+    result: dict = {}
+    version_id = (payload.version_id or "").strip()
+
+    if version_id:
+        async with get_session() as session:
+            row = await session.get(VersionRow, version_id)
+            if row is None:
+                raise HTTPException(status_code=404, detail="版本不存在")
+            stored = dict(row.result or {})
+            result.update(stored)
+            result.setdefault("project_id", row.project_id)
+            result.setdefault("version_id", row.version_id)
+            result.setdefault("version", row.version_label)
+
+    for key in (
+        "title",
+        "content",
+        "project_id",
+        "version",
+        "version_id",
+        "image_url",
+        "review_feedback",
+    ):
+        val = getattr(payload, key, None)
+        if val is not None and str(val).strip():
+            result[key] = val
+
+    if payload.hashtags is not None:
+        result["hashtags"] = payload.hashtags
+
+    if not (result.get("title") or result.get("content")):
+        raise HTTPException(
+            status_code=400,
+            detail="需提供 title/content 或有效的 version_id",
+        )
+
+    try:
+        user_id = (payload.user_id or "").strip()
+        if user_id:
+            token = await lark_oauth_registry.get_valid_user_access_token(user_id)
+            if not token:
+                raise HTTPException(
+                    status_code=401,
+                    detail="用户未完成飞书授权，请先连接飞书账号",
+                )
+            user_client = LarkClient(user_access_token=token)
+            user_service = LarkImService(client=user_client, use_cli=False)
+            data = await user_service.send_review_notification(result)
+        else:
+            data = await get_lark_im_service().send_review_notification(result)
+        return {"ok": True, "message_id": data.get("message_id")}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.warning("飞书推送失败: %s", exc)
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
 @app.get("/")

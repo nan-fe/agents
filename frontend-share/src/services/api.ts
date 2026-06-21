@@ -413,3 +413,119 @@ export const compareVersions = async (
     throw error;
   }
 };
+
+export type LarkStatusResponse = {
+  auth: Record<string, unknown>;
+  notify_chat_configured: boolean;
+  notify_enabled: boolean;
+  notify_mode: string;
+};
+
+export type LarkPushReviewPayload = {
+  title?: string;
+  content?: string;
+  project_id?: string;
+  version?: string;
+  version_id?: string;
+  image_url?: string;
+  review_feedback?: string;
+  hashtags?: string[];
+  user_id?: string;
+};
+
+export type LarkOAuthUserStatus = {
+  connected: boolean;
+  user_id: string;
+  expires_at?: string;
+  has_refresh_token?: boolean;
+  scope?: string;
+};
+
+export type LarkOAuthRegisterResponse = {
+  client_id: string;
+  client_secret: string;
+  client_id_issued_at: number;
+  redirect_uris: string[];
+  scope: string;
+};
+
+export const registerLarkOAuthClient = async (
+  clientName: string,
+  redirectUris: string[],
+): Promise<LarkOAuthRegisterResponse> => {
+  const response = await fetch(`${API_BASE_URL}/lark/oauth/register`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      client_name: clientName,
+      redirect_uris: redirectUris,
+    }),
+  });
+  if (!response.ok) {
+    await parseApiError(response);
+  }
+  return response.json();
+};
+
+export const startLarkOAuthAuthorizeUrl = (params: {
+  userId: string;
+  returnUrl: string;
+  clientId?: string;
+}): string => {
+  const query = new URLSearchParams({
+    user_id: params.userId,
+    return_url: params.returnUrl,
+  });
+  if (params.clientId) {
+    query.set('client_id', params.clientId);
+  }
+  return `${API_BASE_URL}/lark/oauth/authorize?${query.toString()}`;
+};
+
+export const getLarkOAuthUserStatus = async (
+  userId: string,
+): Promise<LarkOAuthUserStatus> => {
+  const response = await fetch(
+    `${API_BASE_URL}/lark/oauth/user?user_id=${encodeURIComponent(userId)}`,
+  );
+  if (!response.ok) {
+    await parseApiError(response);
+  }
+  return response.json();
+};
+
+export const disconnectLarkOAuth = async (userId: string): Promise<void> => {
+  const response = await fetch(
+    `${API_BASE_URL}/lark/oauth/user?user_id=${encodeURIComponent(userId)}`,
+    { method: 'DELETE' },
+  );
+  if (!response.ok) {
+    await parseApiError(response);
+  }
+};
+
+export const getLarkStatus = async (): Promise<LarkStatusResponse> => {
+  const response = await fetch(`${API_BASE_URL}/lark/status`);
+  if (!response.ok) {
+    await parseApiError(response);
+  }
+  return response.json();
+};
+
+export const pushReviewToLark = async (
+  payload: LarkPushReviewPayload,
+): Promise<{ ok: boolean; message_id?: string }> => {
+  const response = await fetch(`${API_BASE_URL}/lark/push-review`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    await parseApiError(response);
+  }
+
+  return response.json();
+};

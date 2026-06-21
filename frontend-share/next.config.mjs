@@ -30,6 +30,10 @@ const nextConfig = {
         source: '/shares/:path*',
         destination: `${apiUpstream}/shares/:path*`,
       },
+      {
+        source: '/lark/:path*',
+        destination: `${apiUpstream}/lark/:path*`,
+      },
     ];
   },
 };

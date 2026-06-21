@@ -1,5 +1,6 @@
 "use client";
 import React, { useState } from 'react';
+import { SessionProvider } from 'next-auth/react';
 import {
   LogoutOutlined,
   PlusOutlined,
@@ -108,11 +109,13 @@ const StudioAppContent = () => {
 };
 
 const StudioApp = () => (
-  <ConfigProvider theme={atelierTheme}>
-    <App>
-      <StudioAppContent />
-    </App>
-  </ConfigProvider>
+  <SessionProvider>
+    <ConfigProvider theme={atelierTheme}>
+      <App>
+        <StudioAppContent />
+      </App>
+    </ConfigProvider>
+  </SessionProvider>
 );
 
 export default StudioApp;

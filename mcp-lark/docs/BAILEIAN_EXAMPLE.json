@@ -1,0 +1,17 @@
+{
+  "安装方式": "http",
+  "mcpServers": {
+    "lark-im": {
+      "url": "https://your-host.example.com/mcp",
+      "type": "streamableHttp",
+      "headers": {
+        "Authorization": "Bearer <MCP_BEARER_TOKEN>"
+      }
+    }
+  },
+  "说明": {
+    "本地开发": "url 改为 http://127.0.0.1:3101/mcp",
+    "Bearer": "与 mcp-lark/.env 中 MCP_BEARER_TOKEN 一致，勿提交到 Git",
+    "飞书凭证": "LARK_APP_ID/SECRET 写在服务器 backend/.env，不要填在本 JSON"
+  }
+}

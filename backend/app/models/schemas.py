@@ -221,3 +221,47 @@ class ProductListResponse(BaseModel):
 
     items: List[ProductItem]
     total: int
+
+
+class LarkPushReviewRequest(BaseModel):
+    """显式推送审核通过通知到飞书。"""
+
+    title: Optional[str] = None
+    content: Optional[str] = None
+    project_id: Optional[str] = None
+    version: Optional[str] = None
+    version_id: Optional[str] = None
+    image_url: Optional[str] = None
+    review_feedback: Optional[str] = None
+    hashtags: Optional[List[str]] = None
+    user_id: Optional[str] = None
+
+
+class LarkStatusResponse(BaseModel):
+    """飞书鉴权与通知配置状态。"""
+
+    auth: dict
+    notify_chat_configured: bool
+    notify_enabled: bool
+    notify_mode: str
+    user_oauth: Optional[dict] = None
+
+
+class LarkOAuthRegisterRequest(BaseModel):
+    """动态客户端注册（DCR）。"""
+
+    client_name: str
+    redirect_uris: List[str]
+    scope: Optional[str] = None
+
+
+class LarkOAuthRegisterResponse(BaseModel):
+    client_id: str
+    client_secret: str
+    client_id_issued_at: int
+    client_secret_expires_at: int = 0
+    redirect_uris: List[str]
+    scope: str
+    grant_types: List[str] = ["authorization_code"]
+    response_types: List[str] = ["code"]
+    token_endpoint_auth_method: str = "none"

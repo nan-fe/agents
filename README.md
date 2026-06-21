@@ -2,6 +2,8 @@
 
 一个基于多智能体架构的小红书内容创作平台，自动生成高质量的小红书文案和配图。访问 👉：http://47.100.107.192:3000/ 可以直接通过IP访问
 
+飞书推送与 MCP 接入配置见 [`mcp-lark/docs/INTEGRATION.md`](mcp-lark/docs/INTEGRATION.md)。
+
 ## 📖 项目简介
 
 本项目采用多智能体协作架构：编排层负责意图识别、执行路径规划与内容 brief；Copywriter、Image、Reviewer 等专业 Agent 协同完成平台内容的创作、配图和审核。
