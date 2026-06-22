@@ -2,6 +2,8 @@ import asyncio
 import sys
 from pathlib import Path
 
+import pytest
+
 project_root = Path(__file__).parent.parent
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
@@ -9,6 +11,7 @@ if str(project_root) not in sys.path:
 from app.agents.copywriter_agent import CopywriterAgent
 
 
+@pytest.mark.network
 async def test_copywriter():
     copywriter_agent = CopywriterAgent()
     print("创建 CopywriterAgent 成功")

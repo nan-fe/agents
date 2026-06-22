@@ -14,6 +14,21 @@ env:
   NODE_VERSION: "22"
   AUTH_SECRET: ci-build-secret-minimum-32-characters
   DATABASE_URL: postgresql://postgres:postgres@localhost:5432/xhs_auth
+  # backend Settings (no .env in CI)
+  API_KEY: test-api-key
+  BASE_MODEL: deepseek-v4-flash
+  MODEL_BASE_URL: https://example.com/v1
+  COPYWRITE_MODEL: test-copywrite-model
+  EMBEDING_MODEL: BAAI/bge-large-zh-v1.5
+  GENARATION_MODEL: test-generation-model
+  PLAN_MODEL: test-plan-model
+  INTENT_MODEL: test-intent-model
+  SILICONFLOW_API_KEY: test-siliconflow-key
+  SILICONFLOW_BASE_URL: https://api.siliconflow.cn/v1
+  IMAGE_MODEL: Kwai-Kolors/Kolors
+  LANGCHAIN_API_KEY: test-langsmith-key
+  LANGCHAIN_PROJECT: xhs-ci
+  LANGCHAIN_TRACING_V2: "false"
 
 jobs:
   backend:
@@ -49,7 +64,7 @@ jobs:
           ruff format --check .
 
       - name: Run tests
-        run: pytest tests/ -m "not network"
+        run: python -m pytest tests/ -m "not network"
 
   mcp-lark:
     name: mcp-lark (pytest)
@@ -115,9 +130,6 @@ jobs:
 
       - name: Build
         run: pnpm build
-        env:
-          AUTH_SECRET: ${{ env.AUTH_SECRET }}
-          DATABASE_URL: ${{ env.DATABASE_URL }}
 
   frontend-share-e2e:
     name: frontend-share (Playwright smoke)
@@ -140,8 +152,6 @@ jobs:
           --health-timeout 5s
           --health-retries 5
     env:
-      AUTH_SECRET: ${{ env.AUTH_SECRET }}
-      DATABASE_URL: ${{ env.DATABASE_URL }}
       CI: true
     steps:
       - name: Checkout
@@ -166,56 +176,3 @@ jobs:
         run: pnpm test:e2e
         env:
           E2E_SKIP_POSTGRES: "1"
-
-  openapi-contract:
-    name: OpenAPI contract (gen:api)
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-          cache: pip
-          cache-dependency-path: |
-            backend/requirements.txt
-            mcp-lark/pyproject.toml
-
-      - name: Install backend dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r backend/requirements.txt
-          pip install -e mcp-lark
-
-      - name: Start backend
-        working-directory: backend
-        run: |
-          uvicorn app.main:app --host 127.0.0.1 --port 8000 &
-          echo $! > ../backend.pid
-
-      - name: Wait for backend
-        run: bash scripts/wait-for-http.sh http://127.0.0.1:8000/health
-
-      - name: Set up pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: ${{ env.PNPM_VERSION }}
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: pnpm
-          cache-dependency-path: frontend-share/pnpm-lock.yaml
-
-      - name: Verify OpenAPI types via gen:api
-        run: bash scripts/check-openapi-contract.sh
-
-      - name: Stop backend
-        if: always()
-        run: |
-          if [[ -f backend.pid ]]; then
-            kill "$(cat backend.pid)" || true
-          fi

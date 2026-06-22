@@ -1,6 +1,7 @@
 import asyncio
 import time
 
+import pytest
 from dotenv import load_dotenv
 
 from app.agents.product_rag_system.agent import ProductRagAgent
@@ -9,6 +10,7 @@ from app.agents.product_rag_system.agent import ProductRagAgent
 load_dotenv()
 
 
+@pytest.mark.network
 async def test_product_rag():
     print("=" * 60)
     print("ProductRagAgent 测试")

@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
+### Changed 2026-06-22 — 后端稳定性、类型检查与 OAuth 修复
+
+- **后端启动修复**
+  - Agent 基类与子类中将错误的 `callable | None` 类型注解改为 `Callable | None`，修复 Python 3.11+ 下 uvicorn 无法 import 应用、导致「新对话」等 `/projects` API 不可用的问题
+
+- **mypy 静态检查（可选，本地/渐进采用）**
+  - 根目录 `requirements-dev.txt` 增加 `mypy`
+  - `pyproject.toml` 新增 `[tool.mypy]`（范围 `backend/app`，`mypy_path` 含 `mcp-lark`）
+  - 新增 `scripts/mypy-backend.sh`；说明见 `AGENTS.md`
+
+- **Copywriter Agent**
+  - `run()` 先将 `PlanningResult | dict` 统一归一为 `planning_dict`，再 `.get()` 取值；避免 `PlanningResult` 对象路径误读不存在的 `user_input` 属性，并与 dict 主路径行为一致
+
+- **飞书 OAuth**
+  - `seed_studio_default_client` 在 `redirect_uris` 为空时改为抛出 `ValueError`，返回类型收窄为 `LarkOAuthClientRow`，与 `ensure_studio_default_client` 声明一致
+
+- **文档**
+  - `README.md` 更新本地开发、CI/pre-commit、mypy 与测试命令
+
 ### Changed 2026-06-19 — 创作台迁入 frontend-share（frontend-ts → Next.js）
 
 将主创作台从 Vite SPA（`frontend-ts`）合并进 Next.js 应用（`frontend-share`），**统一门户、鉴权、创作台、分享页于同一域名与端口**，降低双前端维护成本。迁移目标为 Client SPA 迁入 App Router，而非 SSR 化创作台。

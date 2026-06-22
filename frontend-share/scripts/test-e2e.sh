@@ -11,7 +11,12 @@ FRONTEND_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 ROOT="$(cd "$FRONTEND_DIR/.." && pwd)"
 
 E2E_POSTGRES_PORT="${E2E_POSTGRES_PORT:-5433}"
-E2E_DATABASE_URL="${E2E_DATABASE_URL:-postgresql://postgres:postgres@127.0.0.1:${E2E_POSTGRES_PORT}/xhs_auth}"
+
+if [[ "${E2E_SKIP_POSTGRES:-}" == "1" && -n "${DATABASE_URL:-}" ]]; then
+  E2E_DATABASE_URL="$DATABASE_URL"
+elif [[ -z "${E2E_DATABASE_URL:-}" ]]; then
+  E2E_DATABASE_URL="postgresql://postgres:postgres@127.0.0.1:${E2E_POSTGRES_PORT}/xhs_auth"
+fi
 
 export AUTH_SECRET="${AUTH_SECRET:-e2e-auth-secret-minimum-32-characters}"
 export DATABASE_URL="$E2E_DATABASE_URL"
@@ -93,11 +98,18 @@ try_local_env_postgres() {
 
 ensure_postgres() {
   if [[ "${E2E_SKIP_POSTGRES:-}" == "1" ]]; then
-    if prisma_db_ok; then
-      log "Postgres ready (${E2E_DATABASE_URL})"
-      return 0
-    fi
-    echo "[test:e2e] Cannot connect with DATABASE_URL and E2E_SKIP_POSTGRES=1." >&2
+    local attempt
+    for attempt in $(seq 1 30); do
+      if prisma_db_ok; then
+        log "Postgres ready (${E2E_DATABASE_URL})"
+        return 0
+      fi
+      if (( attempt == 1 || attempt % 5 == 0 )); then
+        log "Waiting for CI Postgres... (${attempt}/30)"
+      fi
+      sleep 2
+    done
+    echo "[test:e2e] Cannot connect with DATABASE_URL=${E2E_DATABASE_URL} (E2E_SKIP_POSTGRES=1)." >&2
     exit 1
   fi
 

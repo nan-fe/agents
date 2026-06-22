@@ -1,8 +1,11 @@
 import asyncio
 
+import pytest
+
 from app.agents.orchestrator.planning import ContentStrategistAgent
 
 
+@pytest.mark.network
 async def test_content_strategist_agent():
     """测试内容策划 Agent"""
     print("开始测试 ContentStrategistAgent...")

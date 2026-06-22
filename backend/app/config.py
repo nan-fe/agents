@@ -43,7 +43,7 @@ class Settings(BaseSettings):
     # SSE 断点续传缓冲：生成完成后保留时长（秒），超时后释放内存
     DIALOG_STREAM_RETENTION_SECONDS: float = 1800.0
     # SSE 心跳：空闲时发送 comment 保活；单次 send 超时则判定连接失效并回收
-    SSE_HEARTBEAT_INTERVAL_SECONDS: float = 15.0
+    SSE_HEARTBEAT_INTERVAL_SECONDS: int = 15
     SSE_SEND_TIMEOUT_SECONDS: float = 10.0
     # SSE 僵尸订阅扫描：超过 TTL 且无活跃生成任务的订阅会被回收；0 表示关闭
     SSE_SUBSCRIBER_IDLE_TTL_SECONDS: float = 120.0
