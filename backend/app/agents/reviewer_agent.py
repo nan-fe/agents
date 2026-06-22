@@ -1,3 +1,4 @@
+from collections.abc import Callable
 from typing import Any, Dict
 
 from langchain_core.output_parsers import JsonOutputParser
@@ -79,7 +80,7 @@ class ReviewerAgent(BaseAgent):
                 data["corrections"] = ReviewCorrections(**corrections)
         return ReviewResult(**data)
 
-    async def run(self, input_data: dict, log_callback: callable | None = None) -> ReviewResult:
+    async def run(self, input_data: dict, log_callback: Callable | None = None) -> ReviewResult:
         """运行质检Agent"""
         chain_input = {
             "copywriting_title": input_data.get("copywriting_title"),

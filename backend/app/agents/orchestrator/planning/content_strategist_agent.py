@@ -1,5 +1,7 @@
 """内容策划 Agent：生成创作要点（topic、卖点、语气等），由 Plan 阶段按需调用。"""
 
+from collections.abc import Callable
+
 from langchain_core.output_parsers import JsonOutputParser
 from langchain_core.prompts import PromptTemplate
 
@@ -52,7 +54,7 @@ class ContentStrategistAgent(BaseAgent):
     async def run(
         self,
         input_data: str,
-        log_callback: callable | None = None,
+        log_callback: Callable | None = None,
         history: str = "",
     ) -> PlanningResult:
         """根据用户输入生成内容策划 brief。"""
