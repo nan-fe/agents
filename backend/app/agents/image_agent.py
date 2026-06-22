@@ -1,12 +1,12 @@
 import time
-from typing import Optional, Tuple
+from typing import Tuple
 
 import replicate
 from openai import AsyncOpenAI
 
 from app.agents.base_agent import BaseAgent
 from app.config import settings
-from app.models.schemas import ImageResult, ImageAgentInput
+from app.models.schemas import ImageAgentInput, ImageResult
 from app.utils.retry_policy import is_transient_exception, retry_with_backoff
 
 
@@ -30,11 +30,7 @@ class ImageAgent(BaseAgent):
         if len(prompt) <= max_chars:
             return prompt
         half = max_chars // 2
-        return (
-            prompt[:half]
-            + "\n...(已压缩描述以重试生图)\n"
-            + prompt[-half:]
-        )
+        return prompt[:half] + "\n...(已压缩描述以重试生图)\n" + prompt[-half:]
 
     @staticmethod
     def _parse_size(size: str) -> Tuple[int, int]:
@@ -93,7 +89,7 @@ class ImageAgent(BaseAgent):
     async def run(
         self,
         input_data: ImageAgentInput,
-        log_callback: Optional[callable] = None,
+        log_callback: callable | None = None,
         history: str = "",
     ) -> ImageResult:
         """运行图片Agent"""
@@ -117,8 +113,8 @@ class ImageAgent(BaseAgent):
         
         请根据以下信息生成一张商品介绍的图片描述：
         
-        目标人群：{', '.join(target_audience)}
-        核心卖点：{', '.join(core_selling_points)}
+        目标人群：{", ".join(target_audience)}
+        核心卖点：{", ".join(core_selling_points)}
         语气风格：{input_data_dict.get("tone_style", "")}
         文案内容：{input_data_dict.get("copywriting_content", "")}
         文案主题：{input_data_dict.get("topic", "")}
@@ -140,7 +136,7 @@ class ImageAgent(BaseAgent):
         deadline = time.monotonic() + settings.IMAGE_GEN_TOTAL_BUDGET_SECONDS
         prompt_variants = [prompt, self._compact_prompt_for_retry(prompt)]
         size_variants = ["1024x1024", "512x512"]
-        last_error: Optional[Exception] = None
+        last_error: Exception | None = None
 
         for i, ptext in enumerate(prompt_variants):
             if time.monotonic() > deadline:
@@ -156,7 +152,11 @@ class ImageAgent(BaseAgent):
                 print(f"使用{self.image_model}生成图片失败 (variant={i}, size={size}): {e}")
                 await self.log("主模型生图失败，正在尝试备用方案…", log_callback)
 
-        if time.monotonic() <= deadline and hasattr(replicate, "run") and settings.REPLICATE_API_KEY:
+        if (
+            time.monotonic() <= deadline
+            and hasattr(replicate, "run")
+            and settings.REPLICATE_API_KEY
+        ):
             ptext = prompt_variants[-1]
             w, h = self._parse_size("512x512")
             try:

@@ -1,5 +1,4 @@
 """内容策划 Agent：生成创作要点（topic、卖点、语气等），由 Plan 阶段按需调用。"""
-from typing import Optional
 
 from langchain_core.output_parsers import JsonOutputParser
 from langchain_core.prompts import PromptTemplate
@@ -47,15 +46,13 @@ class ContentStrategistAgent(BaseAgent):
         self.prompt = PromptTemplate(
             template=template,
             input_variables=["input_data", "history"],
-            partial_variables={
-                "format_instructions": self.parser.get_format_instructions()
-            },
+            partial_variables={"format_instructions": self.parser.get_format_instructions()},
         )
 
     async def run(
         self,
         input_data: str,
-        log_callback: Optional[callable] = None,
+        log_callback: callable | None = None,
         history: str = "",
     ) -> PlanningResult:
         """根据用户输入生成内容策划 brief。"""

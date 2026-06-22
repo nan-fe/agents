@@ -10,11 +10,10 @@ from fastmcp import FastMCP
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
+from lark_im.setup_guide import get_lark_setup_guide_payload
 from server.auth import build_static_bearer_auth
 from server.bootstrap import get_lark_im_service_singleton, init_lark_stack
 from server.settings import McpSettings, load_settings
-
-from lark_im.setup_guide import get_lark_setup_guide_payload
 
 MCP_INSTRUCTIONS = """你是飞书即时通讯助手。支持向群聊发消息、回复、搜索群、读取群消息，以及审核通过后的飞书推送。
 
@@ -97,8 +96,7 @@ def create_mcp(settings: McpSettings) -> FastMCP:
     @mcp.tool(
         name="reply_message",
         description=(
-            "回复飞书消息。需提供 message_id 与 text 或 markdown。"
-            "发送前须与用户确认内容与身份。"
+            "回复飞书消息。需提供 message_id 与 text 或 markdown。发送前须与用户确认内容与身份。"
         ),
         annotations={
             "readOnlyHint": False,
@@ -249,7 +247,6 @@ def create_mcp(settings: McpSettings) -> FastMCP:
 
 def run_server() -> None:
     settings = load_settings()
-    import asyncio
 
     asyncio.run(init_lark_stack())
     mcp = create_mcp(settings)

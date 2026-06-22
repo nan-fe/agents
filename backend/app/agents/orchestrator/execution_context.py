@@ -1,6 +1,7 @@
 """执行上下文管理"""
-from typing import Optional, Dict, Any, List
+
 from dataclasses import dataclass, field
+from typing import Any, Dict, List
 
 from app.agents.orchestrator.review_repair_router import derive_failure_category
 
@@ -8,13 +9,14 @@ from app.agents.orchestrator.review_repair_router import derive_failure_category
 @dataclass
 class PlanningContext:
     """规划上下文"""
-    topic: Optional[str] = None
-    target_audience: Optional[str] = None
-    core_selling_points: Optional[List[str]] = None
-    tone_style: Optional[str] = None
-    image_requirements: Optional[str] = None
-    product_category: Optional[str] = None
-    product_recommendations: Optional[List[Dict[str, Any]]] = None
+
+    topic: str | None = None
+    target_audience: str | None = None
+    core_selling_points: List[str] | None = None
+    tone_style: str | None = None
+    image_requirements: str | None = None
+    product_category: str | None = None
+    product_recommendations: List[Dict[str, Any]] | None = None
 
     def __getitem__(self, key: str) -> Any:
         """支持字典方式访问"""
@@ -26,15 +28,13 @@ class PlanningContext:
 
     def model_dump(self) -> Dict[str, Any]:
         """转换为字典"""
-        return {
-            k: v for k, v in self.__dict__.items()
-            if v is not None
-        }
+        return {k: v for k, v in self.__dict__.items() if v is not None}
 
 
 @dataclass
 class CopywritingContext:
     """文案上下文"""
+
     title: str = ""
     content: str = ""
     hashtags: List[str] = field(default_factory=list)
@@ -50,6 +50,7 @@ class CopywritingContext:
 @dataclass
 class ImageContext:
     """图片上下文"""
+
     image_url: str = ""
     prompt: str = ""
 
@@ -63,10 +64,11 @@ class ImageContext:
 @dataclass
 class ReviewContext:
     """审核上下文"""
+
     approved: bool = False
     feedback: str = ""
-    corrections: Optional[Dict[str, Any]] = None
-    failure_category: Optional[str] = None
+    corrections: Dict[str, Any] | None = None
+    failure_category: str | None = None
     review_executed: bool = False
     review_status: str = "skipped"
 
@@ -92,8 +94,8 @@ class ExecutionContext:
         self.copywriting = CopywritingContext()
         self.image = ImageContext()
         self.review = ReviewContext()
-        self.rag_context: Optional[Any] = None
-        self._last_result: Optional[Dict[str, Any]] = None
+        self.rag_context: Any | None = None
+        self._last_result: Dict[str, Any] | None = None
         self.partial_errors: Dict[str, str] = {}
         self.executed_agents: List[str] = []
         self.review_repair_rounds: int = 0
@@ -137,23 +139,20 @@ class ExecutionContext:
 
     def set_planning(self, planning_result) -> None:
         """设置规划结果（支持对象或字典）"""
-        if hasattr(planning_result, 'model_dump'):
+        if hasattr(planning_result, "model_dump"):
             data = planning_result.model_dump()
         else:
             data = planning_result
 
-        self.planning = PlanningContext(**{
-            k: v for k, v in data.items()
-            if k in PlanningContext.__dataclass_fields__
-        })
-
-    def set_copywriting(self, title: str = "", content: str = "", hashtags: List[str] = None) -> None:
-        """设置文案结果"""
-        self.copywriting = CopywritingContext(
-            title=title,
-            content=content,
-            hashtags=hashtags or []
+        self.planning = PlanningContext(
+            **{k: v for k, v in data.items() if k in PlanningContext.__dataclass_fields__}
         )
+
+    def set_copywriting(
+        self, title: str = "", content: str = "", hashtags: List[str] = None
+    ) -> None:
+        """设置文案结果"""
+        self.copywriting = CopywritingContext(title=title, content=content, hashtags=hashtags or [])
 
     def set_copywriting_from_result(self, result) -> None:
         """从 Agent 执行结果设置文案"""
@@ -174,7 +173,7 @@ class ExecutionContext:
             prompt=getattr(result, "prompt", ""),
         )
 
-    def _normalize_corrections(self, corrections: Any) -> Optional[Dict[str, Any]]:
+    def _normalize_corrections(self, corrections: Any) -> Dict[str, Any] | None:
         if corrections is None:
             return None
         if hasattr(corrections, "model_dump"):
@@ -185,9 +184,7 @@ class ExecutionContext:
             return cleaned or None
         return None
 
-    def _resolve_review_status(
-        self, approved: bool, failure_category: Optional[str]
-    ) -> str:
+    def _resolve_review_status(self, approved: bool, failure_category: str | None) -> str:
         if approved:
             return "passed"
         if failure_category == "policy_block":
@@ -203,9 +200,7 @@ class ExecutionContext:
         corrections = self._normalize_corrections(getattr(result, "corrections", None))
         failure_category = getattr(result, "failure_category", None)
         if not approved and not failure_category:
-            failure_category = derive_failure_category(
-                failure_category, feedback, corrections
-            )
+            failure_category = derive_failure_category(failure_category, feedback, corrections)
 
         self.review = ReviewContext(
             approved=approved,

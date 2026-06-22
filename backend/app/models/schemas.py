@@ -1,6 +1,7 @@
 from datetime import datetime
+from typing import List, Literal
+
 from pydantic import BaseModel, Field
-from typing import Literal, Optional, List
 
 ReviewFailureCategory = Literal[
     "copywriting",
@@ -16,29 +17,29 @@ class UserInput(BaseModel):
 
     prompt: str
     session_id: str
-    last_event_id: Optional[str] = None
-    project_id: Optional[str] = None
-    user_id: Optional[str] = None
+    last_event_id: str | None = None
+    project_id: str | None = None
+    user_id: str | None = None
 
 
 class ProjectFinalizeRequest(BaseModel):
     """页面关闭或新建话题时，将 versions 汇总写入 projects。"""
 
     project_id: str
-    session_id: Optional[str] = None
-    user_id: Optional[str] = None
+    session_id: str | None = None
+    user_id: str | None = None
 
 
 class ProjectFinalizeResponse(BaseModel):
     project_id: str
     finalized: bool
-    final_version: Optional[str] = None
+    final_version: str | None = None
     version_count: int = 0
-    message: Optional[str] = None
+    message: str | None = None
 
 
 class ProjectCreateRequest(BaseModel):
-    user_id: Optional[str] = None
+    user_id: str | None = None
 
 
 class ProjectCreateResponse(BaseModel):
@@ -49,26 +50,26 @@ class VersionSnapshot(BaseModel):
     version_id: str
     version_label: str
     version_number: int
-    parent_version_id: Optional[str] = None
+    parent_version_id: str | None = None
     summary: str = ""
-    user_input: Optional[str] = None
+    user_input: str | None = None
     result: dict
-    intent: Optional[str] = None
+    intent: str | None = None
     created_at: datetime
 
 
 class ProjectConversationResponse(BaseModel):
     project_id: str
-    topic: Optional[str] = None
-    final_version: Optional[str] = None
-    project_summary: Optional[str] = None
+    topic: str | None = None
+    final_version: str | None = None
+    project_summary: str | None = None
     versions: List[VersionSnapshot] = Field(default_factory=list)
 
 
 class ProjectListItem(BaseModel):
     project_id: str
     topic: str = ""
-    final_version: Optional[str] = None
+    final_version: str | None = None
     project_summary: str = ""
     version_count: int = 0
     updated_at: datetime
@@ -114,17 +115,17 @@ class ImageResult(BaseModel):
 class ReviewCorrections(BaseModel):
     """审核修改建议（结构化）"""
 
-    copywriting: Optional[dict] = None
-    image: Optional[dict] = None
+    copywriting: dict | None = None
+    image: dict | None = None
 
 
 class ReviewResult(BaseModel):
     """质检Agent输出模型"""
 
     approved: bool
-    feedback: Optional[str] = None
-    corrections: Optional[ReviewCorrections] = None
-    failure_category: Optional[ReviewFailureCategory] = None
+    feedback: str | None = None
+    corrections: ReviewCorrections | None = None
+    failure_category: ReviewFailureCategory | None = None
 
 
 class ShareCreateRequest(BaseModel):
@@ -133,8 +134,8 @@ class ShareCreateRequest(BaseModel):
     title: str = ""
     content: str = ""
     hashtags: List[str] = Field(default_factory=list)
-    image_url: Optional[str] = None
-    message: Optional[str] = None
+    image_url: str | None = None
+    message: str | None = None
 
 
 class ShareSnapshot(ShareCreateRequest):
@@ -142,7 +143,7 @@ class ShareSnapshot(ShareCreateRequest):
 
     id: str
     created_at: datetime
-    expires_at: Optional[datetime] = None
+    expires_at: datetime | None = None
 
 
 class ShareCreateResponse(BaseModel):
@@ -156,7 +157,7 @@ class SSEMessage(BaseModel):
     """SSE消息模型"""
 
     type: str  # 'log' or 'result'
-    data: Optional[dict] = None
+    data: dict | None = None
 
 
 class ProductInfoCreateRequest(BaseModel):
@@ -196,8 +197,8 @@ class ProductItem(BaseModel):
     description: str
     sales: int
     shop_name: str
-    url: Optional[str] = None
-    cover_image: Optional[str] = None
+    url: str | None = None
+    cover_image: str | None = None
     comments: List[ProductComment] = Field(default_factory=list)
 
 
@@ -226,15 +227,15 @@ class ProductListResponse(BaseModel):
 class LarkPushReviewRequest(BaseModel):
     """显式推送审核通过通知到飞书。"""
 
-    title: Optional[str] = None
-    content: Optional[str] = None
-    project_id: Optional[str] = None
-    version: Optional[str] = None
-    version_id: Optional[str] = None
-    image_url: Optional[str] = None
-    review_feedback: Optional[str] = None
-    hashtags: Optional[List[str]] = None
-    user_id: Optional[str] = None
+    title: str | None = None
+    content: str | None = None
+    project_id: str | None = None
+    version: str | None = None
+    version_id: str | None = None
+    image_url: str | None = None
+    review_feedback: str | None = None
+    hashtags: List[str] | None = None
+    user_id: str | None = None
 
 
 class LarkStatusResponse(BaseModel):
@@ -244,7 +245,7 @@ class LarkStatusResponse(BaseModel):
     notify_chat_configured: bool
     notify_enabled: bool
     notify_mode: str
-    user_oauth: Optional[dict] = None
+    user_oauth: dict | None = None
 
 
 class LarkOAuthRegisterRequest(BaseModel):
@@ -252,7 +253,7 @@ class LarkOAuthRegisterRequest(BaseModel):
 
     client_name: str
     redirect_uris: List[str]
-    scope: Optional[str] = None
+    scope: str | None = None
 
 
 class LarkOAuthRegisterResponse(BaseModel):

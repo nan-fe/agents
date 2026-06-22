@@ -1,9 +1,10 @@
 """Project Memory：versions 即时写入，projects 在 finalize 时汇总。"""
+
 from __future__ import annotations
 
 import secrets
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import func, select
@@ -17,7 +18,7 @@ def new_project_id() -> str:
 
 
 def _utcnow() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def build_version_summary(intent: str, user_input: str, result: dict[str, Any]) -> str:
@@ -28,17 +29,13 @@ def build_version_summary(intent: str, user_input: str, result: dict[str, Any]) 
     return f"{intent or 'create'}: {snippet}" if snippet else intent or "version"
 
 
-def should_persist_project_row(
-    topic: str | None, final_version: str | None
-) -> bool:
+def should_persist_project_row(topic: str | None, final_version: str | None) -> bool:
     return bool((topic or "").strip()) and bool((final_version or "").strip())
 
 
 def metadata_from_version(version: VersionRow) -> tuple[str, str]:
     planning = version.planning or {}
-    topic = (planning.get("topic") or "").strip() or (
-        (version.result.get("title") or "").strip()
-    )
+    topic = (planning.get("topic") or "").strip() or ((version.result.get("title") or "").strip())
     return topic, version.version_label
 
 
@@ -103,9 +100,7 @@ class ProjectMemoryService:
         if not should_persist_project_row(topic, final_version):
             return
 
-        await self.ensure_project_stub(
-            project_id, topic=topic, final_version=final_version
-        )
+        await self.ensure_project_stub(project_id, topic=topic, final_version=final_version)
         async with get_session() as session:
             row = await session.get(ProjectRow, project_id)
             if row is not None:
@@ -123,14 +118,10 @@ class ProjectMemoryService:
             finalized = list((await session.execute(query)).scalars().all())
 
         finalized_ids = {row.project_id for row in finalized}
-        orphan_items = await self._list_orphan_version_projects(
-            exclude_ids=finalized_ids
-        )
+        orphan_items = await self._list_orphan_version_projects(exclude_ids=finalized_ids)
         return self._merge_project_lists(finalized, orphan_items)
 
-    async def _list_orphan_version_projects(
-        self, *, exclude_ids: set[str]
-    ) -> list[ProjectRow]:
+    async def _list_orphan_version_projects(self, *, exclude_ids: set[str]) -> list[ProjectRow]:
         """仅有 versions、尚未 finalize 的 project_id（兼容旧数据）。"""
         async with get_session() as session:
             rows = await session.execute(

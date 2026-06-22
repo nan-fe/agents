@@ -1,5 +1,5 @@
-from unittest.mock import AsyncMock, MagicMock, patch
 import asyncio
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -82,9 +82,7 @@ def test_run_review_repair_loop_runs_copywriter_on_failed_review(
 
     async def fake_pipeline(agent_names, ctx, user_input, log_callback, builder=None):
         if "ReviewerAgent" in agent_names:
-            ctx.set_review_from_result(
-                ReviewResult(approved=True, feedback="已通过")
-            )
+            ctx.set_review_from_result(ReviewResult(approved=True, feedback="已通过"))
 
     orchestrator._execute_agent_pipeline = AsyncMock(side_effect=fake_pipeline)
 

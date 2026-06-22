@@ -36,9 +36,7 @@ async def test_content_strategist_agent():
         print(f"\n--- 测试 {i}：{test_case['name']} ---")
         print(f"输入: {test_case['input_data']}")
 
-        result = await agent.run(
-            test_case["input_data"], log_callback=log_callback, history=""
-        )
+        result = await agent.run(test_case["input_data"], log_callback=log_callback, history="")
 
         print(f"结果: {result}")
         print(f"日志: {logs}")

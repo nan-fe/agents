@@ -8,7 +8,7 @@ import hmac
 import json
 import secrets
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from app.memory.db import get_session
@@ -20,7 +20,7 @@ _STATE_TTL_SECONDS = 600
 
 
 def _utcnow() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def _state_secret(app_secret: str) -> str:
@@ -107,9 +107,7 @@ class LarkOAuthRegistryService:
         async with get_session() as session:
             return await session.get(LarkOAuthClientRow, cid)
 
-    async def validate_client_redirect(
-        self, client_id: str, return_url: str
-    ) -> LarkOAuthClientRow:
+    async def validate_client_redirect(self, client_id: str, return_url: str) -> LarkOAuthClientRow:
         client = await self.get_client(client_id)
         if client is None:
             raise LarkOAuthError(f"未注册的 OAuth 客户端: {client_id}")
@@ -120,9 +118,7 @@ class LarkOAuthRegistryService:
 
         allowed = list(client.redirect_uris or [])
         if target not in allowed:
-            raise LarkOAuthError(
-                f"return_url 不在客户端允许列表中: {target}"
-            )
+            raise LarkOAuthError(f"return_url 不在客户端允许列表中: {target}")
         return client
 
     async def seed_studio_default_client(
@@ -165,9 +161,7 @@ class LarkOAuthRegistryService:
         if extra and extra not in uris:
             uris.append(extra)
         if not uris:
-            raise LarkOAuthError(
-                "LARK_OAUTH_STUDIO_REDIRECT_URIS 未配置，无法发起 OAuth"
-            )
+            raise LarkOAuthError("LARK_OAUTH_STUDIO_REDIRECT_URIS 未配置，无法发起 OAuth")
         return await self.seed_studio_default_client(uris)
 
     def feishu_callback_uri(self) -> str:

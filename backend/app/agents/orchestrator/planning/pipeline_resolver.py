@@ -1,8 +1,10 @@
 """Pipeline 解析：refine 走规则表，fresh task 走 LLM 路由。"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Literal
+
 from langsmith import Client, traceable
 from langsmith.run_helpers import get_current_run_tree
 
@@ -13,7 +15,6 @@ from app.services.orchestrator_llm_service import (
 )
 
 from .intents import FRESH_TASK_INTENTS, FULL_PIPELINE, PIPELINE_BY_INTENT
-
 
 _langsmith_client = Client(api_key=settings.LANGCHAIN_API_KEY)
 

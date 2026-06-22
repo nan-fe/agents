@@ -42,14 +42,14 @@ from app.models.schemas import (
 )
 from app.services.product_page_scraper import (
     ProductPageCapture,
+    _parse_price_from_visible_text,
+    _parse_sales_from_visible_text,
     build_vision_image_payload,
     capture_product_page,
     is_jd_blocked_page,
     is_playwright_available,
     is_usable_product_page_text,
     playwright_setup_hint,
-    _parse_price_from_visible_text,
-    _parse_sales_from_visible_text,
 )
 from app.utils.llm_factory import llm_factory
 from app.utils.search_tool import (
@@ -223,10 +223,7 @@ async def resolve_product_url(url: str) -> str:
         return resolved
 
     if _is_supported_product_host(urlparse(final_url).netloc):
-        print(
-            f"[ProductInfoService] 使用重定向 URL resolved={final_url} "
-            f"+{_elapsed_ms(started)}ms"
-        )
+        print(f"[ProductInfoService] 使用重定向 URL resolved={final_url} +{_elapsed_ms(started)}ms")
         return final_url
 
     raise ValueError("链接未能解析为淘宝/天猫/京东商品详情页，请检查链接是否正确")
@@ -485,18 +482,12 @@ async def _enrich_jd_price_sales_from_search(
         parsed_price = _parse_price_from_visible_text(snippet)
         if parsed_price is not None and parsed_price > 0:
             capture.price = parsed_price
-            print(
-                f"[ProductInfoService] 检索回退命中京东价格 price={parsed_price} "
-                f"sku={jd_id}"
-            )
+            print(f"[ProductInfoService] 检索回退命中京东价格 price={parsed_price} sku={jd_id}")
     if need_sales:
         parsed_sales = _parse_sales_from_visible_text(snippet)
         if parsed_sales is not None and parsed_sales > 0:
             capture.sales = parsed_sales
-            print(
-                f"[ProductInfoService] 检索回退命中京东销量 sales={parsed_sales} "
-                f"sku={jd_id}"
-            )
+            print(f"[ProductInfoService] 检索回退命中京东销量 sales={parsed_sales} sku={jd_id}")
     return snippet.strip()
 
 
@@ -535,10 +526,7 @@ async def extract_vision_product_context(url: str, capture: ProductPageCapture) 
         return ""
 
     model_name = settings.PRODUCT_VISION_MODEL or settings.BASE_MODEL
-    print(
-        f"[ProductInfoService] 开始视觉识别 model={model_name} "
-        f"images={len(image_payload)}"
-    )
+    print(f"[ProductInfoService] 开始视觉识别 model={model_name} images={len(image_payload)}")
     client = AsyncOpenAI(api_key=settings.API_KEY, base_url=settings.MODEL_BASE_URL)
 
     content: list[dict[str, Any]] = [
@@ -577,9 +565,7 @@ def _is_usable_page_text(text: str, *, product_title: str = "") -> bool:
     )
 
 
-_LOW_QUALITY_PRODUCT_NAMES = frozenset(
-    {"未知商品", "未知", "商品", "未命名商品", "未识别商品"}
-)
+_LOW_QUALITY_PRODUCT_NAMES = frozenset({"未知商品", "未知", "商品", "未命名商品", "未识别商品"})
 
 
 def _resolve_product_name(parsed_name: str, capture: ProductPageCapture | None) -> str:
@@ -697,9 +683,7 @@ async def gather_product_context(url: str) -> ProductGatherResult:
         f"usable_chars={usable_chars} total={_elapsed_ms(started)}ms"
     )
     if usable_chars < 20:
-        raise ValueError(
-            "未能获取商品信息。请确认链接有效；若页面需登录，可稍后重试或更换链接。"
-        )
+        raise ValueError("未能获取商品信息。请确认链接有效；若页面需登录，可稍后重试或更换链接。")
 
     return ProductGatherResult(
         context=context,
@@ -736,9 +720,7 @@ async def extract_product_fields(
         raise ValueError("未能从商品页获取有效文本，请检查链接是否可访问")
 
     started = time.perf_counter()
-    print(
-        f"[ProductInfoService] 开始 LLM 字段提取 context_len={len(page_text)} url={url}"
-    )
+    print(f"[ProductInfoService] 开始 LLM 字段提取 context_len={len(page_text)} url={url}")
     result = await llm_factory.run_chain_with_dynamic_tokens(
         prompt_template=_EXTRACT_PROMPT,
         chain_input={"url": url, "page_text": page_text[:8000]},

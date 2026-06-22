@@ -1,7 +1,8 @@
 """会话历史（内存）。"""
+
 import time
 from collections import deque
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from langchain_core.chat_history import BaseChatMessageHistory
 from langchain_core.messages import BaseMessage
@@ -14,12 +15,12 @@ class WritingSessionHistory(BaseChatMessageHistory):
         self.session_id = session_id
         self._last_active_at = time.monotonic()
         self.messages: deque = deque(maxlen=max_messages)
-        self._last_result: Optional[Dict[str, Any]] = None
-        self._last_plan: Optional[Dict[str, Any]] = None
-        self.project_id: Optional[str] = None
-        self.current_version_id: Optional[str] = None
-        self.current_version_label: Optional[str] = None
-        self.last_intent: Optional[str] = None
+        self._last_result: Dict[str, Any] | None = None
+        self._last_plan: Dict[str, Any] | None = None
+        self.project_id: str | None = None
+        self.current_version_id: str | None = None
+        self.current_version_label: str | None = None
+        self.last_intent: str | None = None
 
     def touch(self) -> None:
         self._last_active_at = time.monotonic()
@@ -40,10 +41,10 @@ class WritingSessionHistory(BaseChatMessageHistory):
         self._last_result = None
         self._last_plan = None
 
-    def get_last_result(self) -> Optional[Dict[str, Any]]:
+    def get_last_result(self) -> Dict[str, Any] | None:
         return self._last_result
 
-    def get_last_plan(self) -> Optional[Dict[str, Any]]:
+    def get_last_plan(self) -> Dict[str, Any] | None:
         return self._last_plan
 
     def update_result(self, result: Dict[str, Any]) -> None:

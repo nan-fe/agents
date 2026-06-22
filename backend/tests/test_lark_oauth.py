@@ -13,8 +13,6 @@ from app.main import app
 from app.memory.db import close_db, init_db
 from app.services.lark_oauth_service import lark_oauth_registry
 from lark_im.oauth import LarkOAuthService
-
-
 from lark_im.settings import lark_settings
 
 
@@ -63,7 +61,9 @@ async def _run_oauth_dcr_and_authorize() -> None:
         with patch.object(
             lark_oauth_registry,
             "start_authorize",
-            new=AsyncMock(return_value="https://accounts.feishu.cn/open-apis/authen/v1/authorize?x=1"),
+            new=AsyncMock(
+                return_value="https://accounts.feishu.cn/open-apis/authen/v1/authorize?x=1"
+            ),
         ):
             auth = await client.get(
                 "/lark/oauth/authorize",

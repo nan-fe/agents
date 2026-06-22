@@ -33,8 +33,7 @@ def should_use_lark_cli(client: Any | None = None) -> bool:
         return False
 
     has_app = bool(
-        (lark_settings.LARK_APP_ID or "").strip()
-        and (lark_settings.LARK_APP_SECRET or "").strip()
+        (lark_settings.LARK_APP_ID or "").strip() and (lark_settings.LARK_APP_SECRET or "").strip()
     )
     has_user_token = bool((lark_settings.LARK_USER_ACCESS_TOKEN or "").strip())
 
@@ -45,9 +44,7 @@ class LarkCliAdapter:
     """将 LarkImService 操作映射到 lark-cli 子命令。"""
 
     def __init__(self, cli_path: str | None = None) -> None:
-        self._cli_path = (
-            cli_path or lark_settings.LARK_CLI_PATH or "lark-cli"
-        ).strip()
+        self._cli_path = (cli_path or lark_settings.LARK_CLI_PATH or "lark-cli").strip()
 
     async def _run(self, args: list[str]) -> dict[str, Any]:
         if not lark_cli_available(self._cli_path):
@@ -99,9 +96,7 @@ class LarkCliAdapter:
                 "user_name": user.get("userName"),
             },
             "default_identity": lark_settings.LARK_DEFAULT_IDENTITY,
-            "note": (
-                "个人账号模式：通过本机 lark-cli 用户授权发消息，无需企业自建应用。"
-            ),
+            "note": ("个人账号模式：通过本机 lark-cli 用户授权发消息，无需企业自建应用。"),
         }
 
     async def send_message(

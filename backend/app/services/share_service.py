@@ -2,9 +2,9 @@ import json
 import os
 import secrets
 import threading
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict
 
 from app.models.schemas import ShareCreateRequest, ShareSnapshot
 
@@ -12,11 +12,9 @@ from app.models.schemas import ShareCreateRequest, ShareSnapshot
 class JsonShareStore:
     """Small JSON-backed store for public share snapshots."""
 
-    def __init__(self, storage_path: Optional[Path] = None):
+    def __init__(self, storage_path: Path | None = None):
         default_path = Path(__file__).resolve().parents[1] / "data" / "shares.json"
-        self.storage_path = storage_path or Path(
-            os.getenv("SHARE_STORE_PATH", str(default_path))
-        )
+        self.storage_path = storage_path or Path(os.getenv("SHARE_STORE_PATH", str(default_path)))
         self._lock = threading.Lock()
 
     def create_share(self, payload: ShareCreateRequest) -> ShareSnapshot:
@@ -30,13 +28,13 @@ class JsonShareStore:
                 hashtags=payload.hashtags,
                 image_url=payload.image_url,
                 message=payload.message,
-                created_at=datetime.now(timezone.utc),
+                created_at=datetime.now(UTC),
             )
             shares[share_id] = snapshot.model_dump(mode="json")
             self._write_all(shares)
             return snapshot
 
-    def get_share(self, share_id: str) -> Optional[ShareSnapshot]:
+    def get_share(self, share_id: str) -> ShareSnapshot | None:
         with self._lock:
             raw_share = self._read_all().get(share_id)
         if not raw_share:

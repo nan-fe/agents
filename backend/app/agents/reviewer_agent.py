@@ -1,11 +1,13 @@
-from app.agents.base_agent import BaseAgent
-from app.models.schemas import ReviewResult, ReviewCorrections
+from typing import Any, Dict
+
 from langchain_core.output_parsers import JsonOutputParser
 from langchain_core.prompts import PromptTemplate
+
+from app.agents.base_agent import BaseAgent
 from app.config import settings
+from app.models.schemas import ReviewCorrections, ReviewResult
 from app.security.prompt_rules import REVIEWER_SECURITY_PROMPT
 from app.utils.llm_factory import llm_factory
-from typing import Any, Dict, Optional
 
 
 class ReviewerAgent(BaseAgent):
@@ -63,9 +65,7 @@ class ReviewerAgent(BaseAgent):
                 "image_url",
                 "image_prompt",
             ],
-            partial_variables={
-                "format_instructions": self.parser.get_format_instructions()
-            },
+            partial_variables={"format_instructions": self.parser.get_format_instructions()},
         )
 
     @staticmethod
@@ -79,9 +79,7 @@ class ReviewerAgent(BaseAgent):
                 data["corrections"] = ReviewCorrections(**corrections)
         return ReviewResult(**data)
 
-    async def run(
-        self, input_data: dict, log_callback: Optional[callable] = None
-    ) -> ReviewResult:
+    async def run(self, input_data: dict, log_callback: callable | None = None) -> ReviewResult:
         """运行质检Agent"""
         chain_input = {
             "copywriting_title": input_data.get("copywriting_title"),
@@ -106,7 +104,7 @@ class ReviewerAgent(BaseAgent):
             await self.log(f"审核完成：{status}", log_callback)
             return review
         except Exception as e:
-            print(f"审核失败", e)
+            print("审核失败", e)
             await self.log(f"审核失败: {e}", log_callback)
             return ReviewResult(
                 approved=False,

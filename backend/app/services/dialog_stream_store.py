@@ -37,7 +37,7 @@ class DialogStream:
     prompt: str
     events: list[StreamEvent] = field(default_factory=list)
     next_event_id: int = 1
-    task: Optional[asyncio.Task] = None
+    task: asyncio.Task | None = None
     is_complete: bool = False
     _subscribers: list[StreamSubscriber] = field(default_factory=list)
     _lock: asyncio.Lock = field(default_factory=asyncio.Lock)
@@ -155,7 +155,7 @@ class DialogStream:
 
 
 class DialogStreamStore:
-    def __init__(self, persist_dir: Optional[Path] = None) -> None:
+    def __init__(self, persist_dir: Path | None = None) -> None:
         self._streams: dict[str, DialogStream] = {}
         self._active_generations: set[str] = set()
         self._lock = asyncio.Lock()
@@ -212,7 +212,7 @@ class DialogStreamStore:
             stream.is_complete = True
         return stream
 
-    async def _load_persisted_stream(self, session_id: str) -> Optional[DialogStream]:
+    async def _load_persisted_stream(self, session_id: str) -> DialogStream | None:
         path = self._persist_path(session_id)
         if not path.exists():
             return None
@@ -226,7 +226,7 @@ class DialogStreamStore:
             return None
         return self._hydrate_stream(data)
 
-    async def get_stream(self, session_id: str) -> Optional[DialogStream]:
+    async def get_stream(self, session_id: str) -> DialogStream | None:
         async with self._lock:
             stream = self._streams.get(session_id)
             if stream is not None:

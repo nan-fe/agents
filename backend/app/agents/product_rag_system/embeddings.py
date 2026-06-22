@@ -1,9 +1,11 @@
 """
 嵌入数据库模块 - 管理文本向量化和向量存储
 """
-import openai
+
 import chromadb
-from chromadb.api.types import Documents, Embeddings, EmbeddingFunction
+import openai
+from chromadb.api.types import Documents, EmbeddingFunction, Embeddings
+
 from app.config import settings
 
 
@@ -41,9 +43,10 @@ class CustomEmbeddingFunction(EmbeddingFunction[Documents]):
         """Get model name"""
         return self.model_name
 
+
 class EmbeddingDatabase:
     """嵌入数据库类 - 管理向量存储"""
-    
+
     def __init__(
         self,
         embedding_model: str = None,
@@ -53,30 +56,30 @@ class EmbeddingDatabase:
         self.embedding_model = embedding_model or settings.EMBEDING_MODEL
         self.distance_type = self._determine_distance_type(embedding_model)
         self.db_path = db_path or settings.CHROMA_DB_PATH
-        
+
         self.embedding_fn = CustomEmbeddingFunction(
             api_key=settings.SILICONFLOW_API_KEY,
             base_url=settings.SILICONFLOW_BASE_URL,
-            model_name=self.embedding_model
+            model_name=self.embedding_model,
         )
-        
+
         # 初始化ChromaDB客户端
         self.chroma_client = chromadb.PersistentClient(path=self.db_path)
-        
+
         # 创建或获取集合
         self.collection = self.chroma_client.get_or_create_collection(
             name="taobao_products",
             embedding_function=self.embedding_fn,
             metadata={"hnsw:space": self.distance_type},
         )
-    
+
     def _determine_distance_type(self, model_name: str) -> str:
         """根据模型名称确定距离度量方式"""
         if model_name:
             if "m3" in model_name.lower() or "zh" in model_name.lower():
                 return "cosine"  # 余弦距离
         return "ip"  # 内积距离
-    
+
     def index_documents(self, ids: list, documents: list, metadatas: list):
         """批量索引文档到向量库（仅当集合为空时执行全量索引）。"""
         if self.collection.count() > 0:
@@ -104,20 +107,18 @@ class EmbeddingDatabase:
         if not ids:
             return
         self.collection.delete(ids=ids)
-    
+
     def query(self, query_text: str, top_k: int = 3) -> dict:
         """向量相似度查询"""
         results = self.collection.query(
-            query_texts=[query_text],
-            n_results=top_k,
-            include=["metadatas", "distances"]
+            query_texts=[query_text], n_results=top_k, include=["metadatas", "distances"]
         )
         return results
-    
+
     def get_collection_size(self) -> int:
         """获取集合中的文档数量"""
         return self.collection.count()
-    
+
     def similarity_to_score(self, distance: float) -> float:
         """根据距离类型将距离转换为相似度分数"""
         if self.distance_type == "cosine":

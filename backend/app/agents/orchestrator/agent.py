@@ -1,21 +1,35 @@
+import logging
+import time
+from typing import Any, Callable, Dict, List
+
+from dotenv import load_dotenv
+from langchain_core.messages import HumanMessage
+
+from app.agents.copywriter_agent import CopywriterAgent
+from app.agents.image_agent import ImageAgent
+from app.agents.product_rag_system.agent import ProductRagAgent
+from app.agents.reviewer_agent import ReviewerAgent
+from app.config import settings
+from app.memory import project_memory
+from app.memory.project_memory import new_project_id
+from app.security.input_guard import check_input_security, safety_rejection_payload
+from app.services.dialog_stream_store import dialog_stream_store
+from app.services.orchestrator_llm_service import OrchestratorLLMService
+from app.utils.log_callback import emit_log
+from app.utils.retry_policy import classify_agent_failure
+from lark_im import get_lark_im_service
+from lark_im.notify import build_lark_notification_meta
+from lark_im.settings import lark_settings
+
+from .agent_executor import AgentExecutor
+from .agent_input_builder import AgentInputBuilder
+from .execution_context import ExecutionContext
 from .planning import (
-    ContentStrategistAgent,
     FRESH_TASK_INTENTS,
+    ContentStrategistAgent,
     PlanPhaseRunner,
     is_fresh_task_intent,
 )
-from app.agents.copywriter_agent import CopywriterAgent
-from app.agents.image_agent import ImageAgent
-from app.agents.reviewer_agent import ReviewerAgent
-from app.agents.product_rag_system.agent import ProductRagAgent
-from app.services.orchestrator_llm_service import OrchestratorLLMService
-from app.config import settings
-from app.security.input_guard import check_input_security, safety_rejection_payload
-from app.utils.retry_policy import classify_agent_failure
-from app.utils.log_callback import emit_log
-from .execution_context import ExecutionContext
-from .agent_input_builder import AgentInputBuilder
-from .agent_executor import AgentExecutor
 from .result_mapper import ResultMapper
 from .review_repair_router import (
     content_agents_ran,
@@ -23,17 +37,6 @@ from .review_repair_router import (
 )
 from .session_eviction import evict_idle_sessions
 from .session_history import WritingSessionHistory
-from app.memory import project_memory
-from app.services.dialog_stream_store import dialog_stream_store
-from app.memory.project_memory import new_project_id
-from lark_im import get_lark_im_service
-from lark_im.notify import build_lark_notification_meta
-from lark_im.settings import lark_settings
-from typing import Optional, Callable, Dict, List, Any
-import logging
-import time
-from langchain_core.messages import HumanMessage
-from dotenv import load_dotenv
 
 load_dotenv()
 
@@ -59,9 +62,7 @@ class DialogOrchestratorAgent:
         self.reviewer_agent = ReviewerAgent()
         self.rag_agent = ProductRagAgent()
         self.llm_service = OrchestratorLLMService()
-        self.plan_phase = PlanPhaseRunner(
-            self.content_strategist_agent, self.llm_service
-        )
+        self.plan_phase = PlanPhaseRunner(self.content_strategist_agent, self.llm_service)
 
         self.agent_map = {
             "ContentStrategistAgent": self.content_strategist_agent,
@@ -77,9 +78,7 @@ class DialogOrchestratorAgent:
     def get_session_history(self, session_id: str) -> WritingSessionHistory:
         self._evict_idle_sessions(protected_session_ids={session_id})
         if session_id not in self.session_histories:
-            self.session_histories[session_id] = WritingSessionHistory(
-                session_id
-            )
+            self.session_histories[session_id] = WritingSessionHistory(session_id)
         history = self.session_histories[session_id]
         history.touch()
         return history
@@ -99,10 +98,10 @@ class DialogOrchestratorAgent:
         self,
         user_input: str,
         session_id: str,
-        log_callback: Optional[Callable] = None,
+        log_callback: Callable | None = None,
         *,
-        project_id: Optional[str] = None,
-        user_id: Optional[str] = None,
+        project_id: str | None = None,
+        user_id: str | None = None,
     ) -> dict:
         """运行多Agent协作流程"""
         session_id = (session_id or "").strip()
@@ -118,14 +117,10 @@ class DialogOrchestratorAgent:
         session_history.add_message(HumanMessage(content=user_input))
 
         resolved_project_id = (
-            (project_id or "").strip()
-            or session_history.project_id
-            or new_project_id()
+            (project_id or "").strip() or session_history.project_id or new_project_id()
         )
         session_history.bind_project(resolved_project_id)
-        await project_memory.ensure_project_stub(
-            resolved_project_id, user_id=user_id
-        )
+        await project_memory.ensure_project_stub(resolved_project_id, user_id=user_id)
         await self._hydrate_session_from_project_memory(
             session_history, resolved_project_id, log_callback
         )
@@ -133,17 +128,13 @@ class DialogOrchestratorAgent:
         await emit_log(log_callback, "Orchestrator", "开始智能任务编排...")
 
         context = ExecutionContext()
-        plan = await self.plan_phase.run(
-            user_input, session_history, context, log_callback
-        )
+        plan = await self.plan_phase.run(user_input, session_history, context, log_callback)
         if plan.early_exit is not None:
             early_exit = dict(plan.early_exit)
             early_exit["project_id"] = resolved_project_id
             return early_exit
 
-        await self._execute_agent_pipeline(
-            plan.pipeline_order, context, user_input, log_callback
-        )
+        await self._execute_agent_pipeline(plan.pipeline_order, context, user_input, log_callback)
 
         if not content_agents_ran(context.executed_agents):
             context.mark_review_skipped()
@@ -159,14 +150,10 @@ class DialogOrchestratorAgent:
 
             parent_version_id = session_history.current_version_id
             if parent_version_id is None:
-                latest = await project_memory.get_latest_version(
-                    resolved_project_id
-                )
+                latest = await project_memory.get_latest_version(resolved_project_id)
                 if latest is not None:
                     parent_version_id = latest.version_id
-                    session_history.bind_version(
-                        latest.version_id, latest.version_label
-                    )
+                    session_history.bind_version(latest.version_id, latest.version_label)
 
             version_row = await project_memory.append_version(
                 project_id=resolved_project_id,
@@ -176,46 +163,40 @@ class DialogOrchestratorAgent:
                 result=final_result,
                 planning=context.get_planning(),
             )
-            session_history.bind_version(
-                version_row.version_id, version_row.version_label
-            )
+            session_history.bind_version(version_row.version_id, version_row.version_label)
             final_result["project_id"] = resolved_project_id
             final_result["version_id"] = version_row.version_id
             final_result["version"] = version_row.version_label
             final_result["version_number"] = version_row.version_number
         else:
-            session_history.update_result({
-                "title": "",
-                "content": "",
-                "hashtags": [],
-                "image_url": "",
-                "message": final_result.get("message", ""),
-                "review_approved": False,
-                "failure_category": "policy_block",
-                "error_code": "POLICY_BLOCK",
-            })
+            session_history.update_result(
+                {
+                    "title": "",
+                    "content": "",
+                    "hashtags": [],
+                    "image_url": "",
+                    "message": final_result.get("message", ""),
+                    "review_approved": False,
+                    "failure_category": "policy_block",
+                    "error_code": "POLICY_BLOCK",
+                }
+            )
             session_history.update_plan(context.get_planning())
             final_result["project_id"] = resolved_project_id
 
         notify_mode = (lark_settings.LARK_NOTIFY_MODE or "auto").strip().lower()
-        review_passed = (
-            context.review.review_executed and context.review.approved
-        )
+        review_passed = context.review.review_executed and context.review.approved
         auto_sent = False
         notify_error: str | None = None
 
         if review_passed and notify_mode != "off":
             if notify_mode == "auto" and lark_settings.LARK_NOTIFY_ENABLED:
                 try:
-                    await get_lark_im_service().send_review_notification(
-                        final_result
-                    )
+                    await get_lark_im_service().send_review_notification(final_result)
                     auto_sent = True
                 except Exception as exc:
                     notify_error = str(exc)
-                    logger.warning(
-                        "飞书通知失败（不影响生成结果）: %s", exc
-                    )
+                    logger.warning("飞书通知失败（不影响生成结果）: %s", exc)
 
         if review_passed:
             final_result["lark_notification"] = build_lark_notification_meta(
@@ -232,7 +213,7 @@ class DialogOrchestratorAgent:
         self,
         session_history: WritingSessionHistory,
         project_id: str,
-        log_callback: Optional[Callable] = None,
+        log_callback: Callable | None = None,
     ) -> None:
         """页面重进后 Working Memory 为空时，从 versions 恢复上轮结果。"""
         if session_history.get_last_result():
@@ -255,7 +236,7 @@ class DialogOrchestratorAgent:
         self,
         context: ExecutionContext,
         user_input: str,
-        log_callback: Optional[Callable] = None,
+        log_callback: Callable | None = None,
     ) -> None:
         """审核未通过时同轮规则路由修复。"""
         if context.review.review_status != "failed":
@@ -314,8 +295,8 @@ class DialogOrchestratorAgent:
         agent_names: List[str],
         context: ExecutionContext,
         user_input: str,
-        log_callback: Optional[Callable] = None,
-        builder: Optional[AgentInputBuilder] = None,
+        log_callback: Callable | None = None,
+        builder: AgentInputBuilder | None = None,
     ) -> None:
         """执行 Agent 流程"""
         if builder is None:
@@ -324,9 +305,7 @@ class DialogOrchestratorAgent:
 
         for agent_name in agent_names:
             if agent_name not in self.agent_map:
-                await emit_log(
-                    log_callback, agent_name, f"未知 Agent: {agent_name}，跳过"
-                )
+                await emit_log(log_callback, agent_name, f"未知 Agent: {agent_name}，跳过")
                 continue
 
             if agent_name == "ImageAgent":

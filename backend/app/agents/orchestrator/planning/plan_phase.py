@@ -1,9 +1,10 @@
 """统一规划阶段：意图识别 + 内容策划 + pipeline 解析。"""
+
 from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List
 
 from app.config import settings
 from app.services.orchestrator_llm_service import (
@@ -43,7 +44,7 @@ class PlanPhaseResult:
     pipeline_order: List[str]
     routing: RoutingDecision
     replanned: bool
-    early_exit: Optional[Dict[str, Any]] = None
+    early_exit: Dict[str, Any] | None = None
 
 
 class PlanPhaseRunner:
@@ -62,14 +63,12 @@ class PlanPhaseRunner:
         user_input: str,
         session_history: WritingSessionHistory,
         context: ExecutionContext,
-        log_callback: Optional[Callable] = None,
+        log_callback: Callable | None = None,
     ) -> PlanPhaseResult:
         await emit_log(log_callback, "Orchestrator", "规划阶段：识别意图…")
 
         try:
-            intent = await self.llm_service.analyze_intent(
-                user_input, session_history.messages
-            )
+            intent = await self.llm_service.analyze_intent(user_input, session_history.messages)
         except IntentAnalysisTimeoutError as e:
             await emit_log(log_callback, "Orchestrator", str(e))
             return PlanPhaseResult(
@@ -115,9 +114,7 @@ class PlanPhaseRunner:
         replanned = await self._resolve_planning(
             context, session_history, intent, user_input, log_callback
         )
-        await self._load_session_artifacts(
-            context, session_history, intent, log_callback
-        )
+        await self._load_session_artifacts(context, session_history, intent, log_callback)
 
         await emit_log(log_callback, "Orchestrator", "规划阶段：解析工作流程")
         resolution = await resolve_pipeline(
@@ -147,14 +144,12 @@ class PlanPhaseRunner:
         session_history: WritingSessionHistory,
         intent: str,
         user_input: str,
-        log_callback: Optional[Callable],
+        log_callback: Callable | None,
     ) -> bool:
         last_plan = session_history.get_last_plan()
         if should_run_content_strategist(intent, last_plan is not None):
             planning_result = await asyncio.wait_for(
-                self.content_strategist_agent.run(
-                    user_input, log_callback, history=""
-                ),
+                self.content_strategist_agent.run(user_input, log_callback, history=""),
                 timeout=settings.AGENT_TIMEOUT_PLANNER_AGENT_SECONDS,
             )
             context.set_planning(planning_result)
@@ -181,7 +176,7 @@ class PlanPhaseRunner:
         context: ExecutionContext,
         session_history: WritingSessionHistory,
         intent: str,
-        log_callback: Optional[Callable],
+        log_callback: Callable | None,
     ) -> None:
         if is_fresh_task_intent(intent):
             return
@@ -190,18 +185,18 @@ class PlanPhaseRunner:
         if not last_result:
             return
 
-        context.load_from_dict({
-            "copywriting": {
-                "title": last_result.get("title", ""),
-                "content": last_result.get("content", ""),
-                "hashtags": last_result.get("hashtags", []),
-            },
-            "image": {
-                "image_url": last_result.get("image_url", ""),
-                "prompt": last_result.get(
-                    "prompt", last_result.get("image_prompt", "")
-                ),
-            },
-        })
+        context.load_from_dict(
+            {
+                "copywriting": {
+                    "title": last_result.get("title", ""),
+                    "content": last_result.get("content", ""),
+                    "hashtags": last_result.get("hashtags", []),
+                },
+                "image": {
+                    "image_url": last_result.get("image_url", ""),
+                    "prompt": last_result.get("prompt", last_result.get("image_prompt", "")),
+                },
+            }
+        )
         context.set_last_result(last_result)
         await emit_log(log_callback, "Orchestrator", "已加载上轮文案与配图")

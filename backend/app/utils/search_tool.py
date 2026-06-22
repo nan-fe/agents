@@ -1,13 +1,11 @@
-import re
-import time
-from urllib.parse import urlparse, parse_qs
-# from duckduckgo_search import DDGS
-from typing import List, Dict, Any, Optional
-from langchain_community.tools import DuckDuckGoSearchRun
-import requests
-from bs4 import BeautifulSoup
-import json
 import asyncio
+import re
+
+# from duckduckgo_search import DDGS
+from typing import Any, Dict
+from urllib.parse import parse_qs, urlparse
+
+from langchain_community.tools import DuckDuckGoSearchRun
 
 from app.config import settings
 from app.utils.retry_policy import retry_with_backoff
@@ -199,7 +197,7 @@ except ImportError:
 _TAOBAO_ITEM_ID_RE = re.compile(r"[?&]id=(\d+)")
 
 
-def _extract_taobao_item_id(url: str) -> Optional[str]:
+def _extract_taobao_item_id(url: str) -> str | None:
     parsed = urlparse(url)
     q = parse_qs(parsed.query)
     if "id" in q and q["id"]:
@@ -228,11 +226,7 @@ def canonical_taobao_item_url(url: str) -> str:
     if not item_id:
         return url
     parsed = urlparse(url)
-    host = (
-        "detail.tmall.com"
-        if "tmall.com" in parsed.netloc.lower()
-        else "item.taobao.com"
-    )
+    host = "detail.tmall.com" if "tmall.com" in parsed.netloc.lower() else "item.taobao.com"
     return f"https://{host}/item.htm?id={item_id}"
 
 
@@ -287,8 +281,8 @@ def _is_usable_product_snippet(text: str) -> bool:
 def search_product_context_snippets(
     *,
     url: str,
-    taobao_item_id: Optional[str] = None,
-    jd_item_id: Optional[str] = None,
+    taobao_item_id: str | None = None,
+    jd_item_id: str | None = None,
     max_results_per_query: int = 10,
 ) -> str:
     """按商品链接或 ID 检索中文商品摘要，供选品池解析回退使用。"""
@@ -411,7 +405,7 @@ def search_jd_product_price_snippets(
 
 def search_taobao_first_item_detail_by_category(
     category: str, max_results_per_query: int = 12
-) -> Optional[Dict[str, Any]]:
+) -> Dict[str, Any] | None:
     """
     按商品类别做外部检索，返回**与该类别文案一致**的一条淘宝系商品详情（非首个 URL 即收）。
 
@@ -488,6 +482,7 @@ def search_duckduckgo_langchain(query: str, site: str = "taobao.com"):
 
 async def search_duckduckgo_langchain_async(query: str, site: str = "taobao.com") -> str:
     """异步包装 + 可恢复错误重试（指数退避）；最终失败返回空串。"""
+
     async def once():
         return await asyncio.to_thread(_search_duckduckgo_langchain_impl, query, site)
 
@@ -710,7 +705,7 @@ if __name__ == "__main__":
     print("\n文本搜索结果:")
     text_results = search_duckduckgo(query, 2, "www.taobao.com")
     for i, result in enumerate(text_results):
-        print(f"{i+1}. {result['title']}")
+        print(f"{i + 1}. {result['title']}")
         print(f"   URL: {result['url']}")
         print(f"   摘要: {result['snippet'][:100]}...")
 

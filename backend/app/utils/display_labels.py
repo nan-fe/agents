@@ -1,4 +1,5 @@
 """意图与 Agent 展示名映射，供 SSE 日志与前端展示。"""
+
 from typing import Dict, Iterable, List
 
 INTENT_DISPLAY_LABELS: Dict[str, str] = {

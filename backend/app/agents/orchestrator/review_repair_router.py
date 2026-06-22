@@ -1,5 +1,6 @@
 """审核失败后的规则路由（不调用 LLM）。"""
-from typing import Any, Dict, List, Optional
+
+from typing import Any, Dict, List
 
 CONTENT_AGENTS = frozenset({"CopywriterAgent", "ImageAgent"})
 
@@ -12,9 +13,9 @@ def content_agents_ran(executed_agents: List[str]) -> bool:
 
 
 def derive_failure_category(
-    failure_category: Optional[str],
+    failure_category: str | None,
     feedback: str,
-    corrections: Optional[Dict[str, Any]],
+    corrections: Dict[str, Any] | None,
 ) -> str:
     """从 LLM 字段或 corrections 键兜底推导失败域。"""
     if failure_category:
@@ -41,10 +42,10 @@ def derive_failure_category(
 
 
 def route_review_failure(
-    failure_category: Optional[str],
+    failure_category: str | None,
     feedback: str,
-    corrections: Optional[Dict[str, Any]],
-    partial_errors: Optional[Dict[str, str]] = None,
+    corrections: Dict[str, Any] | None,
+    partial_errors: Dict[str, str] | None = None,
     image_repair_attempts: int = 0,
 ) -> List[str]:
     """根据审核失败类型返回 repair 流水线 Agent 列表；空列表表示不 repair。"""
