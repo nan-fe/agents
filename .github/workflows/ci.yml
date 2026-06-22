@@ -199,14 +199,19 @@ jobs:
           pip install -r backend/requirements.txt
           pip install -e mcp-lark
 
-      - name: Start backend
-        working-directory: backend
-        run: |
-          uvicorn app.main:app --host 127.0.0.1 --port 8000 &
-          echo $! > ../backend.pid
+      - name: Start backend and wait for health
+        run: bash scripts/start-backend-ci.sh
 
-      - name: Wait for backend
-        run: bash scripts/wait-for-http.sh http://127.0.0.1:8000/health
+      - name: Backend startup log
+        if: failure()
+        run: |
+          if [[ -f backend-ci.log ]]; then
+            echo "=== backend-ci.log ==="
+            cat backend-ci.log
+          fi
+          if [[ -f backend.pid ]]; then
+            kill "$(cat backend.pid)" 2>/dev/null || true
+          fi
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v4

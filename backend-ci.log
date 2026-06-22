@@ -1,0 +1,35 @@
+INFO:     Started server process [83380]
+INFO:     Waiting for application startup.
+已加载数据文件: /Users/lixuefu/Documents/trae_projects/agents/xhs-multi-agent-creator/backend/app/agents/product_rag_system/data/taobao_products.csv
+成功加载 13 条商品数据
+已加载爬虫记录文件: /Users/lixuefu/Documents/trae_projects/agents/xhs-multi-agent-creator/backend/app/agents/product_rag_system/data/scraped_products.csv
+成功加载 4 条爬虫记录
+2026-06-22 22:35:37,619 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2026-06-22 22:35:37,620 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("projects")
+2026-06-22 22:35:37,620 INFO sqlalchemy.engine.Engine [raw sql] ()
+2026-06-22 22:35:37,621 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("versions")
+2026-06-22 22:35:37,621 INFO sqlalchemy.engine.Engine [raw sql] ()
+2026-06-22 22:35:37,622 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("lark_oauth_clients")
+2026-06-22 22:35:37,622 INFO sqlalchemy.engine.Engine [raw sql] ()
+2026-06-22 22:35:37,623 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("lark_user_tokens")
+2026-06-22 22:35:37,623 INFO sqlalchemy.engine.Engine [raw sql] ()
+2026-06-22 22:35:37,624 INFO sqlalchemy.engine.Engine COMMIT
+2026-06-22 22:35:37,626 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2026-06-22 22:35:37,631 INFO sqlalchemy.engine.Engine SELECT lark_oauth_clients.client_id AS lark_oauth_clients_client_id, lark_oauth_clients.client_secret AS lark_oauth_clients_client_secret, lark_oauth_clients.client_name AS lark_oauth_clients_client_name, lark_oauth_clients.redirect_uris AS lark_oauth_clients_redirect_uris, lark_oauth_clients.scopes AS lark_oauth_clients_scopes, lark_oauth_clients.created_at AS lark_oauth_clients_created_at 
+FROM lark_oauth_clients 
+WHERE lark_oauth_clients.client_id = ?
+2026-06-22 22:35:37,631 INFO sqlalchemy.engine.Engine [generated in 0.00029s] ('oac_studio_default',)
+2026-06-22 22:35:37,633 INFO sqlalchemy.engine.Engine COMMIT
+2026-06-22 22:35:37,634 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2026-06-22 22:35:37,635 INFO sqlalchemy.engine.Engine SELECT lark_oauth_clients.client_id, lark_oauth_clients.client_secret, lark_oauth_clients.client_name, lark_oauth_clients.redirect_uris, lark_oauth_clients.scopes, lark_oauth_clients.created_at 
+FROM lark_oauth_clients 
+WHERE lark_oauth_clients.client_id = ?
+2026-06-22 22:35:37,635 INFO sqlalchemy.engine.Engine [generated in 0.00016s] ('oac_studio_default',)
+2026-06-22 22:35:37,636 INFO sqlalchemy.engine.Engine ROLLBACK
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8011 (Press CTRL+C to quit)
+INFO:     127.0.0.1:55172 - "GET /health HTTP/1.1" 200 OK
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [83380]
