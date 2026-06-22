@@ -121,12 +121,10 @@ class LarkOAuthRegistryService:
             raise LarkOAuthError(f"return_url 不在客户端允许列表中: {target}")
         return client
 
-    async def seed_studio_default_client(
-        self, redirect_uris: list[str]
-    ) -> LarkOAuthClientRow | None:
+    async def seed_studio_default_client(self, redirect_uris: list[str]) -> LarkOAuthClientRow:
         uris = [u.strip() for u in redirect_uris if (u or "").strip()]
         if not uris:
-            return None
+            raise ValueError("redirect_uris 不能为空")
 
         async with get_session() as session:
             existing = await session.get(LarkOAuthClientRow, _DEFAULT_STUDIO_CLIENT_ID)

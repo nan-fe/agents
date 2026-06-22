@@ -63,7 +63,7 @@
 ┌─────────────────────────────────────────────────────────────────────┐
 │                         GitHub Actions CI/CD                         │
 │  ┌──────────────────────────────────────────────────────────────┐   │
-│  │  Trigger: Push to feat-init branch or v* tags                │   │
+│  │  Trigger: push / pull_request (`.github/workflows/ci.yml`)     │
 │  │  ┌──────────────┐  ┌──────────────┐  ┌──────────────────┐   │   │
 │  │  │  Checkout    │→│  Build Images│→│  Push to Aliyun  │   │   │
 │  │  │  Code        │  │  (Backend)   │  │  Container       │   │   │
@@ -95,12 +95,14 @@
 | 阶段 | 工具/平台 | 说明 |
 |------|-----------|------|
 | **代码托管** | GitHub | 源代码版本控制 |
-| **CI 构建** | GitHub Actions | 自动化构建和测试 |
+| **CI** | GitHub Actions | push/PR 触发：backend ruff + pytest、mcp-lark ruff + pytest、frontend-share lint/test/build/e2e、OpenAPI 契约检查 |
+| **Pre-commit** | pre-commit + ruff | 本地提交前：ruff 格式化、变更 Python 文件 pytest、frontend-share `tsc` |
+| **静态类型** | mypy | 本地可选：`bash scripts/mypy-backend.sh`（配置见根目录 `pyproject.toml`） |
 | **镜像仓库** | 阿里云 ACR | 容器镜像存储（上海区域） |
 | **CD 部署** | GitHub Actions + SSH | 自动部署到阿里云服务器 |
 | **容器编排** | Docker Compose | 多容器服务管理 |
-| **反向代理** | Nginx | 主前端静态资源服务，并代理 `/dialog`、`/session`、`/shares` 到后端 |
-| **分享页服务** | Next.js standalone | 独立容器承载公开分享页 |
+| **反向代理** | Next.js standalone | 唯一 Web 入口；Route Handler / rewrite 代理 API 到 backend |
+| **分享页服务** | Next.js ISR | `/share/[shareId]` 公开分享页 |
 
 
 ## 🚀 核心能力
@@ -135,7 +137,7 @@
 | 组件 | 功能 |
 |------|------|
 | **Token Counter** | 精确的Token计数和上下文窗口管理 |
-| **OpenAPI SSOT** | 后端 OpenAPI 作为前端 API 类型唯一事实源，`frontend-ts` 通过 `openapi-typescript` 生成类型 |
+| **OpenAPI SSOT** | 后端 OpenAPI 作为前端 API 类型唯一事实源，`frontend-share` 通过 `openapi-typescript` 生成 `src/api/schema.d.ts` |
 | **Prompt Security Rules** | 为 Agent、意图识别、动态路由注入统一安全与权限规则 |
 
 
@@ -215,9 +217,23 @@ frontend-share/
 
 ### 环境要求
 
-- Python 3.8+
-- Node.js 22+（前端 Docker 构建使用 Node 22，满足 Vite 运行要求）
-- Docker & Docker Compose
+- Python **3.11+**（CI 与 `pyproject.toml` 目标版本）
+- Node.js **22+**、pnpm **10+**
+- Docker & Docker Compose（PostgreSQL、可选全栈 Compose）
+- 可选：`pre-commit`（见下方一次性开发依赖安装）
+
+### 一次性开发依赖（推荐）
+
+在项目根目录执行：
+
+```bash
+pip install -r requirements-dev.txt   # ruff、mypy、pytest、pre-commit
+pip install -r backend/requirements.txt
+pip install -e mcp-lark                 # 飞书 OAuth / IM 集成
+pre-commit install                      # 安装 git hooks（可选）
+```
+
+根目录 `requirements-dev.txt` 为**仓库级开发工具**（ruff / mypy / pytest / pre-commit），同时服务于 `backend/` 与 `mcp-lark/`；`backend/requirements.txt` 为运行时依赖。
 
 ### 配置环境变量
 
@@ -273,18 +289,22 @@ docker compose up -d
 # PostgreSQL（用户鉴权）
 docker compose up postgres -d
 
-# 启动后端
+# 终端 1：后端 API（:8000）
 cd backend
 pip install -r requirements.txt
+pip install -e ../mcp-lark
+cp .env.example .env   # 填入 API Key 等
 pnpm run start
 
-# 启动 frontend-share（门户 + 创作台 + 分享）
-cd ../frontend-share
+# 终端 2：frontend-share（门户 + 创作台 + 分享，:3000）
+cd frontend-share
 pnpm install
 cp .env.example .env
 pnpm db:migrate:deploy
 pnpm dev
 ```
+
+后端也可使用 `uvicorn app.main:app --reload --host 0.0.0.0 --port 8000`（需已安装依赖）。
 
 ### 访问服务
 
@@ -311,12 +331,47 @@ pnpm dev
 - `SHARE_STORE_PATH` 或 `./data/shares` 持久化卷已挂载，避免重新部署后分享链接失效
 - **不再部署** `frontend-ts` Nginx 容器；无需 `VITE_SHARE_BASE_URL` / `STUDIO_UPSTREAM_URL`
 
-## 🧪 测试
+## 🧪 测试与质量检查
+
+### 后端
 
 ```bash
-# 运行后端测试
-cd backend/tests
-python3  test_xxxx.py
+cd backend
+pytest tests/ -m "not network"          # 默认套件（排除 DuckDuckGo 网络测试）
+```
+
+### 仓库根目录（Python 静态检查）
+
+```bash
+ruff check backend mcp-lark
+ruff format backend mcp-lark
+bash scripts/mypy-backend.sh            # 或 python3 -m mypy
+```
+
+### 前端（frontend-share）
+
+```bash
+cd frontend-share
+pnpm lint                               # tsc --noEmit
+pnpm test                               # Vitest（SSE parser、middleware）
+pnpm build                              # prisma generate + next build
+pnpm test:e2e                           # Playwright 冒烟（CI 用 Postgres service）
+```
+
+### OpenAPI 类型契约
+
+后端运行于 `:8000` 时，可校验前端类型是否与 OpenAPI 一致：
+
+```bash
+bash scripts/check-openapi-contract.sh
+# 或手动：cd frontend-share && pnpm gen:api
+```
+
+### MCP Lark
+
+```bash
+cd mcp-lark
+pytest tests/
 ```
 
 ## 🔍 代码清理分析

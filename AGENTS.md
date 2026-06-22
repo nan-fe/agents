@@ -46,6 +46,15 @@ The production frontend lives in `frontend-share/` (Next.js App Router). Follow 
 
 - Follow FastAPI and Pydantic conventions in [`.agents/skills/fastapi/SKILL.md`](.agents/skills/fastapi/SKILL.md) (`Annotated` dependencies, lifespan patterns, etc.).
 - **Ruff** config lives in root [`pyproject.toml`](pyproject.toml); run `ruff check backend mcp-lark` and `ruff format backend mcp-lark` before merging.
+- **Mypy** config lives in root [`pyproject.toml`](pyproject.toml) (`[tool.mypy]`, scope: `backend/app`). Install via `requirements-dev.txt`, then run:
+
+  ```bash
+  pip install -r requirements-dev.txt
+  pip install -e mcp-lark   # needed for lark_im imports
+  bash scripts/mypy-backend.sh
+  ```
+
+  Or from repo root: `python3 -m mypy`. The codebase is not yet fully typed; fix reported issues incrementally when touching related modules.
 - Run tests before merging:
 
   ```bash

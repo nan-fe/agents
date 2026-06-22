@@ -1,7 +1,6 @@
 import asyncio
 import re
 
-# from duckduckgo_search import DDGS
 from typing import Any, Dict
 from urllib.parse import parse_qs, urlparse
 

@@ -150,22 +150,17 @@ class CopywriterAgent(BaseAgent):
             文案结果
         """
 
-        # 处理不同类型的输入
+        # 处理不同类型的输入：统一归一为 dict 再取值
         if isinstance(planning_result, dict):
             planning_dict = planning_result
-            target_audience = planning_dict.get("target_audience", [])
-            core_selling_points = planning_dict.get("core_selling_points", [])
-            tone_style = planning_dict.get("tone_style", "亲切自然")
-            topic = planning_dict.get("topic", "默认主题")
-            user_input = planning_dict.get("user_input", "用户输入")
         else:
-            # PlanningResult对象
             planning_dict = planning_result.model_dump()
-            target_audience = planning_result.target_audience
-            core_selling_points = planning_result.core_selling_points
-            tone_style = planning_result.tone_style
-            topic = planning_result.topic
-            user_input = planning_result.user_input
+
+        target_audience = planning_dict.get("target_audience", [])
+        core_selling_points = planning_dict.get("core_selling_points", [])
+        tone_style = planning_dict.get("tone_style", "亲切自然")
+        topic = planning_dict.get("topic", "默认主题")
+        user_input = planning_dict.get("user_input", "用户输入")
 
         # 构建输入数据
         chain_input = {

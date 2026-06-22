@@ -1,0 +1,57 @@
+---
+description: Backend 修改现有代码时保留类型/import，改完后跑测试验证
+globs: backend/**/*.py
+alwaysApply: false
+---
+
+# Backend 修改现有代码
+
+修改 `backend/` 里**已有**代码时，遵守以下约束。
+
+## 保留类型与 import
+
+- **不要随意删除** `typing`、`collections.abc`、`pydantic` 等模块中的类型注解、类型别名、`TypeVar`、`Protocol`，以及文件顶部的 import。
+- 重构时若某 import「看起来未使用」，先确认是否仍被注解、`TYPE_CHECKING` 块、泛型参数或字符串前向引用使用；**不要**为「清理 unused import」而删掉仍参与类型契约的定义。
+- 调整函数签名时，优先**收窄或扩展**类型，而不是移除类型信息；若必须改类型，同步更新所有调用方与相关测试。
+
+```python
+# ❌ BAD — 删掉 Annotated / 返回类型，调用方与 IDE 失去约束
+async def get_user(id: str):
+    ...
+
+# ✅ GOOD — 保留或收紧类型
+async def get_user(id: str) -> User | None:
+    ...
+```
+
+## 改完后必须验证
+
+完成修改后**不要**仅凭静态阅读宣布完成；至少运行与改动相关的检查：
+
+1. **相关测试**（优先）：
+
+   ```bash
+   cd backend
+   pytest tests/test_<相关模块>.py -m "not network" -q
+   ```
+
+   若影响面大或改动编排/路由，跑全量默认套件：
+
+   ```bash
+   cd backend
+   pytest tests/ -m "not network" -q
+   ```
+
+2. **静态检查**（改动涉及 import/格式时）：
+
+   ```bash
+   ruff check backend
+   ```
+
+3. 若改动模块可独立导入，可快速确认无语法/导入错误：
+
+   ```bash
+   cd backend && python -c "from app.<模块> import <符号>"
+   ```
+
+测试失败或 import 报错时，先修复再继续提交或声称完成。
