@@ -57,7 +57,7 @@ Before opening a PR touching this package:
 pnpm lint       # tsc --noEmit
 pnpm test       # Vitest: sse-parser, middleware
 pnpm build
-pnpm test:e2e   # Playwright smoke (requires Postgres + pnpm build)
+pnpm test:e2e   # Playwright smoke (auto: Postgres, migrate, build)
 ```
 
 If backend API changed, also run `pnpm gen:api` and commit `src/api/schema.d.ts`, or locally verify with `bash scripts/check-openapi-contract.sh` from repo root.
@@ -65,4 +65,4 @@ If backend API changed, also run `pnpm gen:api` and commit `src/api/schema.d.ts`
 ## Testing
 
 - **Vitest** (`src/**/*.test.ts`): pure utilities and middleware with mocks — e.g. `src/lib/sse/sse-parser.test.ts`, `src/middleware.test.ts`.
-- **Playwright** (`e2e/`): register/login → `/studio` smoke; needs `DATABASE_URL`, `AUTH_SECRET`, migrations, and a production build (`playwright.config.ts` starts `pnpm start` in CI).
+- **Playwright** (`e2e/`): register/login → `/studio` smoke. `pnpm test:e2e` prefers **Docker Postgres on `:5433`** (`docker-compose.e2e.yml`); if Docker is not running, it falls back to `DATABASE_URL` in `frontend-share/.env` (your local `:5432`). Set `E2E_SKIP_POSTGRES=1` when Postgres is already provided (CI).

@@ -162,17 +162,10 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Prepare database
-        run: pnpm db:migrate:deploy
-
-      - name: Install Playwright browsers
-        run: pnpm exec playwright install chromium --with-deps
-
-      - name: Build app
-        run: pnpm build
-
       - name: Run Playwright smoke tests
         run: pnpm test:e2e
+        env:
+          E2E_SKIP_POSTGRES: "1"
 
   openapi-contract:
     name: OpenAPI contract (gen:api)
