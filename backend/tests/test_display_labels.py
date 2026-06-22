@@ -17,6 +17,8 @@ def test_agent_display_label():
 
 
 def test_format_agent_pipeline():
-    assert format_agent_pipeline(
-        ["CopywriterAgent", "ImageAgent", "ReviewerAgent"]
-    ) == ["文案", "配图", "审核"]
+    assert format_agent_pipeline(["CopywriterAgent", "ImageAgent", "ReviewerAgent"]) == [
+        "文案",
+        "配图",
+        "审核",
+    ]

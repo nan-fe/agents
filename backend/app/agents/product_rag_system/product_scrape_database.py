@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import json
 import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import pandas as pd
@@ -176,16 +176,16 @@ class ProductScrapeDatabase:
             "scrape_sales": self._optional_int(scrape_payload.get("scrape_sales")),
             "scrape_shop": str(scrape_payload.get("scrape_shop", "")).strip(),
             "scrape_price_text": str(scrape_payload.get("scrape_price_text", "")).strip(),
-            "scrape_visible_text": self._truncate_text(scrape_payload.get("scrape_visible_text", "")),
+            "scrape_visible_text": self._truncate_text(
+                scrape_payload.get("scrape_visible_text", "")
+            ),
             "scrape_vision_text": self._truncate_text(scrape_payload.get("scrape_vision_text", "")),
             "scrape_search_text": self._truncate_text(scrape_payload.get("scrape_search_text", "")),
             "scrape_detail_images": str(scrape_payload.get("scrape_detail_images", "")).strip(),
             "scrape_screenshot_url": str(scrape_payload.get("scrape_screenshot_url", "")).strip(),
             "comments_list": self._serialize_comments_list(scrape_payload.get("comments_list")),
-            "scrape_comments_status": str(
-                scrape_payload.get("scrape_comments_status", "")
-            ).strip(),
-            "scraped_at": datetime.now(timezone.utc).isoformat(),
+            "scrape_comments_status": str(scrape_payload.get("scrape_comments_status", "")).strip(),
+            "scraped_at": datetime.now(UTC).isoformat(),
         }
         self.records.append(record)
         self._rewrite_csv()

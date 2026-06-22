@@ -20,9 +20,7 @@ def mock_client() -> MagicMock:
             "default_identity": "bot",
         }
     )
-    client.request = AsyncMock(
-        return_value={"code": 0, "data": {"message_id": "om_test"}}
-    )
+    client.request = AsyncMock(return_value={"code": 0, "data": {"message_id": "om_test"}})
     return client
 
 

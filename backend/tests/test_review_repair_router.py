@@ -11,10 +11,7 @@ def test_content_agents_ran() -> None:
 
 
 def test_derive_failure_category_from_corrections() -> None:
-    assert (
-        derive_failure_category(None, "", {"copywriting": {"content": "改"}})
-        == "copywriting"
-    )
+    assert derive_failure_category(None, "", {"copywriting": {"content": "改"}}) == "copywriting"
     assert derive_failure_category(None, "", {"image": {"prompt": "改"}}) == "image"
     assert (
         derive_failure_category(

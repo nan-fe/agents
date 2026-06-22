@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
-from typing import Optional
 
 from dotenv import load_dotenv
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -24,19 +22,19 @@ class LarkSettings(BaseSettings):
         case_sensitive=True,
     )
 
-    LARK_APP_ID: Optional[str] = None
-    LARK_APP_SECRET: Optional[str] = None
-    LARK_NOTIFY_CHAT_ID: Optional[str] = None
+    LARK_APP_ID: str | None = None
+    LARK_APP_SECRET: str | None = None
+    LARK_NOTIFY_CHAT_ID: str | None = None
     LARK_NOTIFY_ENABLED: bool = False
     LARK_NOTIFY_MODE: str = "auto"
     LARK_DEFAULT_IDENTITY: str = "user"
-    LARK_USER_ACCESS_TOKEN: Optional[str] = None
-    LARK_USE_CLI: Optional[bool] = None
+    LARK_USER_ACCESS_TOKEN: str | None = None
+    LARK_USE_CLI: bool | None = None
     LARK_CLI_PATH: str = "lark-cli"
-    LARK_OAUTH_REDIRECT_URI: Optional[str] = None
+    LARK_OAUTH_REDIRECT_URI: str | None = None
     LARK_OAUTH_SCOPES: str = "offline_access"
-    LARK_OAUTH_STATE_SECRET: Optional[str] = None
-    LARK_OAUTH_STUDIO_REDIRECT_URIS: Optional[str] = None
+    LARK_OAUTH_STATE_SECRET: str | None = None
+    LARK_OAUTH_STUDIO_REDIRECT_URIS: str | None = None
 
 
 lark_settings = LarkSettings()

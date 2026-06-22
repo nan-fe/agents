@@ -61,9 +61,7 @@ async def _collect_sse_events(response) -> list[dict[str, Any]]:
 async def _seed_stream(session_id: str, prompt: str, count: int) -> None:
     stream = await dialog_stream_store.create_stream(session_id, prompt)
     for index in range(1, count + 1):
-        await stream.append_event(
-            {"event": "message", "data": _log_payload(f"log-{index}")}
-        )
+        await stream.append_event({"event": "message", "data": _log_payload(f"log-{index}")})
 
 
 async def _test_resume_replays_only_events_after_last_event_id() -> None:
@@ -72,9 +70,7 @@ async def _test_resume_replays_only_events_after_last_event_id() -> None:
     await _seed_stream(session_id, prompt, 5)
     stream = await dialog_stream_store.get_stream(session_id)
     assert stream is not None
-    await stream.append_event(
-        {"event": "message", "data": _result_payload()}
-    )
+    await stream.append_event({"event": "message", "data": _result_payload()})
     stream.is_complete = True
     await dialog_stream_store.mark_complete(stream)
 
@@ -106,18 +102,10 @@ async def _test_resume_orphan_restarts_full_pipeline_from_id_1(
     assert stream is not None
     stream.task = None
 
-    async def _fake_run_generation(
-        target_stream, user_input, session_id_arg, **kwargs
-    ):
-        await target_stream.append_event(
-            {"event": "message", "data": _log_payload("restart-1")}
-        )
-        await target_stream.append_event(
-            {"event": "message", "data": _log_payload("restart-2")}
-        )
-        await target_stream.append_event(
-            {"event": "message", "data": _result_payload()}
-        )
+    async def _fake_run_generation(target_stream, user_input, session_id_arg, **kwargs):
+        await target_stream.append_event({"event": "message", "data": _log_payload("restart-1")})
+        await target_stream.append_event({"event": "message", "data": _log_payload("restart-2")})
+        await target_stream.append_event({"event": "message", "data": _result_payload()})
 
     monkeypatch.setattr(
         "app.main._run_dialog_generation",
@@ -154,16 +142,10 @@ async def _test_resume_subscribes_running_task_without_duplicating_replay(
 
     gate = asyncio.Event()
 
-    async def _slow_run_generation(
-        target_stream, user_input, session_id_arg, **kwargs
-    ):
+    async def _slow_run_generation(target_stream, user_input, session_id_arg, **kwargs):
         await gate.wait()
-        await target_stream.append_event(
-            {"event": "message", "data": _log_payload("live-6")}
-        )
-        await target_stream.append_event(
-            {"event": "message", "data": _result_payload()}
-        )
+        await target_stream.append_event({"event": "message", "data": _log_payload("live-6")})
+        await target_stream.append_event({"event": "message", "data": _result_payload()})
         target_stream.is_complete = True
 
     monkeypatch.setattr(
@@ -222,6 +204,4 @@ def test_resume_orphan_restarts_full_pipeline_from_id_1(
 def test_resume_subscribes_running_task_without_duplicating_replay(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    asyncio.run(
-        _test_resume_subscribes_running_task_without_duplicating_replay(monkeypatch)
-    )
+    asyncio.run(_test_resume_subscribes_running_task_without_duplicating_replay(monkeypatch))

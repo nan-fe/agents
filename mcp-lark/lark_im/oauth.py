@@ -135,9 +135,7 @@ class LarkOAuthService:
 
         expires_in = int(data.get("expires_in") or data.get("expire") or 7200)
         refresh = data.get("refresh_token")
-        refresh_expires = data.get("refresh_token_expires_in") or data.get(
-            "refresh_expires_in"
-        )
+        refresh_expires = data.get("refresh_token_expires_in") or data.get("refresh_expires_in")
 
         return LarkUserTokenBundle(
             access_token=access,

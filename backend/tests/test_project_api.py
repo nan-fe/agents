@@ -1,5 +1,5 @@
 import asyncio
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -73,7 +73,7 @@ def test_project_create_and_conversation_api() -> None:
 async def _test_list_projects_filters_empty_metadata() -> None:
     await close_db()
     await init_db()
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     empty_id = "proj_empty000001"
     valid_id = "proj_valid000001"
     async with get_session() as session:

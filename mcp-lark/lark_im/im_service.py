@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Any
 
 from lark_im.client import LarkClient, LarkIdentity
 from lark_im.lark_cli_adapter import (
@@ -32,9 +32,7 @@ class LarkImService:
     ) -> None:
         self._client = client or LarkClient()
         self._cli = cli_adapter or LarkCliAdapter()
-        self._use_cli = (
-            use_cli if use_cli is not None else should_use_lark_cli(self._client)
-        )
+        self._use_cli = use_cli if use_cli is not None else should_use_lark_cli(self._client)
 
     async def get_auth_status(self) -> dict[str, Any]:
         if self._use_cli:
@@ -61,9 +59,7 @@ class LarkImService:
             return "bot"
         return preferred
 
-    def _resolve_cli_identity(
-        self, identity: LarkIdentityParam | None
-    ) -> LarkIdentityParam:
+    def _resolve_cli_identity(self, identity: LarkIdentityParam | None) -> LarkIdentityParam:
         resolved = self._resolve_identity(identity)
         return "user" if resolved == "user" else "bot"
 

@@ -1,11 +1,12 @@
 """
 产品数据库模块 - 管理商品数据的加载、清洗和存储
 """
+
 import os
 import re
+from typing import Any, Dict, List
 
 import pandas as pd
-from typing import Any, Dict, List, Optional
 
 from app.utils.token_counter import token_counter
 
@@ -37,18 +38,18 @@ def default_products_csv_path() -> str:
 
 class ProductDatabase:
     """商品数据库类（选品池 / RAG 索引，不含爬虫原始字段）。"""
-    
+
     def __init__(self, data_path: str = None):
         if data_path is None:
             data_path = default_products_csv_path()
-        
+
         self.data_path = data_path
         self.products_data = []
         self.corpus = []
-        
+
         self._ensure_data_file()
         self._load_data()
-    
+
     def _ensure_data_file(self):
         """确保数据文件存在，若不存在则创建示例数据"""
         if not os.path.exists(self.data_path):
@@ -70,7 +71,7 @@ class ProductDatabase:
             print(f"已自动创建示例数据文件: {self.data_path}")
         else:
             print(f"已加载数据文件: {self.data_path}")
-    
+
     def _load_data(self):
         """加载CSV数据并进行清洗"""
         df = pd.read_csv(self.data_path)
@@ -80,7 +81,7 @@ class ProductDatabase:
                 df[column] = ""
 
         df = df[CSV_CORE_COLUMNS]
-        
+
         # 去除 ID 列的空格并转换为整数
         df["id"] = df["id"].astype(str).str.strip().astype(int)
 
@@ -91,32 +92,34 @@ class ProductDatabase:
                 df[col] = df[col].fillna("").astype(str).str.strip()
                 if col == "url":
                     df[col] = df[col].replace("nan", "")
-        
+
         df["search_text"] = df.apply(
-            lambda row: f"{row['name']} {row['category']} {row['description']} {row['shop_name']}".strip(),
+            lambda row: (
+                f"{row['name']} {row['category']} {row['description']} {row['shop_name']}".strip()
+            ),
             axis=1,
         )
-        
+
         self.products_data = df.to_dict(orient="records")
         self.corpus = df["search_text"].tolist()
-        
+
         print(f"成功加载 {len(self.products_data)} 条商品数据")
-    
+
     def get_all_products(self) -> List[Dict]:
         """获取所有商品数据"""
         return self.products_data
-    
-    def get_product_by_id(self, product_id: str) -> Optional[Dict]:
+
+    def get_product_by_id(self, product_id: str) -> Dict | None:
         """根据ID获取单个商品"""
         for product in self.products_data:
             if str(product["id"]) == str(product_id):
                 return product
         return None
-    
+
     def get_corpus(self) -> List[str]:
         """获取所有商品的搜索文本（用于BM25）"""
         return self.corpus
-    
+
     def get_metadata(self) -> List[Dict]:
         """获取元数据列表（用于向量库）"""
         return [
@@ -130,11 +133,11 @@ class ProductDatabase:
             }
             for p in self.products_data
         ]
-    
+
     def get_ids(self) -> List[str]:
         """获取所有商品ID列表"""
         return [str(p["id"]) for p in self.products_data]
-    
+
     def get_documents(self) -> List[str]:
         """获取所有文档文本（用于向量库）"""
         return [p["search_text"] for p in self.products_data]
@@ -213,9 +216,7 @@ class ProductDatabase:
         """从内存与 CSV 删除商品；成功返回 True。"""
         target_id = str(product_id)
         before = len(self.products_data)
-        self.products_data = [
-            p for p in self.products_data if str(p["id"]) != target_id
-        ]
+        self.products_data = [p for p in self.products_data if str(p["id"]) != target_id]
         if len(self.products_data) == before:
             return False
 

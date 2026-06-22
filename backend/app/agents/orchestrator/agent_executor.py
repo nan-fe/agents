@@ -1,6 +1,7 @@
 """Agent 执行器"""
+
 import asyncio
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict
 
 from app.config import settings
 from app.utils.log_callback import emit_log
@@ -31,37 +32,33 @@ class AgentExecutor:
         self,
         agent_name: str,
         agent_input: Any,
-        log_callback: Optional[Callable] = None,
+        log_callback: Callable | None = None,
         history: str = "",
     ) -> Any:
         """执行指定的 Agent
-        
+
         Args:
             agent_name: Agent 名称
             agent_input: Agent 输入
             log_callback: 日志回调
             history: 历史数据
-            
+
         Returns:
             Agent 执行结果
         """
         if agent_name not in self.agent_map:
-            await emit_log(
-                log_callback, agent_name, f"未知 Agent: {agent_name}，跳过"
-            )
+            await emit_log(log_callback, agent_name, f"未知 Agent: {agent_name}，跳过")
             return None
 
         agent = self.agent_map[agent_name]
         timeout = _agent_timeout_seconds(agent_name)
         try:
             result = await asyncio.wait_for(
-                self._call_agent(
-                    agent, agent_name, agent_input, log_callback, history
-                ),
+                self._call_agent(agent, agent_name, agent_input, log_callback, history),
                 timeout=timeout,
             )
             return result
-        except asyncio.TimeoutError:
+        except TimeoutError:
             msg = f"执行超时（>{timeout}s），请稍后重试"
             await emit_log(log_callback, agent_name, msg)
             raise TimeoutError(msg) from None
@@ -74,7 +71,7 @@ class AgentExecutor:
         agent: Any,
         agent_name: str,
         agent_input: Any,
-        log_callback: Optional[Callable],
+        log_callback: Callable | None,
         history: str = "",
     ) -> Any:
         """调用 Agent 的 run 方法"""

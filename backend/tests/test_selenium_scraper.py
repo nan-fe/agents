@@ -13,7 +13,7 @@
 #     print(f"\n测试 URL: {url}")
 #     print("抓取中...")
 #     details = get_product_details_with_selenium(url)
-    
+
 #     if details:
 #         print("\n抓取结果:")
 #         for key, value in details.items():

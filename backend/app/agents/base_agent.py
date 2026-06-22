@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Optional, Any
+from typing import Any
 
 from app.utils.log_callback import emit_log
 
@@ -18,9 +18,7 @@ class BaseAgent(ABC):
         self.role = role
 
     @abstractmethod
-    async def run(
-        self, input_data: Any, log_callback: Optional[callable] = None
-    ) -> Any:
+    async def run(self, input_data: Any, log_callback: callable | None = None) -> Any:
         """运行Agent
 
         Args:
@@ -32,7 +30,7 @@ class BaseAgent(ABC):
         """
         pass
 
-    async def log(self, message: str, log_callback: Optional[callable] = None):
+    async def log(self, message: str, log_callback: callable | None = None):
         """记录日志
 
         Args:

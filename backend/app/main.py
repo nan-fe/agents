@@ -11,7 +11,7 @@ import asyncio
 import logging
 from contextlib import asynccontextmanager
 from datetime import datetime
-from typing import AsyncIterator, Optional
+from typing import AsyncIterator
 
 import httpx
 from fastapi import FastAPI, HTTPException, Request
@@ -23,42 +23,43 @@ from sse_starlette.sse import EventSourceResponse
 from app.agents.orchestrator.agent import DialogOrchestratorAgent
 from app.config import settings
 from app.memory import project_memory
+from app.memory.db import close_db, get_session, init_db
+from app.memory.models import VersionRow
 from app.memory.project_memory import should_persist_project_row
-from app.memory.db import close_db, init_db
 from app.models.schemas import (
-    ProjectConversationResponse,
-    ProjectCreateRequest,
-    ProjectCreateResponse,
-    ProjectListItem,
-    ProjectListResponse,
-    ProjectFinalizeRequest,
-    ProjectFinalizeResponse,
+    LarkOAuthRegisterRequest,
+    LarkOAuthRegisterResponse,
+    LarkPushReviewRequest,
+    LarkStatusResponse,
+    ProductInfoConfirmRequest,
     ProductInfoCreateRequest,
     ProductInfoCreateResponse,
-    ProductInfoConfirmRequest,
     ProductInfoPreviewRequest,
     ProductInfoPreviewResponse,
     ProductItem,
     ProductListResponse,
-    LarkPushReviewRequest,
-    LarkStatusResponse,
-    LarkOAuthRegisterRequest,
-    LarkOAuthRegisterResponse,
+    ProjectConversationResponse,
+    ProjectCreateRequest,
+    ProjectCreateResponse,
+    ProjectFinalizeRequest,
+    ProjectFinalizeResponse,
+    ProjectListItem,
+    ProjectListResponse,
     ShareCreateRequest,
     ShareCreateResponse,
     ShareSnapshot,
-    UserInput,
     SSEMessage,
+    UserInput,
     VersionSnapshot,
 )
-from app.services.product_info_service import ProductInfoService
-from app.services.product_page_scraper import get_product_screenshot_dir
-from app.security.input_guard import check_input_security, safety_rejection_payload
 from app.services.dialog_stream_store import (
     DialogStream,
     StreamSubscriber,
     dialog_stream_store,
 )
+from app.services.lark_oauth_service import lark_oauth_registry
+from app.services.product_info_service import ProductInfoService
+from app.services.product_page_scraper import get_product_screenshot_dir
 from app.services.share_service import share_store
 from app.services.sse_resume import ResumePhase, resolve_resume_phase
 from app.utils.display_labels import (
@@ -67,15 +68,12 @@ from app.utils.display_labels import (
     intent_display_label,
 )
 from app.utils.retry_policy import classify_agent_failure
-from app.services.lark_oauth_service import lark_oauth_registry
 from lark_im import get_lark_im_service
 from lark_im.client import LarkClient
 from lark_im.im_service import LarkImService
 from lark_im.notify import is_lark_notify_configured
 from lark_im.oauth import LarkOAuthError
 from lark_im.settings import lark_settings as lark_im_settings
-from app.memory.db import get_session
-from app.memory.models import VersionRow
 
 logger = logging.getLogger(__name__)
 
@@ -87,6 +85,7 @@ product_info_service = ProductInfoService(orchestrator.rag_agent)
 
 # 限制同时跑 orchestrator 的生成任务数；超额任务在 acquire 处排队等待
 _dialog_generation_sem = asyncio.Semaphore(settings.MAX_ACTIVE_DIALOG_GENERATIONS)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -190,7 +189,7 @@ def _build_log_message(
     agent_key: str,
     message: str,
     *,
-    intent: Optional[str] = None,
+    intent: str | None = None,
 ) -> SSEMessage:
     data = {
         "from": agent_display_label(agent_key),
@@ -256,9 +255,7 @@ async def _schedule_stream_cleanup(session_id: str, stream_token: int) -> None:
 
 async def _append_result_event(stream: DialogStream, data: dict) -> None:
     result_message = SSEMessage(type="result", data=data)
-    await stream.append_event(
-        {"event": "message", "data": result_message.model_dump_json()}
-    )
+    await stream.append_event({"event": "message", "data": result_message.model_dump_json()})
 
 
 def _timeout_error_result() -> dict:
@@ -267,9 +264,7 @@ def _timeout_error_result() -> dict:
         "content": "",
         "hashtags": [],
         "image_url": "",
-        "message": (
-            "生成失败：执行超时（常见于规划、模型调用等环节超过等待上限），请稍后重试。"
-        ),
+        "message": ("生成失败：执行超时（常见于规划、模型调用等环节超过等待上限），请稍后重试。"),
         "error_code": "TIMEOUT",
     }
 
@@ -289,20 +284,19 @@ async def _run_dialog_generation(
     user_input: str,
     session_id: str,
     *,
-    project_id: Optional[str] = None,
-    user_id: Optional[str] = None,
+    project_id: str | None = None,
+    user_id: str | None = None,
 ) -> None:
     dialog_stream_store.mark_generation_started(session_id)
+
     async def log_callback(
         agent_key: str,
         message: str,
         *,
-        intent: Optional[str] = None,
+        intent: str | None = None,
     ) -> None:
         log_message = _build_log_message(agent_key, message, intent=intent)
-        await stream.append_event(
-            {"event": "message", "data": log_message.model_dump_json()}
-        )
+        await stream.append_event({"event": "message", "data": log_message.model_dump_json()})
 
     try:
         async with _dialog_generation_sem:
@@ -327,9 +321,7 @@ async def _run_dialog_generation(
                 final_result = _timeout_error_result()
             except Exception:
                 try:
-                    final_result = await orchestrator.run(
-                        user_input, session_id, log_callback
-                    )
+                    final_result = await orchestrator.run(user_input, session_id, log_callback)
                 except asyncio.CancelledError:
                     raise
                 except TimeoutError:
@@ -356,8 +348,7 @@ async def _stream_subscribed_events(
 
     def _should_stop() -> bool:
         if subscriber.queue.empty() and (
-            stream.is_complete
-            or (stream.task is not None and stream.task.done())
+            stream.is_complete or (stream.task is not None and stream.task.done())
         ):
             return True
         return False
@@ -378,7 +369,7 @@ async def _stream_subscribed_events(
                 subscriber.touch()
                 yield _sanitize_sse_payload(event.sse_payload)
                 subscriber.queue.task_done()
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 if _should_stop():
                     break
                 if await request.is_disconnected():
@@ -394,8 +385,8 @@ async def _start_generation_on_stream(
     user_input: str,
     session_id: str,
     *,
-    project_id: Optional[str] = None,
-    user_id: Optional[str] = None,
+    project_id: str | None = None,
+    user_id: str | None = None,
 ) -> StreamSubscriber:
     stream.is_complete = False
     subscriber = await stream.subscribe()
@@ -415,10 +406,10 @@ async def generate_dialog_event_stream(
     request: Request,
     user_input: str,
     session_id: str,
-    last_event_id: Optional[str] = None,
+    last_event_id: str | None = None,
     *,
-    project_id: Optional[str] = None,
-    user_id: Optional[str] = None,
+    project_id: str | None = None,
+    user_id: str | None = None,
 ):
     is_resume = bool((last_event_id or "").strip())
 
@@ -433,9 +424,7 @@ async def generate_dialog_event_stream(
             return
 
         if user_input != stream.prompt:
-            async for event in _yield_resume_error(
-                "续传失败：请求内容与原始生成任务不一致。"
-            ):
+            async for event in _yield_resume_error("续传失败：请求内容与原始生成任务不一致。"):
                 yield event
             return
 
@@ -446,9 +435,7 @@ async def generate_dialog_event_stream(
                 yield event
             return
 
-        replay_events, subscriber = await stream.snapshot_events_after(
-            last_event_id
-        )
+        replay_events, subscriber = await stream.snapshot_events_after(last_event_id)
         logger.info(
             "SSE 续传 session_id=%s last_event_id=%s replay=%d complete=%s",
             session_id,
@@ -480,9 +467,7 @@ async def generate_dialog_event_stream(
                 project_id=project_id,
                 user_id=user_id,
             )
-            async for event in _stream_subscribed_events(
-                request, stream, subscriber
-            ):
+            async for event in _stream_subscribed_events(request, stream, subscriber):
                 yield event
             return
 
@@ -491,9 +476,7 @@ async def generate_dialog_event_stream(
             session_id,
             last_event_id,
         )
-        async for event in _stream_subscribed_events(
-            request, stream, subscriber
-        ):
+        async for event in _stream_subscribed_events(request, stream, subscriber):
             yield event
         return
 
@@ -527,18 +510,12 @@ async def generate_dialog_event_stream(
 
 
 @app.get("/projects", response_model=ProjectListResponse)
-async def list_projects(user_id: Optional[str] = None):
+async def list_projects(user_id: str | None = None):
     """进入页面时拉取项目列表，按用户最近打开时间降序，默认定位第一个。"""
     rows = await project_memory.list_projects(user_id=user_id)
-    rows = [
-        row
-        for row in rows
-        if should_persist_project_row(row.topic, row.final_version)
-    ]
+    rows = [row for row in rows if should_persist_project_row(row.topic, row.final_version)]
     rows.sort(key=lambda row: (row.last_accessed_at, row.created_at), reverse=True)
-    version_counts = await project_memory.version_counts(
-        [row.project_id for row in rows]
-    )
+    version_counts = await project_memory.version_counts([row.project_id for row in rows])
     items: list[ProjectListItem] = []
     for row in rows:
         count = version_counts.get(row.project_id, 0)
@@ -594,8 +571,7 @@ async def get_project_conversation(project_id: str):
     latest_label = versions[-1].version_label if versions else None
     return ProjectConversationResponse(
         project_id=project_id,
-        topic=(project.topic if project and project.topic else None)
-        or latest_label,
+        topic=(project.topic if project and project.topic else None) or latest_label,
         final_version=(project.final_version if project else None) or latest_label,
         project_summary=project.project_summary if project else None,
         versions=snapshots,
@@ -618,9 +594,7 @@ async def finalize_project(payload: ProjectFinalizeRequest):
             message="无版本记录，跳过汇总",
         )
 
-    row = await project_memory.finalize_project(
-        project_id, user_id=payload.user_id
-    )
+    row = await project_memory.finalize_project(project_id, user_id=payload.user_id)
     return ProjectFinalizeResponse(
         project_id=project_id,
         finalized=row is not None,
@@ -777,7 +751,7 @@ async def lark_oauth_register(payload: LarkOAuthRegisterRequest):
 async def lark_oauth_authorize(
     user_id: str,
     return_url: str,
-    client_id: Optional[str] = None,
+    client_id: str | None = None,
 ):
     """跳转飞书授权页（浏览器 302）。授权完成后回到 return_url。"""
     try:
@@ -793,9 +767,9 @@ async def lark_oauth_authorize(
 
 @app.get("/lark/oauth/callback")
 async def lark_oauth_callback(
-    code: Optional[str] = None,
-    state: Optional[str] = None,
-    error: Optional[str] = None,
+    code: str | None = None,
+    state: str | None = None,
+    error: str | None = None,
 ):
     """飞书 OAuth 回调：用 code 换 user_access_token 并跳回业务页。"""
     if error:
@@ -833,7 +807,7 @@ async def lark_oauth_disconnect(user_id: str):
 
 
 @app.get("/lark/status", response_model=LarkStatusResponse)
-async def lark_status(user_id: Optional[str] = None):
+async def lark_status(user_id: str | None = None):
     """飞书 bot 鉴权状态与通知群是否已配置。"""
     service = get_lark_im_service()
     auth = await service.get_auth_status()

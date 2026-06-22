@@ -1,0 +1,221 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: "3.11"
+  PNPM_VERSION: "10.30.3"
+  NODE_VERSION: "22"
+  AUTH_SECRET: ci-build-secret-minimum-32-characters
+  DATABASE_URL: postgresql://postgres:postgres@localhost:5432/xhs_auth
+
+jobs:
+  backend:
+    name: backend (pytest)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: |
+            backend/requirements.txt
+            mcp-lark/pyproject.toml
+            requirements-dev.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -e ../mcp-lark
+
+      - name: Ruff
+        run: |
+          pip install -r ../requirements-dev.txt
+          ruff check .
+          ruff format --check .
+
+      - name: Run tests
+        run: pytest tests/ -m "not network"
+
+  mcp-lark:
+    name: mcp-lark (pytest)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mcp-lark
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: |
+            mcp-lark/pyproject.toml
+            requirements-dev.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[mcp]" pytest pytest-asyncio
+          pip install -r ../requirements-dev.txt
+
+      - name: Ruff
+        run: ruff check . && ruff format --check .
+
+      - name: Run tests
+        run: pytest tests/
+
+  frontend-share:
+    name: frontend-share (lint + unit + build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend-share
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+          cache-dependency-path: frontend-share/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Unit tests
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build
+        env:
+          AUTH_SECRET: ${{ env.AUTH_SECRET }}
+          DATABASE_URL: ${{ env.DATABASE_URL }}
+
+  frontend-share-e2e:
+    name: frontend-share (Playwright smoke)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend-share
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: xhs_auth
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d xhs_auth"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      AUTH_SECRET: ${{ env.AUTH_SECRET }}
+      DATABASE_URL: ${{ env.DATABASE_URL }}
+      CI: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+          cache-dependency-path: frontend-share/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run Playwright smoke tests
+        run: pnpm test:e2e
+        env:
+          E2E_SKIP_POSTGRES: "1"
+
+  openapi-contract:
+    name: OpenAPI contract (gen:api)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: |
+            backend/requirements.txt
+            mcp-lark/pyproject.toml
+
+      - name: Install backend dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt
+          pip install -e mcp-lark
+
+      - name: Start backend
+        working-directory: backend
+        run: |
+          uvicorn app.main:app --host 127.0.0.1 --port 8000 &
+          echo $! > ../backend.pid
+
+      - name: Wait for backend
+        run: bash scripts/wait-for-http.sh http://127.0.0.1:8000/health
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+          cache-dependency-path: frontend-share/pnpm-lock.yaml
+
+      - name: Verify OpenAPI types via gen:api
+        run: bash scripts/check-openapi-contract.sh
+
+      - name: Stop backend
+        if: always()
+        run: |
+          if [[ -f backend.pid ]]; then
+            kill "$(cat backend.pid)" || true
+          fi

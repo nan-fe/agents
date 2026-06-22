@@ -5,6 +5,7 @@ HTTP / LLM 调用策略化重试：仅对幂等、可恢复错误重试；4xx（
 编排层重试 Agent 前，应先用本模块的 is_transient_exception 做门控，
 避免无意义的全链路重跑与双倍成本。
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -85,7 +86,9 @@ def is_transient_exception(exc: BaseException) -> bool:
             return False
 
     if httpx is not None:
-        if isinstance(root, (httpx.ConnectError, httpx.ReadTimeout, httpx.WriteTimeout, httpx.PoolTimeout)):
+        if isinstance(
+            root, (httpx.ConnectError, httpx.ReadTimeout, httpx.WriteTimeout, httpx.PoolTimeout)
+        ):
             return True
         if isinstance(root, httpx.HTTPStatusError):
             c = root.response.status_code

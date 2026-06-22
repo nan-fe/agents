@@ -1,7 +1,7 @@
 """编排层 LLM：意图识别、动态路由；超时用 wait_for，HTTP 重试交给 llm_factory。"""
 
 import asyncio
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from langchain_core.messages import BaseMessage
 from langchain_core.output_parsers import JsonOutputParser
@@ -25,9 +25,7 @@ class IntentAnalysisTimeoutError(Exception):
 
     def __init__(self, timeout_seconds: float):
         self.timeout_seconds = timeout_seconds
-        super().__init__(
-            f"意图分析超时（>{timeout_seconds}s），请稍后重试或简化输入"
-        )
+        super().__init__(f"意图分析超时（>{timeout_seconds}s），请稍后重试或简化输入")
 
     def to_early_exit(self) -> Dict[str, Any]:
         return {
@@ -154,18 +152,14 @@ class OrchestratorLLMService:
 
         try:
             return await asyncio.wait_for(_call(), timeout=timeout)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             print(f"路由决策超时（>{timeout}s），使用 intent-aware 兜底")
-            return fallback_route(
-                intent, f"路由超时（>{timeout}s）：intent-aware 兜底"
-            )
+            return fallback_route(intent, f"路由超时（>{timeout}s）：intent-aware 兜底")
         except Exception as e:
             print(f"路由决策失败: {e}")
             return fallback_route(intent, "默认路由：intent-aware 兜底")
 
-    async def analyze_intent(
-        self, user_input: str, chat_history: List[BaseMessage]
-    ) -> str:
+    async def analyze_intent(self, user_input: str, chat_history: List[BaseMessage]) -> str:
         """意图识别；超时抛 IntentAnalysisTimeoutError，其它失败 → new_task。"""
         timeout = settings.AGENT_TIMEOUT_INTENT_SECONDS
         history_str = "\n".join(f"{m.type}: {m.content}" for m in chat_history)
@@ -185,7 +179,7 @@ class OrchestratorLLMService:
             intent = await asyncio.wait_for(_call(), timeout=timeout)
             print("完成识别意图")
             return intent
-        except asyncio.TimeoutError as e:
+        except TimeoutError as e:
             raise IntentAnalysisTimeoutError(timeout) from e
         except Exception as e:
             print(f"意图识别失败: {e}")

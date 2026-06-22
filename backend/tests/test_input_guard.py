@@ -14,7 +14,6 @@ from app.security.input_guard import (
     safety_rejection_payload,
 )
 
-
 INPUT_GUARD_CASES = [
     {
         "name": "正常小红书文案需求",

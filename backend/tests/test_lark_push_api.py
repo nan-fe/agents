@@ -28,9 +28,7 @@ async def _run_lark_api_flow() -> None:
     mock_service.get_auth_status = AsyncMock(
         return_value={"bot": {"available": True}, "user": {"available": False}}
     )
-    mock_service.send_review_notification = AsyncMock(
-        return_value={"message_id": "om_test"}
-    )
+    mock_service.send_review_notification = AsyncMock(return_value={"message_id": "om_test"})
 
     transport = ASGITransport(app=app)
     with patch("app.main.get_lark_im_service", return_value=mock_service):

@@ -23,9 +23,10 @@ from app.agents.product_rag_system.product_scrape_database import (
     ProductScrapeDatabase,
 )
 from app.services.product_info_service import (
-    ProductInfoService,
-    PreparedProduct,
     _EXTRACT_PROMPT,
+    PreparedProduct,
+    ProductGatherResult,
+    ProductInfoService,
     _extract_jd_item_id,
     _normalize_optional_url,
     _preview_comments,
@@ -38,7 +39,6 @@ from app.services.product_info_service import (
     product_record_to_item,
     resolve_product_url,
     validate_product_url,
-    ProductGatherResult,
 )
 from app.services.product_page_scraper import (
     ProductPageCapture,
@@ -60,10 +60,7 @@ from app.utils.token_counter import token_counter
 
 load_dotenv()
 
-JD_E2E_URL = (
-    "https://item.jd.com/100045686996.html"
-    "?sourceType=m-activity&bbtf=1&pageId=6265621"
-)
+JD_E2E_URL = "https://item.jd.com/100045686996.html?sourceType=m-activity&bbtf=1&pageId=6265621"
 
 
 def _e2e_data_dir(tmp_path: Path) -> Path:
@@ -161,7 +158,6 @@ def test_normalize_optional_url_handles_nan():
 
 
 def test_product_record_to_item_handles_empty_url():
-    import math
 
     item = product_record_to_item(
         {
@@ -441,8 +437,8 @@ def test_get_product_includes_scrape_cover_and_comments(tmp_path):
         "scrape_title,scrape_platform,scrape_source,scrape_final_url,scrape_price,scrape_sales,"
         "scrape_shop,scrape_price_text,scrape_visible_text,scrape_vision_text,scrape_search_text,"
         "scrape_detail_images,scrape_screenshot_url,comments_list,scrape_comments_status,scraped_at\n"
-        '1,1,https://item.jd.com/1.html,测试商品,数码,99,描述,10,测试店,search,title,jd,playwright,'
-        'https://item.jd.com/1.html,,,,,,,,https://img.example/head.jpg|https://img.example/detail.jpg,'
+        "1,1,https://item.jd.com/1.html,测试商品,数码,99,描述,10,测试店,search,title,jd,playwright,"
+        "https://item.jd.com/1.html,,,,,,,,https://img.example/head.jpg|https://img.example/detail.jpg,"
         '/product-screenshots/jd_1.jpg,"[{""content"": ""很好用"", ""nickname"": ""买家A""}]",ok,2026-01-01T00:00:00+00:00\n',
         encoding="utf-8",
     )
@@ -462,8 +458,7 @@ def test_get_product_includes_scrape_cover_and_comments(tmp_path):
 def test_product_database_add_and_delete(tmp_path):
     csv_path = tmp_path / "products.csv"
     csv_path.write_text(
-        "id,name,category,price,description,sales,shop_name\n"
-        "1,测试商品,数码,99,描述,10,测试店\n",
+        "id,name,category,price,description,sales,shop_name\n1,测试商品,数码,99,描述,10,测试店\n",
         encoding="utf-8",
     )
     db = ProductDatabase(str(csv_path))
@@ -561,7 +556,12 @@ def test_add_product_persists_scrape_columns(tmp_path):
             "scrape_detail_images": "https://img.example/a.jpg|https://img.example/b.jpg",
             "scrape_screenshot_url": "/product-screenshots/jd_100045686996.jpg",
             "comments_list": [
-                {"content": "枕头很软", "nickname": "jd用户", "score": "5", "creation_time": "2026-01-01"},
+                {
+                    "content": "枕头很软",
+                    "nickname": "jd用户",
+                    "score": "5",
+                    "creation_time": "2026-01-01",
+                },
             ],
         },
         search_text="爬虫商品 记忆枕",

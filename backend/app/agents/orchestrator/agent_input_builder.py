@@ -1,6 +1,8 @@
 """Agent 输入构建器"""
+
 import json
 from typing import Any, Dict
+
 from .execution_context import ExecutionContext
 
 
@@ -24,9 +26,7 @@ class AgentInputBuilder:
         if review.feedback:
             parts.append(f"审核反馈：{review.feedback}")
         if review.corrections:
-            parts.append(
-                "修改建议：" + json.dumps(review.corrections, ensure_ascii=False)
-            )
+            parts.append("修改建议：" + json.dumps(review.corrections, ensure_ascii=False))
         return "\n".join(parts)
 
     def build_copywriter_input(self) -> Dict[str, Any]:
@@ -101,9 +101,9 @@ class AgentInputBuilder:
             "RagAgent": self.build_rag_input,
             "ContentStrategistAgent": self.build_content_strategist_input,
         }
-        
+
         builder = builders.get(agent_name)
         if builder is None:
             return {}
-        
+
         return builder()

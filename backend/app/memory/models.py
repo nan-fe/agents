@@ -1,5 +1,6 @@
 """Project Memory ORM 模型。"""
-from datetime import datetime, timezone
+
+from datetime import UTC, datetime
 
 from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -11,7 +12,7 @@ class Base(DeclarativeBase):
 
 
 def _utcnow() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 class UTCDateTime(TypeDecorator):
@@ -24,17 +25,17 @@ class UTCDateTime(TypeDecorator):
         if value is None:
             return None
         if value.tzinfo is None:
-            value = value.replace(tzinfo=timezone.utc)
+            value = value.replace(tzinfo=UTC)
         else:
-            value = value.astimezone(timezone.utc)
+            value = value.astimezone(UTC)
         return value.replace(tzinfo=None)
 
     def process_result_value(self, value: datetime | None, dialect) -> datetime | None:
         if value is None:
             return None
         if value.tzinfo is None:
-            return value.replace(tzinfo=timezone.utc)
-        return value.astimezone(timezone.utc)
+            return value.replace(tzinfo=UTC)
+        return value.astimezone(UTC)
 
 
 _utc_datetime = UTCDateTime()
@@ -48,13 +49,9 @@ class ProjectRow(Base):
     topic: Mapped[str] = mapped_column(Text, nullable=False, default="")
     final_version: Mapped[str | None] = mapped_column(String(16), nullable=True)
     project_summary: Mapped[str] = mapped_column(Text, nullable=False, default="")
-    created_at: Mapped[datetime] = mapped_column(
-        _utc_datetime, nullable=False, default=_utcnow
-    )
+    created_at: Mapped[datetime] = mapped_column(_utc_datetime, nullable=False, default=_utcnow)
     # 内容变更时由业务代码显式写入（append_version / finalize 等），不用 onupdate。
-    updated_at: Mapped[datetime] = mapped_column(
-        _utc_datetime, nullable=False, default=_utcnow
-    )
+    updated_at: Mapped[datetime] = mapped_column(_utc_datetime, nullable=False, default=_utcnow)
     # 用户最后一次打开该项目（GET /projects/{id}）；历史列表按此降序。
     last_accessed_at: Mapped[datetime] = mapped_column(
         _utc_datetime, nullable=False, default=_utcnow
@@ -80,9 +77,7 @@ class VersionRow(Base):
     planning: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     intent: Mapped[str | None] = mapped_column(String(64), nullable=True)
     user_input: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(
-        _utc_datetime, nullable=False, default=_utcnow
-    )
+    created_at: Mapped[datetime] = mapped_column(_utc_datetime, nullable=False, default=_utcnow)
 
 
 class LarkOAuthClientRow(Base):
@@ -95,9 +90,7 @@ class LarkOAuthClientRow(Base):
     client_name: Mapped[str] = mapped_column(String(128), nullable=False, default="")
     redirect_uris: Mapped[list[str]] = mapped_column(JSON, nullable=False)
     scopes: Mapped[str] = mapped_column(String(512), nullable=False, default="")
-    created_at: Mapped[datetime] = mapped_column(
-        _utc_datetime, nullable=False, default=_utcnow
-    )
+    created_at: Mapped[datetime] = mapped_column(_utc_datetime, nullable=False, default=_utcnow)
 
 
 class LarkUserTokenRow(Base):
@@ -109,10 +102,6 @@ class LarkUserTokenRow(Base):
     access_token: Mapped[str] = mapped_column(Text, nullable=False)
     refresh_token: Mapped[str | None] = mapped_column(Text, nullable=True)
     expires_at: Mapped[datetime] = mapped_column(_utc_datetime, nullable=False)
-    refresh_expires_at: Mapped[datetime | None] = mapped_column(
-        _utc_datetime, nullable=True
-    )
+    refresh_expires_at: Mapped[datetime | None] = mapped_column(_utc_datetime, nullable=True)
     scope: Mapped[str | None] = mapped_column(String(512), nullable=True)
-    updated_at: Mapped[datetime] = mapped_column(
-        _utc_datetime, nullable=False, default=_utcnow
-    )
+    updated_at: Mapped[datetime] = mapped_column(_utc_datetime, nullable=False, default=_utcnow)

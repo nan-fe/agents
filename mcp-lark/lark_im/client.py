@@ -11,9 +11,7 @@ from lark_im.settings import lark_settings
 
 LarkIdentity = Literal["bot", "user"]
 
-_TENANT_TOKEN_URL = (
-    "https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal"
-)
+_TENANT_TOKEN_URL = "https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal"
 _API_BASE = "https://open.feishu.cn/open-apis"
 
 
@@ -78,10 +76,7 @@ class LarkClient:
         }
 
     async def _get_tenant_access_token(self) -> str:
-        if (
-            self._tenant_token
-            and time.monotonic() < self._tenant_token_expires_at
-        ):
+        if self._tenant_token and time.monotonic() < self._tenant_token_expires_at:
             return self._tenant_token
 
         if not self._can_bot_auth():

@@ -17,9 +17,7 @@ from lark_im.settings import lark_settings
         ("invalid", "auto"),
     ],
 )
-def test_build_lark_notification_meta_mode(
-    monkeypatch, mode: str, expected_mode: str
-) -> None:
+def test_build_lark_notification_meta_mode(monkeypatch, mode: str, expected_mode: str) -> None:
     monkeypatch.setattr(lark_settings, "LARK_NOTIFY_MODE", mode)
     monkeypatch.setattr(lark_settings, "LARK_APP_ID", "cli_x")
     monkeypatch.setattr(lark_settings, "LARK_APP_SECRET", "sec")

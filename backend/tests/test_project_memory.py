@@ -1,7 +1,5 @@
 import asyncio
 
-import pytest
-
 from app.config import settings
 from app.memory.db import close_db, init_db
 from app.memory.project_memory import ProjectMemoryService, new_project_id
@@ -85,9 +83,7 @@ async def _test_list_projects_sorted_by_last_accessed_at() -> None:
         planning=None,
     )
     await service.finalize_project(older)
-    await service.ensure_project_stub(
-        newer, topic="新项目", final_version="v0"
-    )
+    await service.ensure_project_stub(newer, topic="新项目", final_version="v0")
     await service.touch_project(older)
 
     rows = await service.list_projects()
@@ -202,9 +198,7 @@ async def _test_touch_project_materializes_version_only_project() -> None:
     stale = new_project_id()
     active = new_project_id()
 
-    await service.ensure_project_stub(
-        stale, topic="较早打开", final_version="v0"
-    )
+    await service.ensure_project_stub(stale, topic="较早打开", final_version="v0")
     await service.append_version(
         project_id=active,
         parent_version_id=None,
@@ -261,4 +255,3 @@ async def _test_finalize_existing_row_does_not_bump_last_accessed_at() -> None:
 
 def test_finalize_existing_row_does_not_bump_last_accessed_at() -> None:
     asyncio.run(_test_finalize_existing_row_does_not_bump_last_accessed_at())
-

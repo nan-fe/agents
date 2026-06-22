@@ -9,7 +9,7 @@ import re
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 from urllib.parse import parse_qs, urlparse
 
 import httpx
@@ -179,9 +179,7 @@ def is_jd_blocked_page(url: str, *, title: str = "") -> bool:
     if any(marker in lowered_url for marker in _JD_BLOCKED_URL_MARKERS):
         return True
     normalized_title = (title or "").strip()
-    if normalized_title and any(
-        marker in normalized_title for marker in _JD_BLOCKED_TITLE_MARKERS
-    ):
+    if normalized_title and any(marker in normalized_title for marker in _JD_BLOCKED_TITLE_MARKERS):
         return True
     return False
 
@@ -224,6 +222,7 @@ async def _ensure_jd_product_page(
 def is_playwright_available() -> bool:
     try:
         import playwright  # noqa: F401
+
         return True
     except ImportError:
         return False
@@ -313,9 +312,7 @@ def _parse_numeric_price(raw: str) -> float | None:
 
 def _is_jd_mgets_price_url(url: str) -> bool:
     lowered = (url or "").lower()
-    return "prices/mgets" in lowered or (
-        "p.3.cn" in lowered and "skuids" in lowered
-    )
+    return "prices/mgets" in lowered or ("p.3.cn" in lowered and "skuids" in lowered)
 
 
 def _is_jd_ware_business_url(url: str) -> bool:
@@ -459,24 +456,16 @@ def _attach_jd_network_listeners(page, capture: _JdNetworkCapture) -> None:
                 network_price = _parse_jd_mgets_payload(await response.json())
                 if network_price is not None:
                     capture.price = network_price
-                    print(
-                        f"[ProductPageScraper] 京东价格接口(网络监听) price={network_price}"
-                    )
+                    print(f"[ProductPageScraper] 京东价格接口(网络监听) price={network_price}")
                 return
             if _is_jd_ware_business_url(url):
-                ware_price, ware_sales = _parse_jd_ware_business_payload(
-                    await response.json()
-                )
+                ware_price, ware_sales = _parse_jd_ware_business_payload(await response.json())
                 if ware_price is not None:
                     capture.price = ware_price
-                    print(
-                        f"[ProductPageScraper] 京东 wareBusiness 价格 price={ware_price}"
-                    )
+                    print(f"[ProductPageScraper] 京东 wareBusiness 价格 price={ware_price}")
                 if ware_sales is not None:
                     capture.sales = ware_sales
-                    print(
-                        f"[ProductPageScraper] 京东 wareBusiness 销量 sales={ware_sales}"
-                    )
+                    print(f"[ProductPageScraper] 京东 wareBusiness 销量 sales={ware_sales}")
         except Exception:
             return
 
@@ -553,17 +542,14 @@ async def _fetch_jd_price_via_page_xhr(page, item_id: str) -> float | None:
         if price is not None:
             print(f"[ProductPageScraper] 京东价格接口(页面XHR) sku={item_id} price={price}")
         return price
-    except asyncio.TimeoutError:
+    except TimeoutError:
         print(
             f"[ProductPageScraper] 京东价格 XHR 超时 sku={item_id} "
             f"timeout_sec={_JD_PAGE_EVAL_TIMEOUT_SEC}"
         )
         return None
     except Exception as exc:
-        print(
-            f"[ProductPageScraper] 京东价格 XHR 失败 sku={item_id} "
-            f"{type(exc).__name__}: {exc!r}"
-        )
+        print(f"[ProductPageScraper] 京东价格 XHR 失败 sku={item_id} {type(exc).__name__}: {exc!r}")
         return None
 
 
@@ -606,14 +592,10 @@ async def _fetch_jd_mobile_price_sales(context, item_id: str) -> tuple[float | N
         if price is None and _is_valid_jd_price_text(str(dom_price or "")):
             price = _parse_numeric_price(str(dom_price))
         if price is not None or sales is not None:
-            print(
-                f"[ProductPageScraper] 京东移动端回退 sku={item_id} "
-                f"price={price} sales={sales}"
-            )
+            print(f"[ProductPageScraper] 京东移动端回退 sku={item_id} price={price} sales={sales}")
     except Exception as exc:
         print(
-            f"[ProductPageScraper] 京东移动端回退失败 sku={item_id} "
-            f"{type(exc).__name__}: {exc!r}"
+            f"[ProductPageScraper] 京东移动端回退失败 sku={item_id} {type(exc).__name__}: {exc!r}"
         )
     finally:
         await mobile_page.close()
@@ -708,7 +690,9 @@ def _decode_jd_api_body(raw: bytes) -> str:
     return raw.decode("utf-8", errors="replace")
 
 
-def _normalize_jd_comment_items(raw_comments: Any, limit: int = _JD_COMMENTS_LIMIT) -> list[dict[str, str]]:
+def _normalize_jd_comment_items(
+    raw_comments: Any, limit: int = _JD_COMMENTS_LIMIT
+) -> list[dict[str, str]]:
     """将京东评论接口返回标准化为 comments_list。"""
     if not isinstance(raw_comments, list):
         return []
@@ -758,7 +742,9 @@ def _parse_jd_comments_response(
     return [], "no_comments"
 
 
-async def _scrape_jd_comments_from_dom(page, limit: int = _JD_COMMENTS_LIMIT) -> list[dict[str, str]]:
+async def _scrape_jd_comments_from_dom(
+    page, limit: int = _JD_COMMENTS_LIMIT
+) -> list[dict[str, str]]:
     """从已渲染的评价区 DOM 提取评论（接口不可用时的回退）。"""
     try:
         await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
@@ -937,9 +923,7 @@ async def _fetch_jd_comments_via_page(
             elif last_status.startswith("http_"):
                 break
 
-        comments_list, status = await _fetch_jd_comments_via_browser_fetch(
-            page, item_id, limit
-        )
+        comments_list, status = await _fetch_jd_comments_via_browser_fetch(page, item_id, limit)
         if status == "ok" and comments_list:
             print(
                 f"[ProductPageScraper] 京东评论浏览器 fetch 成功 count={len(comments_list)} "
@@ -948,8 +932,7 @@ async def _fetch_jd_comments_via_page(
             return comments_list, "browser_fetch"
 
         print(
-            f"[ProductPageScraper] 京东评论接口被限流(系统繁忙) sku={item_id}，"
-            " 尝试从页面 DOM 回退"
+            f"[ProductPageScraper] 京东评论接口被限流(系统繁忙) sku={item_id}， 尝试从页面 DOM 回退"
         )
         dom_comments = await _scrape_jd_comments_from_dom(page, limit=limit)
         if dom_comments:
@@ -959,16 +942,10 @@ async def _fetch_jd_comments_via_page(
             )
             return dom_comments, "dom_fallback"
 
-        print(
-            f"[ProductPageScraper] 京东评论抓取 count=0 "
-            f"sku={item_id} status={last_status}"
-        )
+        print(f"[ProductPageScraper] 京东评论抓取 count=0 sku={item_id} status={last_status}")
         return [], "api_blocked" if last_status == "api_blocked" else last_status
     except Exception as exc:
-        print(
-            f"[ProductPageScraper] 京东评论抓取失败 sku={item_id} "
-            f"{type(exc).__name__}: {exc!r}"
-        )
+        print(f"[ProductPageScraper] 京东评论抓取失败 sku={item_id} {type(exc).__name__}: {exc!r}")
         return [], "error"
 
 
@@ -1075,9 +1052,7 @@ async def _fetch_jd_price_sales(item_id: str) -> tuple[float | None, int | None]
                 payload = price_resp.json()
                 price = _parse_jd_mgets_payload(payload)
                 if price is not None:
-                    print(
-                        f"[ProductPageScraper] 京东价格接口(httpx) sku={item_id} price={price}"
-                    )
+                    print(f"[ProductPageScraper] 京东价格接口(httpx) sku={item_id} price={price}")
 
             comment_resp = await client.get(
                 "https://club.jd.com/comment/productCommentSummaries.action",
@@ -1156,9 +1131,7 @@ async def _enrich_capture_price_sales(
     capture.price = price
     capture.sales = sales
     if price is not None or sales is not None:
-        print(
-            f"[ProductPageScraper] 结构化价格销量 price={price} sales={sales}"
-        )
+        print(f"[ProductPageScraper] 结构化价格销量 price={price} sales={sales}")
     elif platform == "jd":
         print(
             f"[ProductPageScraper] 未能获取京东价格/销量 sku="
@@ -1508,7 +1481,7 @@ async def _collect_detail_image_urls(page) -> list[str]:
         return []
 
 
-async def capture_product_page(url: str) -> Optional[ProductPageCapture]:
+async def capture_product_page(url: str) -> ProductPageCapture | None:
     """用 Playwright 打开商品详情页，等待渲染后抓取文本与图片。"""
     if not settings.PRODUCT_SCRAPER_USE_PLAYWRIGHT:
         print("[ProductPageScraper] Playwright 已关闭（PRODUCT_SCRAPER_USE_PLAYWRIGHT=false）")
@@ -1547,9 +1520,7 @@ async def capture_product_page(url: str) -> Optional[ProductPageCapture]:
                 jd_cookies = _jd_playwright_cookies()
                 if jd_cookies:
                     await context.add_cookies(jd_cookies)
-                    print(
-                        f"[ProductPageScraper] 已注入京东 Cookie count={len(jd_cookies)}"
-                    )
+                    print(f"[ProductPageScraper] 已注入京东 Cookie count={len(jd_cookies)}")
                 page = await context.new_page()
 
                 jd_item_id = _extract_jd_item_id(url) if platform == "jd" else None
@@ -1567,14 +1538,10 @@ async def capture_product_page(url: str) -> Optional[ProductPageCapture]:
                             lambda r: _is_jd_mgets_price_url(r.url) and r.ok,
                             timeout=min(timeout_ms, 15000),
                         ) as price_resp_info:
-                            await page.goto(
-                                url, wait_until="domcontentloaded", timeout=timeout_ms
-                            )
+                            await page.goto(url, wait_until="domcontentloaded", timeout=timeout_ms)
                         try:
                             price_resp = await price_resp_info.value
-                            jd_network_price = _parse_jd_mgets_payload(
-                                await price_resp.json()
-                            )
+                            jd_network_price = _parse_jd_mgets_payload(await price_resp.json())
                             if jd_network_price is not None:
                                 print(
                                     f"[ProductPageScraper] 京东价格接口(页面XHR) "
@@ -1587,9 +1554,7 @@ async def capture_product_page(url: str) -> Optional[ProductPageCapture]:
                                 f"sku={jd_item_id}（将回退 API/DOM）"
                             )
                     except Exception:
-                        await page.goto(
-                            url, wait_until="domcontentloaded", timeout=timeout_ms
-                        )
+                        await page.goto(url, wait_until="domcontentloaded", timeout=timeout_ms)
                 else:
                     await page.goto(url, wait_until="domcontentloaded", timeout=timeout_ms)
                 print(
@@ -1621,9 +1586,7 @@ async def capture_product_page(url: str) -> Optional[ProductPageCapture]:
                 idle_started = time.perf_counter()
                 try:
                     await page.wait_for_load_state("networkidle", timeout=8000)
-                    print(
-                        f"[ProductPageScraper] networkidle 完成 +{_elapsed_ms(idle_started)}ms"
-                    )
+                    print(f"[ProductPageScraper] networkidle 完成 +{_elapsed_ms(idle_started)}ms")
                 except Exception:
                     print(
                         f"[ProductPageScraper] networkidle 超时（继续抓取） "
@@ -1695,8 +1658,7 @@ async def capture_product_page(url: str) -> Optional[ProductPageCapture]:
                     await page.evaluate("window.scrollTo(0, document.body.scrollHeight / 2)")
                     await page.wait_for_timeout(800)
                 print(
-                    f"[ProductPageScraper] 懒加载滚动完成 rounds=3 "
-                    f"+{_elapsed_ms(scroll_started)}ms"
+                    f"[ProductPageScraper] 懒加载滚动完成 rounds=3 +{_elapsed_ms(scroll_started)}ms"
                 )
 
                 if jd_item_id and not await _ensure_jd_product_page(
@@ -1812,10 +1774,7 @@ async def capture_product_page(url: str) -> Optional[ProductPageCapture]:
     except Exception as exc:
         message = str(exc)
         if "Executable doesn't exist" in message:
-            print(
-                "[ProductPageScraper] Chromium 浏览器未安装。"
-                f" 请执行: {playwright_setup_hint()}"
-            )
+            print(f"[ProductPageScraper] Chromium 浏览器未安装。 请执行: {playwright_setup_hint()}")
         else:
             print(f"[ProductPageScraper] Playwright 抓取失败: {exc}")
         return None

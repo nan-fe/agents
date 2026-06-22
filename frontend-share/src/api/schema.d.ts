@@ -4,6 +4,66 @@
  */
 
 export interface paths {
+    "/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Root
+         * @description 根路径
+         */
+        get: operations["root__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/display-labels": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Display Labels
+         * @description 意图与 Agent 展示名映射，供前端静态拉取或调试。
+         */
+        get: operations["get_display_labels_api_display_labels_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/dialog/generate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Generatedialog
+         * @description 对话式生成小红书内容
+         */
+        post: operations["generateDialog_dialog_generate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -44,7 +104,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/display-labels": {
+    "/lark/oauth/authorize": {
         parameters: {
             query?: never;
             header?: never;
@@ -52,10 +112,10 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Get Display Labels
-         * @description 意图与 Agent 展示名映射，供前端静态拉取或调试。
+         * Lark Oauth Authorize
+         * @description 跳转飞书授权页（浏览器 302）。授权完成后回到 return_url。
          */
-        get: operations["get_display_labels_api_display_labels_get"];
+        get: operations["lark_oauth_authorize_lark_oauth_authorize_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -64,7 +124,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/projects": {
+    "/lark/oauth/callback": {
         parameters: {
             query?: never;
             header?: never;
@@ -72,34 +132,10 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * List Projects
-         * @description 进入页面时拉取项目列表，按用户最近打开时间降序，默认定位第一个。
+         * Lark Oauth Callback
+         * @description 飞书 OAuth 回调：用 code 换 user_access_token 并跳回业务页。
          */
-        get: operations["list_projects_projects_get"];
-        put?: never;
-        /**
-         * Create Project
-         * @description 新建对话时分配 project_id；无 topic/final_version 时不写入 projects 表。
-         */
-        post: operations["create_project_projects_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/projects/{project_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Project Conversation
-         * @description 加载指定 project 的对话（从 versions 重建）。
-         */
-        get: operations["get_project_conversation_projects__project_id__get"];
+        get: operations["lark_oauth_callback_lark_oauth_callback_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -108,7 +144,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/projects/finalize": {
+    "/lark/oauth/register": {
         parameters: {
             query?: never;
             header?: never;
@@ -118,37 +154,17 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Finalize Project
-         * @description 页面关闭或新建话题时，将 versions 汇总写入 projects 表。
+         * Lark Oauth Register
+         * @description 动态客户端注册（DCR）：登记 redirect_uri 后用于 OAuth 授权回流。
          */
-        post: operations["finalize_project_projects_finalize_post"];
+        post: operations["lark_oauth_register_lark_oauth_register_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/dialog/generate": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Generatedialog
-         * @description 对话式生成小红书内容
-         */
-        post: operations["generateDialog_dialog_generate_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/product_info/list": {
+    "/lark/oauth/user": {
         parameters: {
             query?: never;
             header?: never;
@@ -156,19 +172,23 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * List Product Info
-         * @description 获取选品池商品列表。
+         * Lark Oauth User Status
+         * @description 查询用户是否已完成飞书 OAuth 授权。
          */
-        get: operations["list_product_info_product_info_list_get"];
+        get: operations["lark_oauth_user_status_lark_oauth_user_get"];
         put?: never;
         post?: never;
-        delete?: never;
+        /**
+         * Lark Oauth Disconnect
+         * @description 解除用户飞书 OAuth 绑定。
+         */
+        delete: operations["lark_oauth_disconnect_lark_oauth_user_delete"];
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/product_info/preview": {
+    "/lark/push-review": {
         parameters: {
             query?: never;
             header?: never;
@@ -178,10 +198,30 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Preview Product Info
-         * @description 识别商品链接信息，返回预览供用户确认（不入库）。
+         * Lark Push Review
+         * @description 将审核通过内容推送到飞书通知群（须服务端已配置 LARK_*）。
          */
-        post: operations["preview_product_info_product_info_preview_post"];
+        post: operations["lark_push_review_lark_push_review_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/lark/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Lark Status
+         * @description 飞书 bot 鉴权状态与通知群是否已配置。
+         */
+        get: operations["lark_status_lark_status_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -228,6 +268,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/product_info/list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Product Info
+         * @description 获取选品池商品列表。
+         */
+        get: operations["list_product_info_product_info_list_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/product_info/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview Product Info
+         * @description 识别商品链接信息，返回预览供用户确认（不入库）。
+         */
+        post: operations["preview_product_info_product_info_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/product_info/{product_id}": {
         parameters: {
             query?: never;
@@ -247,6 +327,70 @@ export interface paths {
          * @description 从选品池删除商品。
          */
         delete: operations["delete_product_info_product_info__product_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/projects": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Projects
+         * @description 进入页面时拉取项目列表，按用户最近打开时间降序，默认定位第一个。
+         */
+        get: operations["list_projects_projects_get"];
+        put?: never;
+        /**
+         * Create Project
+         * @description 新建对话时分配 project_id；无 topic/final_version 时不写入 projects 表。
+         */
+        post: operations["create_project_projects_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/projects/finalize": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Finalize Project
+         * @description 页面关闭或新建话题时，将 versions 汇总写入 projects 表。
+         */
+        post: operations["finalize_project_projects_finalize_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/projects/{project_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Project Conversation
+         * @description 加载指定 project 的对话（从 versions 重建）。
+         */
+        get: operations["get_project_conversation_projects__project_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -292,26 +436,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Root
-         * @description 根路径
-         */
-        get: operations["root__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -322,12 +446,110 @@ export interface components {
             detail?: components["schemas"]["ValidationError"][];
         };
         /**
+         * LarkOAuthRegisterRequest
+         * @description 动态客户端注册（DCR）。
+         */
+        LarkOAuthRegisterRequest: {
+            /** Client Name */
+            client_name: string;
+            /** Redirect Uris */
+            redirect_uris: string[];
+            /** Scope */
+            scope?: string | null;
+        };
+        /** LarkOAuthRegisterResponse */
+        LarkOAuthRegisterResponse: {
+            /** Client Id */
+            client_id: string;
+            /** Client Id Issued At */
+            client_id_issued_at: number;
+            /** Client Secret */
+            client_secret: string;
+            /**
+             * Client Secret Expires At
+             * @default 0
+             */
+            client_secret_expires_at: number;
+            /**
+             * Grant Types
+             * @default [
+             *       "authorization_code"
+             *     ]
+             */
+            grant_types: string[];
+            /** Redirect Uris */
+            redirect_uris: string[];
+            /**
+             * Response Types
+             * @default [
+             *       "code"
+             *     ]
+             */
+            response_types: string[];
+            /** Scope */
+            scope: string;
+            /**
+             * Token Endpoint Auth Method
+             * @default none
+             */
+            token_endpoint_auth_method: string;
+        };
+        /**
+         * LarkPushReviewRequest
+         * @description 显式推送审核通过通知到飞书。
+         */
+        LarkPushReviewRequest: {
+            /** Content */
+            content?: string | null;
+            /** Hashtags */
+            hashtags?: string[] | null;
+            /** Image Url */
+            image_url?: string | null;
+            /** Project Id */
+            project_id?: string | null;
+            /** Review Feedback */
+            review_feedback?: string | null;
+            /** Title */
+            title?: string | null;
+            /** User Id */
+            user_id?: string | null;
+            /** Version */
+            version?: string | null;
+            /** Version Id */
+            version_id?: string | null;
+        };
+        /**
+         * LarkStatusResponse
+         * @description 飞书鉴权与通知配置状态。
+         */
+        LarkStatusResponse: {
+            /** Auth */
+            auth: {
+                [key: string]: unknown;
+            };
+            /** Notify Chat Configured */
+            notify_chat_configured: boolean;
+            /** Notify Enabled */
+            notify_enabled: boolean;
+            /** Notify Mode */
+            notify_mode: string;
+            /** User Oauth */
+            user_oauth?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /**
          * ProductComment
          * @description 商品评论摘要（预览展示用）
          */
         ProductComment: {
             /** Content */
             content: string;
+            /**
+             * Creation Time
+             * @default
+             */
+            creation_time: string;
             /**
              * Nickname
              * @default
@@ -338,11 +560,6 @@ export interface components {
              * @default
              */
             score: string;
-            /**
-             * Creation Time
-             * @default
-             */
-            creation_time: string;
         };
         /**
          * ProductInfoConfirmRequest
@@ -371,12 +588,12 @@ export interface components {
          * @description 创建商品后的响应
          */
         ProductInfoCreateResponse: {
-            product: components["schemas"]["ProductItem"];
             /**
              * Message
              * @default 商品已加入选品池并同步至检索索引
              */
             message: string;
+            product: components["schemas"]["ProductItem"];
         };
         /**
          * ProductInfoPreviewRequest
@@ -394,40 +611,40 @@ export interface components {
          * @description 商品链接识别预览（待用户确认）
          */
         ProductInfoPreviewResponse: {
-            /** Preview Token */
-            preview_token: string;
-            product: components["schemas"]["ProductItem"];
             /**
              * Message
              * @default 商品信息识别完成，请确认是否加入选品池
              */
             message: string;
+            /** Preview Token */
+            preview_token: string;
+            product: components["schemas"]["ProductItem"];
         };
         /**
          * ProductItem
          * @description 选品池商品条目
          */
         ProductItem: {
+            /** Category */
+            category: string;
+            /** Comments */
+            comments?: components["schemas"]["ProductComment"][];
+            /** Cover Image */
+            cover_image?: string | null;
+            /** Description */
+            description: string;
             /** Id */
             id: string;
             /** Name */
             name: string;
-            /** Category */
-            category: string;
             /** Price */
             price: number;
-            /** Description */
-            description: string;
             /** Sales */
             sales: number;
             /** Shop Name */
             shop_name: string;
             /** Url */
             url?: string | null;
-            /** Cover Image */
-            cover_image?: string | null;
-            /** Comments */
-            comments?: components["schemas"]["ProductComment"][];
         };
         /**
          * ProductListResponse
@@ -441,14 +658,14 @@ export interface components {
         };
         /** ProjectConversationResponse */
         ProjectConversationResponse: {
-            /** Project Id */
-            project_id: string;
-            /** Topic */
-            topic?: string | null;
             /** Final Version */
             final_version?: string | null;
+            /** Project Id */
+            project_id: string;
             /** Project Summary */
             project_summary?: string | null;
+            /** Topic */
+            topic?: string | null;
             /** Versions */
             versions?: components["schemas"]["VersionSnapshot"][];
         };
@@ -476,56 +693,56 @@ export interface components {
         };
         /** ProjectFinalizeResponse */
         ProjectFinalizeResponse: {
-            /** Project Id */
-            project_id: string;
-            /** Finalized */
-            finalized: boolean;
             /** Final Version */
             final_version?: string | null;
+            /** Finalized */
+            finalized: boolean;
+            /** Message */
+            message?: string | null;
+            /** Project Id */
+            project_id: string;
             /**
              * Version Count
              * @default 0
              */
             version_count: number;
-            /** Message */
-            message?: string | null;
         };
         /** ProjectListItem */
         ProjectListItem: {
-            /** Project Id */
-            project_id: string;
-            /**
-             * Topic
-             * @default
-             */
-            topic: string;
             /** Final Version */
             final_version?: string | null;
+            /**
+             * Finalized
+             * @default false
+             */
+            finalized: boolean;
+            /**
+             * Last Accessed At
+             * Format: date-time
+             */
+            last_accessed_at: string;
+            /** Project Id */
+            project_id: string;
             /**
              * Project Summary
              * @default
              */
             project_summary: string;
             /**
-             * Version Count
-             * @default 0
+             * Topic
+             * @default
              */
-            version_count: number;
+            topic: string;
             /**
              * Updated At
              * Format: date-time
              */
             updated_at: string;
             /**
-             * Last Accessed At
-             * Format: date-time
+             * Version Count
+             * @default 0
              */
-            last_accessed_at: string;
-            /**
-             * Finalized
-             * @default false
-             */
-            finalized: boolean;
+            version_count: number;
         };
         /** ProjectListResponse */
         ProjectListResponse: {
@@ -538,11 +755,6 @@ export interface components {
          */
         ShareCreateRequest: {
             /**
-             * Title
-             * @default
-             */
-            title: string;
-            /**
              * Content
              * @default
              */
@@ -553,15 +765,20 @@ export interface components {
             image_url?: string | null;
             /** Message */
             message?: string | null;
+            /**
+             * Title
+             * @default
+             */
+            title: string;
         };
         /**
          * ShareCreateResponse
          * @description 创建分享后的响应
          */
         ShareCreateResponse: {
+            share: components["schemas"]["ShareSnapshot"];
             /** Share Id */
             share_id: string;
-            share: components["schemas"]["ShareSnapshot"];
         };
         /**
          * ShareSnapshot
@@ -569,23 +786,10 @@ export interface components {
          */
         ShareSnapshot: {
             /**
-             * Title
-             * @default
-             */
-            title: string;
-            /**
              * Content
              * @default
              */
             content: string;
-            /** Hashtags */
-            hashtags?: string[];
-            /** Image Url */
-            image_url?: string | null;
-            /** Message */
-            message?: string | null;
-            /** Id */
-            id: string;
             /**
              * Created At
              * Format: date-time
@@ -593,46 +797,64 @@ export interface components {
             created_at: string;
             /** Expires At */
             expires_at?: string | null;
+            /** Hashtags */
+            hashtags?: string[];
+            /** Id */
+            id: string;
+            /** Image Url */
+            image_url?: string | null;
+            /** Message */
+            message?: string | null;
+            /**
+             * Title
+             * @default
+             */
+            title: string;
         };
         /**
          * UserInput
          * @description 用户输入模型
          */
         UserInput: {
-            /** Prompt */
-            prompt: string;
-            /** Session Id */
-            session_id: string;
             /** Last Event Id */
             last_event_id?: string | null;
             /** Project Id */
             project_id?: string | null;
+            /** Prompt */
+            prompt: string;
+            /** Session Id */
+            session_id: string;
             /** User Id */
             user_id?: string | null;
         };
         /** ValidationError */
         ValidationError: {
+            /** Context */
+            ctx?: Record<string, never>;
+            /** Input */
+            input?: unknown;
             /** Location */
             loc: (string | number)[];
             /** Message */
             msg: string;
             /** Error Type */
             type: string;
-            /** Input */
-            input?: unknown;
-            /** Context */
-            ctx?: Record<string, never>;
         };
         /** VersionSnapshot */
         VersionSnapshot: {
-            /** Version Id */
-            version_id: string;
-            /** Version Label */
-            version_label: string;
-            /** Version Number */
-            version_number: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Intent */
+            intent?: string | null;
             /** Parent Version Id */
             parent_version_id?: string | null;
+            /** Result */
+            result: {
+                [key: string]: unknown;
+            };
             /**
              * Summary
              * @default
@@ -640,17 +862,12 @@ export interface components {
             summary: string;
             /** User Input */
             user_input?: string | null;
-            /** Result */
-            result: {
-                [key: string]: unknown;
-            };
-            /** Intent */
-            intent?: string | null;
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
+            /** Version Id */
+            version_id: string;
+            /** Version Label */
+            version_label: string;
+            /** Version Number */
+            version_number: number;
         };
     };
     responses: never;
@@ -661,6 +878,79 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    root__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    get_display_labels_api_display_labels_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    generateDialog_dialog_generate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UserInput"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     health_health_get: {
         parameters: {
             query?: never;
@@ -701,9 +991,13 @@ export interface operations {
             };
         };
     };
-    get_display_labels_api_display_labels_get: {
+    lark_oauth_authorize_lark_oauth_authorize_get: {
         parameters: {
-            query?: never;
+            query: {
+                user_id: string;
+                return_url: string;
+                client_id?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -719,9 +1013,179 @@ export interface operations {
                     "application/json": unknown;
                 };
             };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
     };
-    list_projects_projects_get: {
+    lark_oauth_callback_lark_oauth_callback_get: {
+        parameters: {
+            query?: {
+                code?: string | null;
+                state?: string | null;
+                error?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    lark_oauth_register_lark_oauth_register_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LarkOAuthRegisterRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LarkOAuthRegisterResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    lark_oauth_user_status_lark_oauth_user_get: {
+        parameters: {
+            query: {
+                user_id: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    lark_oauth_disconnect_lark_oauth_user_delete: {
+        parameters: {
+            query: {
+                user_id: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    lark_push_review_lark_push_review_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LarkPushReviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    lark_status_lark_status_get: {
         parameters: {
             query?: {
                 user_id?: string | null;
@@ -738,190 +1202,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ProjectListResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    create_project_projects_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: {
-            content: {
-                "application/json": components["schemas"]["ProjectCreateRequest"] | null;
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProjectCreateResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_project_conversation_projects__project_id__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                project_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProjectConversationResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    finalize_project_projects_finalize_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ProjectFinalizeRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProjectFinalizeResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    generateDialog_dialog_generate_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["UserInput"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_product_info_product_info_list_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProductListResponse"];
-                };
-            };
-        };
-    };
-    preview_product_info_product_info_preview_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ProductInfoPreviewRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProductInfoPreviewResponse"];
+                    "application/json": components["schemas"]["LarkStatusResponse"];
                 };
             };
             /** @description Validation Error */
@@ -1001,6 +1282,59 @@ export interface operations {
             };
         };
     };
+    list_product_info_product_info_list_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProductListResponse"];
+                };
+            };
+        };
+    };
+    preview_product_info_product_info_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProductInfoPreviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProductInfoPreviewResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_product_info_product_info__product_id__get: {
         parameters: {
             query?: never;
@@ -1050,6 +1384,134 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_projects_projects_get: {
+        parameters: {
+            query?: {
+                user_id?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_project_projects_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["ProjectCreateRequest"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectCreateResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    finalize_project_projects_finalize_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProjectFinalizeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectFinalizeResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_project_conversation_projects__project_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectConversationResponse"];
                 };
             };
             /** @description Validation Error */
@@ -1123,26 +1585,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    root__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
                 };
             };
         };

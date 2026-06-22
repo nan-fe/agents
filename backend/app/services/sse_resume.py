@@ -26,6 +26,7 @@ def is_orphaned_stream(stream: DialogStream) -> bool:
         return False
     return not stream.has_result_event()
 
+
 def resolve_resume_phase(stream: DialogStream) -> ResumePhase:
     """回放 last_event_id 之后，决定后续动作。"""
     if stream.is_complete or stream.has_result_event():

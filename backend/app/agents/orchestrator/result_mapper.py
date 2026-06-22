@@ -1,5 +1,7 @@
 """结果映射器 - 将 Agent 执行结果映射到执行上下文"""
-from typing import Any, Optional
+
+from typing import Any
+
 from .execution_context import ExecutionContext
 
 

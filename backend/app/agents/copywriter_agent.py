@@ -1,11 +1,13 @@
-from app.agents.base_agent import BaseAgent
-from app.models.schemas import CopywritingResult, PlanningResult
-from langchain_core.prompts import PromptTemplate
-from langchain_core.output_parsers import JsonOutputParser
-from app.config import settings
-from app.security.prompt_rules import COMMON_SECURITY_PROMPT
-from typing import Optional, Union, Dict, Any, List
 import re
+from typing import Any, Dict, List
+
+from langchain_core.output_parsers import JsonOutputParser
+from langchain_core.prompts import PromptTemplate
+
+from app.agents.base_agent import BaseAgent
+from app.config import settings
+from app.models.schemas import CopywritingResult, PlanningResult
+from app.security.prompt_rules import COMMON_SECURITY_PROMPT
 from app.utils.llm_factory import llm_factory
 
 
@@ -72,9 +74,7 @@ class CopywriterAgent(BaseAgent):
                 "history",
                 "user_input",
             ],
-            partial_variables={
-                "format_instructions": self.parser.get_format_instructions()
-            },
+            partial_variables={"format_instructions": self.parser.get_format_instructions()},
         )
 
     def _normalize_hashtags(
@@ -88,9 +88,7 @@ class CopywriterAgent(BaseAgent):
         elif isinstance(hashtags_value, str):
             # 兼容模型把 hashtags 当成字符串返回的情况
             normalized = [
-                item.strip()
-                for item in re.split(r"[,，\s]+", hashtags_value)
-                if item.strip()
+                item.strip() for item in re.split(r"[,，\s]+", hashtags_value) if item.strip()
             ]
 
         if not normalized and content:
@@ -120,7 +118,7 @@ class CopywriterAgent(BaseAgent):
         return deduplicated[:5]
 
     def _normalize_copywriting_result(
-        self, raw_result: Union[CopywritingResult, Dict[str, Any]], topic: str
+        self, raw_result: CopywritingResult | Dict[str, Any], topic: str
     ) -> CopywritingResult:
         """将模型返回规整为稳定的 CopywritingResult。"""
         if isinstance(raw_result, CopywritingResult):
@@ -136,8 +134,8 @@ class CopywriterAgent(BaseAgent):
 
     async def run(
         self,
-        planning_result: Union[PlanningResult, Dict],
-        log_callback: Optional[callable] = None,
+        planning_result: PlanningResult | Dict,
+        log_callback: callable | None = None,
         history: str = "",
     ) -> CopywritingResult:
         """运行文案Agent
@@ -171,9 +169,7 @@ class CopywriterAgent(BaseAgent):
         # 构建输入数据
         chain_input = {
             "target_audience": (
-                ", ".join(target_audience)
-                if isinstance(target_audience, list)
-                else target_audience
+                ", ".join(target_audience) if isinstance(target_audience, list) else target_audience
             ),
             "core_selling_points": (
                 ", ".join(core_selling_points)
