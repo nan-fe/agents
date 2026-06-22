@@ -1,4 +1,5 @@
 import re
+from collections.abc import Callable
 from typing import Any, Dict, List
 
 from langchain_core.output_parsers import JsonOutputParser
@@ -135,7 +136,7 @@ class CopywriterAgent(BaseAgent):
     async def run(
         self,
         planning_result: PlanningResult | Dict,
-        log_callback: callable | None = None,
+        log_callback: Callable | None = None,
         history: str = "",
     ) -> CopywritingResult:
         """运行文案Agent
