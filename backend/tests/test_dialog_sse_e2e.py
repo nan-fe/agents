@@ -1,7 +1,6 @@
 import asyncio
 import json
 from typing import Any
-from unittest.mock import AsyncMock
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -151,10 +150,6 @@ async def _test_resume_subscribes_running_task_without_duplicating_replay(
     monkeypatch.setattr(
         "app.main._run_dialog_generation",
         _slow_run_generation,
-    )
-    monkeypatch.setattr(
-        "app.main.check_input_security",
-        AsyncMock(return_value=type("R", (), {"allowed": True})()),
     )
 
     stream.task = asyncio.create_task(

@@ -1,9 +1,12 @@
 import asyncio
 
+import pytest
+
 from app.agents.image_agent import ImageAgent
 from app.models.schemas import ImageAgentInput
 
 
+@pytest.mark.network
 async def test_image_agent():
     print("开始测试图片Agent...")
     agent = ImageAgent()

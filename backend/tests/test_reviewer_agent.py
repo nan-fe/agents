@@ -1,8 +1,11 @@
 import asyncio
 
+import pytest
+
 from app.agents.reviewer_agent import ReviewerAgent
 
 
+@pytest.mark.network
 async def testReviewerAgent():
     reviewer_agent = ReviewerAgent()
     print("创建 ReviewerAgent 成功")
