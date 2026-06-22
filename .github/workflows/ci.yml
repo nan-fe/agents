@@ -14,6 +14,21 @@ env:
   NODE_VERSION: "22"
   AUTH_SECRET: ci-build-secret-minimum-32-characters
   DATABASE_URL: postgresql://postgres:postgres@localhost:5432/xhs_auth
+  # backend Settings (no .env in CI)
+  API_KEY: test-api-key
+  BASE_MODEL: deepseek-v4-flash
+  MODEL_BASE_URL: https://example.com/v1
+  COPYWRITE_MODEL: test-copywrite-model
+  EMBEDING_MODEL: BAAI/bge-large-zh-v1.5
+  GENARATION_MODEL: test-generation-model
+  PLAN_MODEL: test-plan-model
+  INTENT_MODEL: test-intent-model
+  SILICONFLOW_API_KEY: test-siliconflow-key
+  SILICONFLOW_BASE_URL: https://api.siliconflow.cn/v1
+  IMAGE_MODEL: Kwai-Kolors/Kolors
+  LANGCHAIN_API_KEY: test-langsmith-key
+  LANGCHAIN_PROJECT: xhs-ci
+  LANGCHAIN_TRACING_V2: "false"
 
 jobs:
   backend:

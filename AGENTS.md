@@ -54,6 +54,8 @@ The production frontend lives in `frontend-share/` (Next.js App Router). Follow 
   ```
 
 - Default pytest config excludes `@pytest.mark.network` tests (external DuckDuckGo). Do not remove that marker without good reason.
+- CI has no `backend/.env`; required Settings fields are injected via GitHub Actions `env` and `backend/tests/conftest.py` (dummy SiliconFlow/BASE_MODEL placeholders).
+- Local dev: copy `backend/.env.example` → `backend/.env` with real keys.
 - `@pytest.mark.integration` tests may require Playwright/Chromium and real URLs; keep them marked and excluded from default CI when they also need network.
 - `mcp-lark` is installed editable (`pip install -e ../mcp-lark`) for Lark integration in backend tests and runtime.
 

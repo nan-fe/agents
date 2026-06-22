@@ -17,7 +17,6 @@ describe('middleware auth routing', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     process.env.AUTH_SECRET = 'test-auth-secret-minimum-32-characters';
-    process.env.NODE_ENV = 'test';
   });
 
   it('redirects unauthenticated users away from /studio', async () => {
