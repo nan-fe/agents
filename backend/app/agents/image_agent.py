@@ -1,4 +1,5 @@
 import time
+from collections.abc import Callable
 from typing import Tuple
 
 import replicate
@@ -89,7 +90,7 @@ class ImageAgent(BaseAgent):
     async def run(
         self,
         input_data: ImageAgentInput,
-        log_callback: callable | None = None,
+        log_callback: Callable | None = None,
         history: str = "",
     ) -> ImageResult:
         """运行图片Agent"""
