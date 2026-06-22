@@ -115,9 +115,6 @@ jobs:
 
       - name: Build
         run: pnpm build
-        env:
-          AUTH_SECRET: ${{ env.AUTH_SECRET }}
-          DATABASE_URL: ${{ env.DATABASE_URL }}
 
   frontend-share-e2e:
     name: frontend-share (Playwright smoke)
@@ -140,8 +137,6 @@ jobs:
           --health-timeout 5s
           --health-retries 5
     env:
-      AUTH_SECRET: ${{ env.AUTH_SECRET }}
-      DATABASE_URL: ${{ env.DATABASE_URL }}
       CI: true
     steps:
       - name: Checkout
