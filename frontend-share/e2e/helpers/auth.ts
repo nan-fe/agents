@@ -27,3 +27,9 @@ export const registerAndEnterStudio = async (
 export const resetMockApi = async (page: Page) => {
   await page.request.get('http://127.0.0.1:8000/e2e/reset');
 };
+
+/** Client logout page calls signOut then redirects to `/`. Wait before visiting /login. */
+export const logoutToHome = async (page: Page) => {
+  await page.goto('/logout');
+  await expect(page).toHaveURL('/', { timeout: 15_000 });
+};
