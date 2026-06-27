@@ -70,9 +70,7 @@ class ProjectMemoryService:
 
         async with get_session() as session:
             result = await session.execute(
-                select(VersionRow.user_id)
-                .where(VersionRow.project_id == project_id)
-                .distinct()
+                select(VersionRow.user_id).where(VersionRow.project_id == project_id).distinct()
             )
             user_ids = [row[0] for row in result.all()]
 
