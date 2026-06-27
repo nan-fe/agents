@@ -56,6 +56,7 @@ from app.services.dialog_stream_store import (
     DialogStream,
     StreamSubscriber,
     dialog_stream_store,
+    stream_matches_request,
 )
 from app.services.lark_oauth_service import lark_oauth_registry
 from app.services.product_info_service import ProductInfoService
@@ -67,7 +68,7 @@ from app.utils.display_labels import (
     display_label_maps,
     intent_display_label,
 )
-from app.utils.retry_policy import classify_agent_failure
+from app.utils.retry_policy import format_agent_failure_message
 from lark_im import get_lark_im_service
 from lark_im.client import LarkClient
 from lark_im.im_service import LarkImService
@@ -319,15 +320,31 @@ async def _run_dialog_generation(
                 raise
             except TimeoutError:
                 final_result = _timeout_error_result()
-            except Exception:
+            except Exception as first_error:
+                logger.exception(
+                    "dialog generation failed session_id=%s project_id=%s user_id=%s",
+                    session_id,
+                    project_id,
+                    user_id,
+                )
                 try:
-                    final_result = await orchestrator.run(user_input, session_id, log_callback)
+                    final_result = await orchestrator.run(
+                        user_input,
+                        session_id,
+                        log_callback,
+                        project_id=project_id,
+                        user_id=user_id,
+                    )
                 except asyncio.CancelledError:
                     raise
                 except TimeoutError:
                     final_result = _timeout_error_result()
                 except Exception as e:
-                    error_text = f"生成失败: {classify_agent_failure(e)}"
+                    logger.exception(
+                        "dialog generation retry failed session_id=%s",
+                        session_id,
+                    )
+                    error_text = format_agent_failure_message(e or first_error)
                     await log_callback("Orchestrator", error_text)
                     final_result = _error_result(error_text)
 
@@ -423,8 +440,13 @@ async def generate_dialog_event_stream(
                 yield event
             return
 
-        if user_input != stream.prompt:
-            async for event in _yield_resume_error("续传失败：请求内容与原始生成任务不一致。"):
+        if not stream_matches_request(
+            stream,
+            user_input=user_input,
+            user_id=user_id,
+            project_id=project_id,
+        ):
+            async for event in _yield_resume_error("续传失败：请求与原始生成任务不一致。"):
                 yield event
             return
 
@@ -459,7 +481,12 @@ async def generate_dialog_event_stream(
                 last_event_id,
                 len(replay_events),
             )
-            stream = await dialog_stream_store.create_stream(session_id, user_input)
+            stream = await dialog_stream_store.create_stream(
+                session_id,
+                user_input,
+                user_id=user_id,
+                project_id=project_id,
+            )
             subscriber = await _start_generation_on_stream(
                 stream,
                 user_input,
@@ -483,9 +510,36 @@ async def generate_dialog_event_stream(
     existing = await dialog_stream_store.get_stream(session_id)
     if (
         existing
+        and not existing.is_complete
+        and (existing.task is None or not existing.task.done())
+        and stream_matches_request(
+            existing,
+            user_input=user_input,
+            user_id=user_id,
+            project_id=project_id,
+        )
+    ):
+        logger.info(
+            "SSE 订阅进行中的 stream session_id=%s events=%d",
+            session_id,
+            len(existing.events),
+        )
+        subscriber = await existing.subscribe()
+        async for event in _stream_subscribed_events(request, existing, subscriber):
+            yield event
+        return
+
+    existing = await dialog_stream_store.get_stream(session_id)
+    if (
+        existing
         and existing.is_complete
-        and existing.prompt == user_input
         and existing.has_result_event()
+        and stream_matches_request(
+            existing,
+            user_input=user_input,
+            user_id=user_id,
+            project_id=project_id,
+        )
     ):
         logger.info(
             "SSE 复用已完成 stream session_id=%s events=%d",
@@ -496,7 +550,12 @@ async def generate_dialog_event_stream(
             yield payload
         return
 
-    stream = await dialog_stream_store.create_stream(session_id, user_input)
+    stream = await dialog_stream_store.create_stream(
+        session_id,
+        user_input,
+        user_id=user_id,
+        project_id=project_id,
+    )
     subscriber = await _start_generation_on_stream(
         stream,
         user_input,
@@ -512,10 +571,16 @@ async def generate_dialog_event_stream(
 @app.get("/projects", response_model=ProjectListResponse)
 async def list_projects(user_id: str | None = None):
     """进入页面时拉取项目列表，按用户最近打开时间降序，默认定位第一个。"""
-    rows = await project_memory.list_projects(user_id=user_id)
+    uid = (user_id or "").strip()
+    if not uid:
+        raise HTTPException(status_code=400, detail="user_id 不能为空")
+    rows = await project_memory.list_projects(user_id=uid)
     rows = [row for row in rows if should_persist_project_row(row.topic, row.final_version)]
     rows.sort(key=lambda row: (row.last_accessed_at, row.created_at), reverse=True)
-    version_counts = await project_memory.version_counts([row.project_id for row in rows])
+    version_counts = await project_memory.version_counts(
+        [row.project_id for row in rows],
+        user_id=uid,
+    )
     items: list[ProjectListItem] = []
     for row in rows:
         count = version_counts.get(row.project_id, 0)
@@ -543,14 +608,19 @@ async def create_project(payload: ProjectCreateRequest | None = None):
 
 
 @app.get("/projects/{project_id}", response_model=ProjectConversationResponse)
-async def get_project_conversation(project_id: str):
+async def get_project_conversation(project_id: str, user_id: str | None = None):
     """加载指定 project 的对话（从 versions 重建）。"""
     project_id = (project_id or "").strip()
+    uid = (user_id or "").strip()
     if not project_id:
         raise HTTPException(status_code=400, detail="project_id 不能为空")
+    if not uid:
+        raise HTTPException(status_code=400, detail="user_id 不能为空")
+    if not await project_memory.project_accessible(project_id, uid):
+        raise HTTPException(status_code=404, detail="项目不存在")
 
-    await project_memory.touch_project(project_id)
-    versions = await project_memory.list_versions(project_id)
+    await project_memory.touch_project(project_id, user_id=uid)
+    versions = await project_memory.list_versions(project_id, user_id=uid)
     project = await project_memory.get_project(project_id)
 
     snapshots = [
@@ -578,14 +648,40 @@ async def get_project_conversation(project_id: str):
     )
 
 
+@app.delete("/projects/{project_id}")
+async def delete_project(project_id: str, user_id: str | None = None):
+    """删除历史对话（project 行及全部 versions）。"""
+    project_id = (project_id or "").strip()
+    uid = (user_id or "").strip()
+    if not project_id:
+        raise HTTPException(status_code=400, detail="project_id 不能为空")
+    if not uid:
+        raise HTTPException(status_code=400, detail="user_id 不能为空")
+    if not await project_memory.delete_project(project_id, user_id=uid):
+        raise HTTPException(status_code=404, detail="项目不存在")
+    return {"ok": True}
+
+
 @app.post("/projects/finalize", response_model=ProjectFinalizeResponse)
 async def finalize_project(payload: ProjectFinalizeRequest):
     """页面关闭或新建话题时，将 versions 汇总写入 projects 表。"""
     project_id = (payload.project_id or "").strip()
+    uid = (payload.user_id or "").strip()
     if not project_id:
         raise HTTPException(status_code=400, detail="project_id 不能为空")
+    if not uid:
+        raise HTTPException(status_code=400, detail="user_id 不能为空")
+    if not await project_memory.project_accessible(project_id, uid):
+        if await project_memory.project_has_versions(project_id):
+            raise HTTPException(status_code=404, detail="项目不存在")
+        return ProjectFinalizeResponse(
+            project_id=project_id,
+            finalized=False,
+            version_count=0,
+            message="无版本记录，跳过汇总",
+        )
 
-    versions = await project_memory.list_versions(project_id)
+    versions = await project_memory.list_versions(project_id, user_id=uid)
     if not versions:
         return ProjectFinalizeResponse(
             project_id=project_id,
@@ -594,7 +690,7 @@ async def finalize_project(payload: ProjectFinalizeRequest):
             message="无版本记录，跳过汇总",
         )
 
-    row = await project_memory.finalize_project(project_id, user_id=payload.user_id)
+    row = await project_memory.finalize_project(project_id, user_id=uid)
     return ProjectFinalizeResponse(
         project_id=project_id,
         finalized=row is not None,

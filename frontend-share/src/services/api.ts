@@ -24,8 +24,13 @@ export const reportError = async (
 };
 
 
+/** Browser: same-origin (Next rewrites / route handlers). SSR/server: upstream. */
 export const API_BASE_URL =
-  (process.env.NODE_ENV === 'development' ? "http://localhost:8000" : "");
+  typeof window !== "undefined"
+    ? ""
+    : (process.env.API_BASE_URL ??
+      process.env.API_UPSTREAM_URL ??
+      "http://localhost:8000");
 
 const getShareBaseUrl = () => {
 
@@ -187,6 +192,21 @@ export const deleteProduct = async (productId: string): Promise<void> => {
   }
 };
 
+export const deleteProject = async (
+  projectId: string,
+  userId: string,
+): Promise<void> => {
+  const query = `?user_id=${encodeURIComponent(userId)}`;
+  const response = await fetch(
+    `${API_BASE_URL}/projects/${encodeURIComponent(projectId)}${query}`,
+    { method: "DELETE" },
+  );
+
+  if (!response.ok) {
+    await parseApiError(response);
+  }
+};
+
 export type DialogSSEType = {
   request: UserInput;
   log_callback: (from: string, message: string) => void;
@@ -194,14 +214,14 @@ export type DialogSSEType = {
 };
 
 export const createProject = async (
-  userId?: string,
+  userId: string,
 ): Promise<ProjectCreateResponse> => {
   const response = await fetch(`${API_BASE_URL}/projects`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify(userId ? { user_id: userId } : {}),
+    body: JSON.stringify({ user_id: userId }),
   });
 
   if (!response.ok) {
@@ -212,9 +232,9 @@ export const createProject = async (
 };
 
 export const getProjects = async (
-  userId?: string,
+  userId: string,
 ): Promise<ProjectListResponse> => {
-  const query = userId ? `?user_id=${encodeURIComponent(userId)}` : "";
+  const query = `?user_id=${encodeURIComponent(userId)}`;
   const response = await fetch(`${API_BASE_URL}/projects${query}`);
 
   if (!response.ok) {
@@ -226,9 +246,11 @@ export const getProjects = async (
 
 export const getProjectConversation = async (
   projectId: string,
+  userId: string,
 ): Promise<ProjectConversationResponse> => {
+  const query = `?user_id=${encodeURIComponent(userId)}`;
   const response = await fetch(
-    `${API_BASE_URL}/projects/${encodeURIComponent(projectId)}`,
+    `${API_BASE_URL}/projects/${encodeURIComponent(projectId)}${query}`,
   );
 
   if (!response.ok) {

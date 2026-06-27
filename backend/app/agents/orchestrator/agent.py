@@ -122,7 +122,7 @@ class DialogOrchestratorAgent:
         session_history.bind_project(resolved_project_id)
         await project_memory.ensure_project_stub(resolved_project_id, user_id=user_id)
         await self._hydrate_session_from_project_memory(
-            session_history, resolved_project_id, log_callback
+            session_history, resolved_project_id, log_callback, user_id=user_id
         )
 
         await emit_log(log_callback, "Orchestrator", "开始智能任务编排...")
@@ -150,7 +150,10 @@ class DialogOrchestratorAgent:
 
             parent_version_id = session_history.current_version_id
             if parent_version_id is None:
-                latest = await project_memory.get_latest_version(resolved_project_id)
+                latest = await project_memory.get_latest_version(
+                    resolved_project_id,
+                    user_id=user_id,
+                )
                 if latest is not None:
                     parent_version_id = latest.version_id
                     session_history.bind_version(latest.version_id, latest.version_label)
@@ -162,6 +165,7 @@ class DialogOrchestratorAgent:
                 user_input=user_input,
                 result=final_result,
                 planning=context.get_planning(),
+                user_id=user_id,
             )
             session_history.bind_version(version_row.version_id, version_row.version_label)
             final_result["project_id"] = resolved_project_id
@@ -214,12 +218,14 @@ class DialogOrchestratorAgent:
         session_history: WritingSessionHistory,
         project_id: str,
         log_callback: Callable | None = None,
+        *,
+        user_id: str | None = None,
     ) -> None:
         """页面重进后 Working Memory 为空时，从 versions 恢复上轮结果。"""
         if session_history.get_last_result():
             return
 
-        latest = await project_memory.get_latest_version(project_id)
+        latest = await project_memory.get_latest_version(project_id, user_id=user_id)
         if latest is None:
             return
 

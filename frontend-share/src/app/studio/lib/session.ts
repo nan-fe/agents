@@ -58,6 +58,16 @@ export const clearProjectId = (): void => {
   localStorage.removeItem(PROJECT_STORAGE_KEY);
 };
 
+/** 退出登录时清除创作 session，避免换账号复用同一 session_id。 */
+export const clearStudioSession = (): void => {
+  if(typeof window === 'undefined') {
+    return;
+  }
+  sessionStorage.removeItem(SESSION_STORAGE_KEY);
+  localStorage.removeItem(SESSION_STORAGE_KEY);
+  clearProjectId();
+};
+
 /** 新建会话：换 session_id，清本地 project_id（随后由 createProject 写入新的）。 */
 export const resetProjectAndSession = (): { sessionId: string } => {
   clearProjectId();

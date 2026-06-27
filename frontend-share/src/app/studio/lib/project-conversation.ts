@@ -71,8 +71,9 @@ export type LoadedProjectState = {
 
 export const loadProjectConversationState = async (
   projectId: string,
+  userId: string,
 ): Promise<LoadedProjectState> => {
-  const conversation = await getProjectConversation(projectId);
+  const conversation = await getProjectConversation(projectId, userId);
 
   if (conversation?.versions?.length === 0) {
     return { thread: createInitialThread(), latestVersionIndex: -1 };
