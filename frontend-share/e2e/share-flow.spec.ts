@@ -1,5 +1,10 @@
 import { expect, test } from '@playwright/test';
 import { registerAndEnterStudio, resetMockApi } from './helpers/auth';
+import {
+  E2E_RESULT_CONTENT,
+  E2E_RESULT_TITLE,
+  sendStudioPromptAndWaitForGeneration,
+} from './helpers/dialog';
 
 test.beforeEach(async ({ page }) => {
   await resetMockApi(page);
@@ -8,12 +13,7 @@ test.beforeEach(async ({ page }) => {
 test('creates share link and opens share page without errors', async ({ page }) => {
   await registerAndEnterStudio(page);
 
-  await page.getByLabel('描述你想创作的小红书内容').fill('写一篇平价好物分享');
-  await page.getByRole('button', { name: '发送' }).click();
-
-  await expect(page.getByRole('heading', { name: 'E2E 测试种草标题' })).toBeVisible({
-    timeout: 30_000,
-  });
+  await sendStudioPromptAndWaitForGeneration(page, '写一篇平价好物分享');
 
   const createShareRequestPromise = page.waitForRequest(
     (request) => request.method() === 'POST' && request.url().includes('/shares'),
@@ -23,7 +23,7 @@ test('creates share link and opens share page without errors', async ({ page }) 
 
   const createShareRequest = await createShareRequestPromise;
   expect(createShareRequest.postDataJSON()).toMatchObject({
-    title: 'E2E 测试种草标题',
+    title: E2E_RESULT_TITLE,
   });
 
   const createShareResponse = await page.waitForResponse(
@@ -53,12 +53,10 @@ test('creates share link and opens share page without errors', async ({ page }) 
   });
 
   await sharePage.goto(shareUrl ?? `/share/${shareId}`);
-  await expect(sharePage.getByRole('heading', { name: 'E2E 测试种草标题' })).toBeVisible({
+  await expect(sharePage.getByRole('heading', { name: E2E_RESULT_TITLE })).toBeVisible({
     timeout: 15_000,
   });
-  await expect(
-    sharePage.getByText('这是一段 E2E 模拟生成的正文，用于验证流式对话与分享链路。'),
-  ).toBeVisible();
+  await expect(sharePage.getByText(E2E_RESULT_CONTENT)).toBeVisible();
   await expect(sharePage.getByText('E2E测试')).toBeVisible();
   expect(pageErrors).toEqual([]);
 

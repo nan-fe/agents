@@ -6,15 +6,18 @@ const databaseUrl =
   'postgresql://postgres:postgres@127.0.0.1:5432/xhs_auth';
 
 const mockApiUrl = process.env.API_UPSTREAM_URL ?? 'http://127.0.0.1:8000';
+const appOrigin = process.env.PLAYWRIGHT_BASE_URL ?? 'http://localhost:3000';
 
 const nextServerEnv = {
   ...process.env,
   AUTH_SECRET: authSecret,
+  AUTH_URL: process.env.AUTH_URL ?? appOrigin,
   DATABASE_URL: databaseUrl,
   NODE_ENV: 'production',
   API_UPSTREAM_URL: mockApiUrl,
   API_BASE_URL: mockApiUrl,
   NEXT_PUBLIC_API_BASE_URL: mockApiUrl,
+  NEXT_PUBLIC_SITE_URL: process.env.NEXT_PUBLIC_SITE_URL ?? appOrigin,
 };
 
 export default defineConfig({
@@ -25,7 +28,7 @@ export default defineConfig({
   workers: 1,
   reporter: process.env.CI ? 'github' : 'list',
   use: {
-    baseURL: process.env.PLAYWRIGHT_BASE_URL ?? 'http://127.0.0.1:3000',
+    baseURL: appOrigin,
     trace: 'on-first-retry',
     permissions: ['clipboard-read', 'clipboard-write'],
   },
@@ -46,7 +49,7 @@ export default defineConfig({
     },
     {
       command: 'pnpm start',
-      url: 'http://127.0.0.1:3000',
+      url: `${appOrigin}`,
       reuseExistingServer: !process.env.CI,
       timeout: 120_000,
       stdout: 'pipe',
