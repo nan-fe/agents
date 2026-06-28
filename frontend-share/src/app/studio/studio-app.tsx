@@ -1,6 +1,6 @@
 "use client";
 import React, { useState } from 'react';
-import { SessionProvider } from 'next-auth/react';
+import { SessionProvider, useSession } from 'next-auth/react';
 import {
   LogoutOutlined,
   PlusOutlined,
@@ -12,6 +12,7 @@ import { atelierTheme } from '../../theme/atelier-theme';
 import DialogContent from './components/dialog-content';
 import { startNewConversation } from './lib/new-conversation';
 import ProductPool from './components/product-pool';
+import { getStudioUserId } from './lib/studio-user';
 
 import './page.css';
 
@@ -21,8 +22,26 @@ enum PageMenu {
   PRODUCT_MARKETING,
 }
 
+const STUDIO_ACTIVE_MENU_KEY = 'studio_active_menu';
+
+const readStoredActiveMenu = (): string => {
+  if (typeof window === 'undefined') {
+    return String(PageMenu.DIALOG_CONTENT);
+  }
+  const stored = sessionStorage.getItem(STUDIO_ACTIVE_MENU_KEY);
+  if (
+    stored === String(PageMenu.DIALOG_CONTENT) ||
+    stored === String(PageMenu.PRODUCT_MARKETING)
+  ) {
+    return stored;
+  }
+  return String(PageMenu.DIALOG_CONTENT);
+};
+
 const StudioAppContent = () => {
-  const [activeMenu, setActiveMenu] = useState(String(PageMenu.DIALOG_CONTENT));
+  const { data: session } = useSession();
+  const userId = getStudioUserId(session);
+  const [activeMenu, setActiveMenu] = useState(readStoredActiveMenu);
   const [chatSessionKey, setChatSessionKey] = useState(0);
   const { message, modal } = App.useApp();
 
@@ -34,7 +53,7 @@ const StudioAppContent = () => {
       cancelText: '取消',
       onOk: async () => {
         try {
-          await startNewConversation();
+          await startNewConversation(userId);
           setChatSessionKey((key) => key + 1);
           message.success('已开始新对话');
         } catch (error) {
@@ -75,6 +94,7 @@ const StudioAppContent = () => {
           selectedKeys={[activeMenu]}
           onClick={({ key }) => {
             setActiveMenu(key);
+            sessionStorage.setItem(STUDIO_ACTIVE_MENU_KEY, key);
           }}
           items={[
             {
@@ -99,7 +119,7 @@ const StudioAppContent = () => {
       <Layout className="min-h-0 min-w-0 flex-1 bg-transparent">
         <Content className="flex h-screen min-h-0 min-w-0 flex-col overflow-hidden p-0">
           {activeMenu === String(PageMenu.DIALOG_CONTENT) && (
-            <DialogContent key={chatSessionKey} />
+            <DialogContent key={chatSessionKey} userId={userId} />
           )}
           {activeMenu === String(PageMenu.PRODUCT_MARKETING) && <ProductPool />}
         </Content>

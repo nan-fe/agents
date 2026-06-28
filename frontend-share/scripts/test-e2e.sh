@@ -22,6 +22,13 @@ export AUTH_SECRET="${AUTH_SECRET:-e2e-auth-secret-minimum-32-characters}"
 export DATABASE_URL="$E2E_DATABASE_URL"
 export FORCE_COLOR="${FORCE_COLOR:-1}"
 
+# next.config.mjs bakes API_UPSTREAM_URL into rewrites at build time (production
+# default is http://backend:8000 for Docker). CI has no .env, so point at the
+# Playwright mock API before `pnpm build`.
+export API_UPSTREAM_URL="${API_UPSTREAM_URL:-http://127.0.0.1:8000}"
+export API_BASE_URL="${API_BASE_URL:-$API_UPSTREAM_URL}"
+export NEXT_PUBLIC_API_BASE_URL="${NEXT_PUBLIC_API_BASE_URL:-$API_UPSTREAM_URL}"
+
 load_dotenv_database_url() {
   local env_file="$FRONTEND_DIR/.env"
   [[ -f "$env_file" ]] || return 1

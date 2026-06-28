@@ -54,6 +54,21 @@ async def init_db() -> None:
     engine = get_engine()
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        await conn.run_sync(_migrate_schema)
+
+
+def _migrate_schema(connection) -> None:
+    from sqlalchemy import inspect, text
+
+    inspector = inspect(connection)
+    if "versions" not in inspector.get_table_names():
+        return
+    columns = {column["name"] for column in inspector.get_columns("versions")}
+    if "user_id" not in columns:
+        connection.execute(text("ALTER TABLE versions ADD COLUMN user_id VARCHAR(128)"))
+        connection.execute(
+            text("CREATE INDEX IF NOT EXISTS ix_versions_user_id ON versions (user_id)")
+        )
 
 
 async def close_db() -> None:

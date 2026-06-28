@@ -2,6 +2,32 @@
 
 All notable changes to this project will be documented in this file.
 
+### Changed 2026-06-25 — 历史删除、用户隔离与 SSE 复用安全
+
+- **历史对话删除**
+  - 后端新增 `DELETE /projects/{project_id}?user_id=`，删除 project 行及全部 versions（处理 `parent_version_id` 自引用 FK）
+  - 创作台历史抽屉每条记录支持删除，带二次确认；删除当前对话自动进入新空白页，删除其他对话不影响当前会话
+
+- **projects / versions 按 user_id 隔离**
+  - `versions` 表新增 `user_id` 字段；启动时自动迁移已有 SQLite 库（[`backend/app/memory/db.py`](backend/app/memory/db.py)）
+  - `ProjectMemoryService` 新增 `project_accessible()`；列表、读取、finalize、删除均校验 `user_id + project_id` 归属，非本人返回 404
+  - `append_version` 写入时保存 `user_id`，并回填 `projects.user_id`
+  - 前端 Studio 全链路传递 `userId`（session 的 `username` 或 `id`）：项目 API、finalize、SSE 生成请求
+
+- **SSE 流复用安全**
+  - `DialogStream` 增加 `user_id`、`project_id` 并持久化；复用/续传时校验 **sessionId + userId + userInput + projectId**（不再仅比 `session_id + prompt`）
+  - 修复换账号后同 prompt 误复用上一用户生成结果的问题
+  - 进行中的相同请求改为订阅已有 stream，避免 cancel 后重复跑 pipeline
+  - 退出登录时清除 `xhs_session_id` / `xhs_project_id`（[`logout/page.tsx`](frontend-share/src/app/logout/page.tsx) 替代原 Route Handler）
+
+- **生成失败错误提示**
+  - 扩展 `classify_agent_failure` / 新增 `format_agent_failure_message`，网络/鉴权/上游错误不再统一显示 `UNKNOWN`
+  - dialog 生成 fallback 重试补齐 `user_id`、`project_id`；失败时记录完整 traceback
+
+- **测试**
+  - 新增 `test_dialog_stream_reuse.py`；更新 `test_project_api.py`、`test_project_memory.py` 覆盖用户隔离与删除
+  - 重新生成 `frontend-share/src/api/schema.d.ts`
+
 ### Changed 2026-06-22 — 后端稳定性、类型检查与 OAuth 修复
 
 - **后端启动修复**

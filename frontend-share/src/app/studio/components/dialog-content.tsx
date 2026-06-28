@@ -36,8 +36,10 @@ import {
   import { formatTimestamp } from '@/lib/timestamp';
   import {
     bootstrapInitialConversation,
+    deleteHistoryProject,
     switchHistoryProject,
   } from '../lib/project-session-actions';
+  import { startConversationAfterDelete } from '../lib/new-conversation';
   import {
     bindProjectId,
     clearProjectId,
@@ -93,6 +95,7 @@ import {
     prompt: string;
     sessionId: string;
     projectId: string | null;
+    userId: string;
     versionCount: number;
     pendingId: string;
     getCancelled: () => boolean;
@@ -104,7 +107,7 @@ import {
   const runDialogGeneration = async (
     payload: GenerationPayload,
   ): Promise<GenerationOutcome> => {
-    const { prompt, sessionId, projectId, getCancelled, deps, messageApi } = payload;
+    const { prompt, sessionId, projectId, userId, getCancelled, deps, messageApi } = payload;
     let streamResult: DialogResultData | null = null;
   
     const streamIngestor = createStreamIngestor();
@@ -134,6 +137,7 @@ import {
               prompt,
               session_id: sessionId,
               ...(projectId ? { project_id: projectId } : {}),
+              ...(userId ? { user_id: userId } : {}),
               ...(lastEventId ? { last_event_id: lastEventId } : {}),
             } satisfies UserInput,
             signal,
@@ -178,6 +182,7 @@ import {
               prompt,
               session_id: sessionId,
               ...(projectId ? { project_id: projectId } : {}),
+              ...(userId ? { user_id: userId } : {}),
               ...(lastEventId ? { last_event_id: lastEventId } : {}),
             },
             log_callback: appendLog,
@@ -230,11 +235,14 @@ import {
     }
   };
   
-  const ensureProjectId = async (currentProjectId: string | null): Promise<string> => {
+  const ensureProjectId = async (
+    currentProjectId: string | null,
+    userId: string,
+  ): Promise<string> => {
     if (currentProjectId) {
       return currentProjectId;
     }
-    const created = await createProject();
+    const created = await createProject(userId);
     bindProjectId(created.project_id);
     return created.project_id;
   };
@@ -258,7 +266,7 @@ import {
   
   type ScrollIntent = { type: 'bottom' } | { type: 'version'; versionId: number };
   
-  const Page = () => {
+  const Page = ({ userId }: { userId: string }) => {
     const [thread, setThread] = useState<ThreadItem[]>(createInitialThread);
     const [currentVersion, setCurrentVersion] = useState<number>(-1);
     const [inputValue, setInputValue] = useState<string>('');
@@ -269,6 +277,7 @@ import {
     const [isRestoring, setIsRestoring] = useState(true);
     const projectIdRef = useRef<string | null>(currentProjectId);
     const sessionIdRef = useRef(currentSessionId);
+    const userIdRef = useRef(userId);
     const { message, modal } = App.useApp();
   
     const {
@@ -352,11 +361,12 @@ import {
     useEffect(() => {
       let cancelled = false;
   
-      void bootstrapInitialConversation().then((result) => {
+      void bootstrapInitialConversation(userId)
+        .then((result) => {
         if (cancelled) {
           return;
         }
-  
+
         if (result.status === 'empty') {
           clearProjectId();
           setCurrentProjectId(null);
@@ -387,12 +397,28 @@ import {
           };
         }
         setIsRestoring(false);
-      });
-  
+      })
+        .catch((error) => {
+          if (cancelled) {
+            return;
+          }
+          console.error('bootstrapInitialConversation failed:', error);
+          void reportError(error, 'session/bootstrapConversation', { userId });
+          clearProjectId();
+          setCurrentProjectId(null);
+          setThread(createInitialThread());
+          setCurrentVersion(-1);
+          setIsRestoring(false);
+        });
+
       return () => {
         cancelled = true;
       };
-    }, []);
+    }, [userId]);
+
+    useEffect(() => {
+      userIdRef.current = userId;
+    }, [userId]);
   
     useEffect(() => {
       projectIdRef.current = currentProjectId;
@@ -411,6 +437,7 @@ import {
         finalizeProjectBeacon({
           project_id: projectId,
           session_id: sessionIdRef.current,
+          user_id: userIdRef.current,
         });
       };
   
@@ -483,7 +510,7 @@ import {
       void (async () => {
         let projectId = currentProjectId;
         try {
-          projectId = await ensureProjectId(projectId);
+          projectId = await ensureProjectId(projectId, userId);
           if (projectId !== currentProjectId) {
             setCurrentProjectId(projectId);
           }
@@ -524,6 +551,7 @@ import {
             prompt: trimmedPrompt,
             sessionId: currentSessionId,
             projectId,
+            userId,
             versionCount,
             pendingId,
             getCancelled: () => cancelByUserRef.current,
@@ -589,7 +617,7 @@ import {
       }
   
       setIsRestoring(true);
-      void switchHistoryProject(projectId).then((result) => {
+      void switchHistoryProject(projectId, userId).then((result) => {
         if (result.status === 'error') {
           message.error('加载对话失败，请稍后重试');
           setIsRestoring(false);
@@ -611,7 +639,35 @@ import {
         setIsRestoring(false);
       });
     };
-  
+
+    const handleDeleteHistoryProject = async (projectId: string): Promise<boolean> => {
+      if (isGenerating || isRestoring) {
+        return false;
+      }
+
+      const deleted = await deleteHistoryProject(projectId, userId);
+      if (!deleted) {
+        message.error('删除失败，请稍后重试');
+        return false;
+      }
+
+      if (projectId === currentProjectId) {
+        const fresh = await startConversationAfterDelete(userId);
+        setCurrentProjectId(fresh.projectId);
+        setThread(createInitialThread());
+        setCurrentVersion(-1);
+        resetLogs([]);
+        generationLogsRef.current = [];
+        setInputValue('');
+        setFinishTask(false);
+        message.success('已删除对话并开始新对话');
+      } else {
+        message.success('已删除对话');
+      }
+
+      return true;
+    };
+
     return (
       <main id="studio-main" className="chat-layout relative flex h-full min-h-0 flex-col">
         <a className="skip-link" href="#studio-thread">
@@ -655,9 +711,11 @@ import {
             )}
             <ProjectHistoryDrawer
               currentProjectId={currentProjectId}
+              userId={userId}
               onSelectProject={(projectId) => {
                 void handleSelectHistoryProject(projectId);
               }}
+              onDeleteProject={handleDeleteHistoryProject}
               disabled={isGenerating || isRestoring}
             />
             {/* <StudioFeishuAuth /> */}

@@ -67,6 +67,7 @@ class VersionRow(Base):
     version_id: Mapped[str] = mapped_column(String(64), primary_key=True)
     # project 行在 finalize 时才写入，此处不做 FK，避免先写 version 失败
     project_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    user_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
     version_number: Mapped[int] = mapped_column(Integer, nullable=False)
     version_label: Mapped[str] = mapped_column(String(16), nullable=False)
     parent_version_id: Mapped[str | None] = mapped_column(

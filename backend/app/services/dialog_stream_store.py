@@ -16,6 +16,32 @@ def _safe_session_filename(session_id: str) -> str:
     return re.sub(r"[^\w\-.]", "_", session_id)
 
 
+def normalize_stream_user_id(user_id: str | None) -> str | None:
+    uid = (user_id or "").strip()
+    return uid or None
+
+
+def normalize_stream_project_id(project_id: str | None) -> str | None:
+    pid = (project_id or "").strip()
+    return pid or None
+
+
+def stream_matches_request(
+    stream: "DialogStream",
+    *,
+    user_input: str,
+    user_id: str | None,
+    project_id: str | None,
+) -> bool:
+    if stream.prompt != user_input:
+        return False
+    if normalize_stream_user_id(user_id) != normalize_stream_user_id(stream.user_id):
+        return False
+    if normalize_stream_project_id(project_id) != normalize_stream_project_id(stream.project_id):
+        return False
+    return True
+
+
 @dataclass
 class StreamEvent:
     event_id: str
@@ -35,6 +61,8 @@ class StreamSubscriber:
 class DialogStream:
     session_id: str
     prompt: str
+    user_id: str | None = None
+    project_id: str | None = None
     events: list[StreamEvent] = field(default_factory=list)
     next_event_id: int = 1
     task: asyncio.Task | None = None
@@ -179,6 +207,8 @@ class DialogStreamStore:
         payload = {
             "session_id": stream.session_id,
             "prompt": stream.prompt,
+            "user_id": stream.user_id,
+            "project_id": stream.project_id,
             "next_event_id": stream.next_event_id,
             "is_complete": stream.is_complete,
             "events": [
@@ -197,6 +227,8 @@ class DialogStreamStore:
         stream = DialogStream(
             session_id=data["session_id"],
             prompt=data["prompt"],
+            user_id=data.get("user_id"),
+            project_id=data.get("project_id"),
             next_event_id=int(data.get("next_event_id", 1)),
             is_complete=bool(data.get("is_complete", False)),
             _store=self,
@@ -248,13 +280,26 @@ class DialogStreamStore:
             )
             return persisted
 
-    async def create_stream(self, session_id: str, prompt: str) -> DialogStream:
+    async def create_stream(
+        self,
+        session_id: str,
+        prompt: str,
+        *,
+        user_id: str | None = None,
+        project_id: str | None = None,
+    ) -> DialogStream:
         async with self._lock:
             existing = self._streams.get(session_id)
             if existing and existing.task and not existing.task.done():
                 existing.task.cancel()
 
-            stream = DialogStream(session_id=session_id, prompt=prompt, _store=self)
+            stream = DialogStream(
+                session_id=session_id,
+                prompt=prompt,
+                user_id=normalize_stream_user_id(user_id),
+                project_id=normalize_stream_project_id(project_id),
+                _store=self,
+            )
             self._streams[session_id] = stream
         await self._persist_stream(stream)
         return stream

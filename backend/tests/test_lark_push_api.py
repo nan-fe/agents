@@ -12,6 +12,8 @@ from app.config import settings
 from app.main import app
 from app.memory.db import close_db, init_db
 from app.memory.project_memory import ProjectMemoryService
+
+TEST_USER_ID = "user_test001"
 from lark_im.settings import lark_settings
 
 
@@ -65,6 +67,7 @@ async def _run_lark_api_flow() -> None:
                     "review_approved": True,
                 },
                 planning={},
+                user_id=TEST_USER_ID,
             )
 
             by_version = await client.post(

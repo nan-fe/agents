@@ -107,6 +107,10 @@ def classify_agent_failure(exc: BaseException) -> str:
     root = _unwrap_cause(exc)
     if isinstance(root, (asyncio.TimeoutError, TimeoutError)):
         return "TIMEOUT"
+    if isinstance(root, APIConnectionError):
+        return "UPSTREAM_UNAVAILABLE"
+    if isinstance(root, APITimeoutError):
+        return "TIMEOUT"
     if isinstance(root, RateLimitError):
         return "RATE_LIMIT"
     if isinstance(root, APIError):
@@ -117,9 +121,34 @@ def classify_agent_failure(exc: BaseException) -> str:
             return "UPSTREAM_5XX"
         if code is not None and 400 <= code < 500:
             return "CLIENT_4XX"
+        return "UPSTREAM_ERROR"
+    if isinstance(root, AuthenticationError):
+        return "AUTH_ERROR"
     if isinstance(root, ValueError):
         return "VALIDATION"
+    if isinstance(root, RuntimeError):
+        return "RUNTIME"
     return "UNKNOWN"
+
+
+def format_agent_failure_message(exc: BaseException) -> str:
+    """将异常转为用户可读的错误文案。"""
+    code = classify_agent_failure(exc)
+    root = _unwrap_cause(exc)
+    detail = str(root).strip()
+    messages = {
+        "TIMEOUT": "执行超时，请稍后重试",
+        "UPSTREAM_UNAVAILABLE": "模型或向量服务连接失败，请检查网络与 API 配置",
+        "RATE_LIMIT": "请求过于频繁，请稍后重试",
+        "UPSTREAM_5XX": "上游服务异常，请稍后重试",
+        "UPSTREAM_ERROR": "上游模型服务返回异常，请稍后重试",
+        "CLIENT_4XX": "请求参数被拒绝，请调整输入后重试",
+        "AUTH_ERROR": "API 鉴权失败，请检查 SiliconFlow 等密钥配置",
+        "VALIDATION": detail or "请求参数无效",
+        "RUNTIME": detail or "服务内部错误",
+    }
+    base = messages.get(code, detail or "未知错误")
+    return f"生成失败: {base}"
 
 
 async def retry_with_backoff(
