@@ -38,12 +38,24 @@ const nextConfig = {
   },
 };
 
+// Better Stack source map upload (Sentry-compatible plugin).
+// Requires SENTRY_ORG, SENTRY_PROJECT (or SENTRY_APPLICATION_ID), SENTRY_URL, SENTRY_AUTH_TOKEN.
+// See https://betterstack.com/docs/errors/collecting-errors/upload-source-maps/
+const sentrySourcemapsEnabled = Boolean(
+  process.env.SENTRY_AUTH_TOKEN &&
+    process.env.SENTRY_ORG &&
+    process.env.SENTRY_URL &&
+    (process.env.SENTRY_PROJECT || process.env.SENTRY_APPLICATION_ID),
+);
+
 export default withSentryConfig(nextConfig, {
-  org: process.env.SENTRY_ORG ?? 'better-stack',
-  project: process.env.SENTRY_APPLICATION_ID ?? 'frontend-share',
+  org: process.env.SENTRY_ORG,
+  project: process.env.SENTRY_PROJECT ?? process.env.SENTRY_APPLICATION_ID,
+  authToken: process.env.SENTRY_AUTH_TOKEN,
+  sentryUrl: process.env.SENTRY_URL,
   silent: !process.env.CI,
-  // Better Stack 通过 DSN 接入，无需 Sentry.io source map 上传
+  widenClientFileUpload: true,
   sourcemaps: {
-    disable: true,
+    disable: !sentrySourcemapsEnabled,
   },
 });

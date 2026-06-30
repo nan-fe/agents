@@ -62,6 +62,10 @@ jobs:
             SENTRY_DSN=${{ secrets.SENTRY_DSN }}
             NEXT_PUBLIC_SENTRY_DSN=${{ secrets.SENTRY_DSN }}
             SENTRY_APPLICATION_ID=${{ vars.SENTRY_APPLICATION_ID || 'frontend-share' }}
+            SENTRY_ORG=${{ vars.SENTRY_ORG }}
+            SENTRY_PROJECT=${{ vars.SENTRY_PROJECT || vars.SENTRY_APPLICATION_ID }}
+            SENTRY_URL=${{ vars.SENTRY_URL }}
+            SENTRY_AUTH_TOKEN=${{ secrets.SENTRY_AUTH_TOKEN }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
