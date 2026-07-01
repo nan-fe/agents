@@ -13,11 +13,11 @@ import httpx
 
 from app.config import settings
 from app.services.social.browser_use_fallback import publish_via_browser_use
-from app.services.social.profile_paths import resolve_weibo_profile_dir
 from app.services.social.content_adapter import (
     WeiboPublishPayload,
     is_likely_logged_in_url,
 )
+from app.services.social.profile_paths import resolve_weibo_profile_dir
 
 logger = logging.getLogger(__name__)
 
