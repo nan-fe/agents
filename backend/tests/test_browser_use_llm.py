@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 from unittest.mock import MagicMock, patch
 
 from app.config import settings
@@ -28,15 +29,20 @@ def test_create_browser_use_llm_uses_project_endpoint() -> None:
         base_url="https://token.sensenova.cn/v1",
         api_key="test-key",
     )
-    with patch.object(settings, "API_KEY", "test-key"):
-        with patch.object(settings, "MODEL_BASE_URL", "https://token.sensenova.cn/v1"):
-            with patch.object(settings, "BASE_MODEL", "deepseek-v4-flash"):
-                with patch.object(settings, "BROWSER_USE_LLM_MODEL", ""):
-                    with patch(
-                        "browser_use.llm.openai.chat.ChatOpenAI",
-                        create=True,
-                        return_value=mock_llm,
-                    ) as mock_chat_openai:
+    mock_chat_openai = MagicMock(return_value=mock_llm)
+    fake_chat_module = MagicMock()
+    fake_chat_module.ChatOpenAI = mock_chat_openai
+    fake_browser_use_modules = {
+        "browser_use": MagicMock(),
+        "browser_use.llm": MagicMock(),
+        "browser_use.llm.openai": MagicMock(),
+        "browser_use.llm.openai.chat": fake_chat_module,
+    }
+    with patch.dict(sys.modules, fake_browser_use_modules):
+        with patch.object(settings, "API_KEY", "test-key"):
+            with patch.object(settings, "MODEL_BASE_URL", "https://token.sensenova.cn/v1"):
+                with patch.object(settings, "BASE_MODEL", "deepseek-v4-flash"):
+                    with patch.object(settings, "BROWSER_USE_LLM_MODEL", ""):
                         llm = create_browser_use_llm()
     mock_chat_openai.assert_called_once_with(
         model="deepseek-v4-flash",
