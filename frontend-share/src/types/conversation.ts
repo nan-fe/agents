@@ -7,6 +7,17 @@ export type LarkNotificationMeta = {
   prompt?: string;
 };
 
+export type WeiboPublishMeta = {
+  eligible?: boolean;
+  enabled?: boolean;
+  auto_on_complete?: boolean;
+  engine?: string;
+  auto_started?: boolean;
+  job_id?: string | null;
+  share_id?: string | null;
+  error?: string | null;
+};
+
 export type DialogResultData = {
   content: string;
   title: string;
@@ -21,6 +32,7 @@ export type DialogResultData = {
   review_approved?: boolean;
   review_feedback?: string;
   lark_notification?: LarkNotificationMeta;
+  weibo_publish?: WeiboPublishMeta;
 };
 
 export type AgentLogEntry = {

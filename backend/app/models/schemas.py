@@ -266,3 +266,45 @@ class LarkOAuthRegisterResponse(BaseModel):
     grant_types: List[str] = ["authorization_code"]
     response_types: List[str] = ["code"]
     token_endpoint_auth_method: str = "none"
+
+
+class WeiboPublishRequest(BaseModel):
+    """触发微博自动发布。"""
+
+    title: str | None = None
+    content: str | None = None
+    hashtags: List[str] | None = None
+    image_url: str | None = None
+    share_url: str | None = None
+    review_approved: bool | None = None
+    version_id: str | None = None
+
+
+class WeiboPublishCreateResponse(BaseModel):
+    job_id: str
+    status: str = "pending"
+
+
+class PublishJobResponse(BaseModel):
+    job_id: str
+    platform: str
+    status: str
+    progress: List[str] = Field(default_factory=list)
+    post_url: str | None = None
+    error: str | None = None
+    screenshot_path: str | None = None
+    created_at: float
+    updated_at: float
+    payload_summary: dict = Field(default_factory=dict)
+
+
+class SocialStatusResponse(BaseModel):
+    weibo_publish_enabled: bool
+    weibo: dict
+    x_sync_enabled: bool
+    x_sync_username: str | None = None
+    x_sync_interval_seconds: int
+    review_required: bool
+    auto_on_complete: bool = True
+    publish_engine: str = "browser_use"
+    dry_run: bool

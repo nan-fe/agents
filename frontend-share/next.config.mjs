@@ -27,8 +27,16 @@ const nextConfig = {
         destination: `${apiUpstream}/session/:path*`,
       },
       {
+        source: '/shares',
+        destination: `${apiUpstream}/shares`,
+      },
+      {
         source: '/shares/:path*',
         destination: `${apiUpstream}/shares/:path*`,
+      },
+      {
+        source: '/social/:path*',
+        destination: `${apiUpstream}/social/:path*`,
       },
       {
         source: '/lark/:path*',
