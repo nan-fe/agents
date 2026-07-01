@@ -121,6 +121,16 @@ const ResultDisplay = ({ result, variant = 'default' }: ResultDisplayProps) => {
       })
       .catch((error) => {
         reportError(error, 'result/getSocialStatus');
+        setSocialStatus({
+          weibo_publish_enabled: false,
+          weibo: { configured: false, logged_in: false },
+          x_sync_enabled: false,
+          x_sync_interval_seconds: 300,
+          review_required: true,
+          auto_on_complete: false,
+          publish_engine: 'browser_use',
+          dry_run: false,
+        });
       });
     return () => {
       cancelled = true;

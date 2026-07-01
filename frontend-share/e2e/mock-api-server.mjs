@@ -82,6 +82,24 @@ const handleProjects = (req, res, url) => {
   return false;
 };
 
+const handleSocial = (req, res, url) => {
+  if (req.method === 'GET' && url.pathname === '/social/status') {
+    json(res, 200, {
+      weibo_publish_enabled: false,
+      weibo: { configured: false, logged_in: false },
+      x_sync_enabled: false,
+      x_sync_username: null,
+      x_sync_interval_seconds: 300,
+      review_required: true,
+      auto_on_complete: false,
+      publish_engine: 'browser_use',
+      dry_run: false,
+    });
+    return true;
+  }
+  return false;
+};
+
 const handleShares = async (req, res, url) => {
   if (req.method === 'POST' && url.pathname === '/shares') {
     const body = await readBody(req);
@@ -260,6 +278,9 @@ const server = http.createServer(async (req, res) => {
 
   try {
     if (handleProjects(req, res, url)) {
+      return;
+    }
+    if (handleSocial(req, res, url)) {
       return;
     }
     if (await handleShares(req, res, url)) {
