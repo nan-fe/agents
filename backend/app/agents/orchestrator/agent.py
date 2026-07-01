@@ -15,6 +15,10 @@ from app.memory.project_memory import new_project_id
 from app.security.input_guard import check_input_security, safety_rejection_payload
 from app.services.dialog_stream_store import dialog_stream_store
 from app.services.orchestrator_llm_service import OrchestratorLLMService
+from app.services.social.social_service import (
+    build_weibo_publish_meta,
+    get_social_publish_service,
+)
 from app.utils.log_callback import emit_log
 from app.utils.retry_policy import classify_agent_failure
 from lark_im import get_lark_im_service
@@ -208,6 +212,25 @@ class DialogOrchestratorAgent:
                 auto_sent=auto_sent,
                 error=notify_error,
             )
+            if settings.WEIBO_PUBLISH_ENABLED and settings.WEIBO_PUBLISH_AUTO_ON_COMPLETE:
+                await emit_log(
+                    log_callback,
+                    "Orchestrator",
+                    "审核通过，正在启动微博自动发布（browser-use）…",
+                )
+            try:
+                final_result[
+                    "weibo_publish"
+                ] = await get_social_publish_service().try_auto_publish_after_generation(
+                    final_result,
+                    review_passed=True,
+                )
+            except Exception as exc:
+                logger.warning("自动微博发布元数据失败（不影响生成结果）: %s", exc)
+                final_result["weibo_publish"] = build_weibo_publish_meta(
+                    review_passed=True,
+                    error=str(exc),
+                )
 
         await emit_log(log_callback, "Orchestrator", "多 Agent 协作完成，正在整理结果")
 

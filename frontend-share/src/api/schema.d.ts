@@ -420,6 +420,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/social/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Social Status */
+        get: operations["social_status_social_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/social/publish/weibo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Social Publish Weibo */
+        post: operations["social_publish_weibo_social_publish_weibo_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/social/publish/{job_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Social Publish Job Status */
+        get: operations["social_publish_job_status_social_publish__job_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/social/sync/x": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Social Sync X Once */
+        post: operations["social_sync_x_once_social_sync_x_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/": {
         parameters: {
             query?: never;
@@ -541,6 +609,48 @@ export interface components {
             user_oauth?: {
                 [key: string]: unknown;
             } | null;
+        };
+        /** WeiboPublishRequest */
+        WeiboPublishRequest: {
+            title?: string | null;
+            content?: string | null;
+            hashtags?: string[] | null;
+            image_url?: string | null;
+            share_url?: string | null;
+            review_approved?: boolean | null;
+            version_id?: string | null;
+        };
+        /** WeiboPublishCreateResponse */
+        WeiboPublishCreateResponse: {
+            job_id: string;
+            status: string;
+        };
+        /** PublishJobResponse */
+        PublishJobResponse: {
+            job_id: string;
+            platform: string;
+            status: string;
+            progress: string[];
+            post_url?: string | null;
+            error?: string | null;
+            screenshot_path?: string | null;
+            created_at: number;
+            updated_at: number;
+            payload_summary: {
+                [key: string]: unknown;
+            };
+        };
+        /** SocialStatusResponse */
+        SocialStatusResponse: {
+            weibo_publish_enabled: boolean;
+            weibo: {
+                [key: string]: unknown;
+            };
+            x_sync_enabled: boolean;
+            x_sync_username?: string | null;
+            x_sync_interval_seconds: number;
+            review_required: boolean;
+            dry_run: boolean;
         };
         /**
          * ProductComment
@@ -1604,6 +1714,106 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    social_status_social_status_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SocialStatusResponse"];
+                };
+            };
+        };
+    };
+    social_publish_weibo_social_publish_weibo_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WeiboPublishRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WeiboPublishCreateResponse"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    social_publish_job_status_social_publish__job_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublishJobResponse"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    social_sync_x_once_social_sync_x_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
         };

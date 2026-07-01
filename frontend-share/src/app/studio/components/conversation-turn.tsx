@@ -4,6 +4,7 @@ import ChatAvatar from './chat-avatar';
 import ChatMessage from './chat-message';
 import ResultDisplay from './result-display';
 import FeishuPushPrompt from './feishu-push-prompt';
+import WeiboPublishPrompt from './weibo-publish-prompt';
 import type { TurnThreadItem } from '../../../types/conversation';
 
 type ConversationTurnProps = {
@@ -40,6 +41,7 @@ const ConversationTurn = ({ turn, isActive }: ConversationTurnProps) => (
             />
           )}
           <ResultDisplay result={turn.result} variant="minimal" />
+          <WeiboPublishPrompt result={turn.result} />
           <FeishuPushPrompt result={turn.result} />
         </div>
       </div>

@@ -69,6 +69,10 @@ pnpm dev
 | `API_BASE_URL` | 分享页 SSR 拉取 `/shares/{id}` | `http://localhost:8000` |
 | `NEXT_PUBLIC_SITE_URL` | 站点公网根地址（metadata / 可选分享链接） | `http://localhost:3000` |
 | `SENTRY_DSN` / `NEXT_PUBLIC_SENTRY_DSN` | Better Stack 错误监控 | 生产由 CI 注入 |
+| `SENTRY_ORG` | Better Stack 团队 ID（SourceMap 上传） | Errors → Applications → Advanced settings |
+| `SENTRY_PROJECT` | Better Stack 应用 ID（SourceMap 上传） | 默认可用 `SENTRY_APPLICATION_ID` |
+| `SENTRY_URL` | SourceMap 上传端点 | 如 `https://us-east-9-sourcemaps.betterstackdata.com` |
+| `SENTRY_AUTH_TOKEN` | Telemetry API token（**仅构建期**，勿提交仓库） | GitHub Secret |
 
 生成 `AUTH_SECRET`：
 
@@ -126,14 +130,29 @@ docker compose up -d
 
 - 镜像构建期传入 `API_UPSTREAM_URL=http://backend:8000`（rewrites 写入）
 - 容器运行期注入 `API_UPSTREAM_URL`、`API_BASE_URL`、`AUTH_SECRET`、`DATABASE_URL`
-- GitHub Actions **Secrets**：`AUTH_SECRET`、`SENTRY_DSN`
+- GitHub Actions **Secrets**：`AUTH_SECRET`、`SENTRY_DSN`、`SENTRY_AUTH_TOKEN`
+- GitHub Actions **Variables**：`SENTRY_ORG`、`SENTRY_PROJECT`（或 `SENTRY_APPLICATION_ID`）、`SENTRY_URL`
 - 容器启动：`prisma migrate deploy && node server.js`
 
 **不再部署** `frontend-ts` Nginx 容器；无需迁移 `frontend-ts/nginx.conf`。
 
 ## 错误监控（Better Stack）
 
-见上文环境变量。本地在 `.env` 配置 DSN 后 `pnpm build && pnpm start` 验证上报。
+运行时错误通过 Sentry 兼容 SDK 上报（`SENTRY_DSN`）。生产堆栈反解需要 **构建期** 上传 SourceMap：
+
+1. 在 Better Stack **Errors → Applications → Advanced settings** 获取 `SENTRY_ORG`、`SENTRY_PROJECT`、`SENTRY_URL`。
+2. 创建 **Telemetry API token** 作为 `SENTRY_AUTH_TOKEN`（勿提交仓库）。
+3. 本地验证（在 `frontend-share/.env` 填入上述变量后）：
+
+```bash
+cd frontend-share
+pnpm build   # 构建日志应出现 source map upload
+pnpm start
+```
+
+4. 在浏览器触发一次测试错误，到 Better Stack Issues 确认堆栈显示 `src/...` 源码路径而非 `static/chunks/...` 混淆行号。
+
+未配置 `SENTRY_AUTH_TOKEN` 时构建仍会成功，但跳过 SourceMap 上传（CI 默认行为）。
 
 ## 目录说明
 

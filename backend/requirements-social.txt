@@ -1,0 +1,14 @@
+# 可选：微博发布 browser-use Agent 兜底
+# 主流程使用 Playwright，不安装本文件也可正常发微博。
+#
+# 安装前请确认 Python >= 3.11
+#
+# 方式 1（推荐，含 Rust 原生 runtime）— 需能访问官方 PyPI：
+#   pip install -r requirements-social.txt -i https://pypi.org/simple
+#
+# 方式 2（无 [core] 时降级）：
+#   pip install "browser-use>=0.12.0" -i https://pypi.org/simple
+#
+# 国内镜像若报 No matching distribution found，请改用官方源或等待镜像同步 browser-use-core。
+
+browser-use>=0.12.0

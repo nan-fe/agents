@@ -6,6 +6,8 @@ backend/venv/
 backend/env/
 backend/app/data/shares.json
 backend/app/data/dialog_streams/
+data/weibo-profile/
+data/x-profiles/
 
 # 前端
 frontend-ts/node_modules/
@@ -14,6 +16,7 @@ frontend-share/node_modules/
 frontend-share/.next/
 frontend-share/out/
 frontend-share/.env
+frontend-share/.env.sentry-build-plugin
 
 # 通用
 *.pyc

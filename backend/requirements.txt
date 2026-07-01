@@ -24,5 +24,9 @@ rank-bm25
 sqlalchemy>=2.0
 aiosqlite
 playwright
+# browser-use 为可选兜底（Playwright 失败时 LLM 恢复），勿写入 requirements.txt：
+#   Python 3.11+ 且从官方 PyPI 安装：pip install "browser-use[core]"
+#   若 [core] 不可用：pip install browser-use  （仅基础包，beta Agent 可能受限）
+# 微博发布主流程仅需 playwright，不装 browser-use 也可运行。
 
 # 本地开发：pip install -e ../mcp-lark

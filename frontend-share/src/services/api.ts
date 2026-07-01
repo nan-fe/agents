@@ -58,6 +58,14 @@ export type ShareResult = {
   hashtags?: string[];
   image_url?: string;
   message?: string;
+  review_approved?: boolean;
+  version_id?: string;
+  weibo_publish?: {
+    auto_started?: boolean;
+    job_id?: string | null;
+    share_id?: string | null;
+    error?: string | null;
+  };
 };
 
 export type ShareCreateResponse = {
@@ -549,5 +557,95 @@ export const pushReviewToLark = async (
     await parseApiError(response);
   }
 
+  return response.json();
+};
+
+export type SocialStatusResponse = {
+  weibo_publish_enabled: boolean;
+  weibo: {
+    configured?: boolean;
+    logged_in?: boolean;
+    reason?: string;
+    dry_run?: boolean;
+    current_url?: string;
+  };
+  x_sync_enabled: boolean;
+  x_sync_username?: string | null;
+  x_sync_interval_seconds: number;
+  review_required: boolean;
+  auto_on_complete: boolean;
+  publish_engine: string;
+  dry_run: boolean;
+};
+
+export type WeiboPublishPayload = {
+  title?: string;
+  content?: string;
+  hashtags?: string[];
+  image_url?: string;
+  share_url?: string;
+  review_approved?: boolean;
+  version_id?: string;
+};
+
+export type WeiboPublishCreateResponse = {
+  job_id: string;
+  status: string;
+};
+
+export type PublishJobResponse = {
+  job_id: string;
+  platform: string;
+  status: 'pending' | 'running' | 'succeeded' | 'failed' | string;
+  progress: string[];
+  post_url?: string | null;
+  error?: string | null;
+  screenshot_path?: string | null;
+  created_at: number;
+  updated_at: number;
+  payload_summary?: Record<string, unknown>;
+};
+
+export const getSocialStatus = async (): Promise<SocialStatusResponse> => {
+  const response = await fetch(`${API_BASE_URL}/social/status`);
+  if (!response.ok) {
+    await parseApiError(response);
+  }
+  return response.json();
+};
+
+export const publishToWeibo = async (
+  payload: WeiboPublishPayload,
+): Promise<WeiboPublishCreateResponse> => {
+  const response = await fetch(`${API_BASE_URL}/social/publish/weibo`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    await parseApiError(response);
+  }
+  return response.json();
+};
+
+export const getPublishJobStatus = async (
+  jobId: string,
+): Promise<PublishJobResponse> => {
+  const response = await fetch(
+    `${API_BASE_URL}/social/publish/${encodeURIComponent(jobId)}`,
+  );
+  if (!response.ok) {
+    await parseApiError(response);
+  }
+  return response.json();
+};
+
+export const triggerXSyncOnce = async (): Promise<Record<string, unknown>> => {
+  const response = await fetch(`${API_BASE_URL}/social/sync/x`, {
+    method: 'POST',
+  });
+  if (!response.ok) {
+    await parseApiError(response);
+  }
   return response.json();
 };

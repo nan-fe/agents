@@ -45,12 +45,16 @@ from app.models.schemas import (
     ProjectFinalizeResponse,
     ProjectListItem,
     ProjectListResponse,
+    PublishJobResponse,
     ShareCreateRequest,
     ShareCreateResponse,
     ShareSnapshot,
+    SocialStatusResponse,
     SSEMessage,
     UserInput,
     VersionSnapshot,
+    WeiboPublishCreateResponse,
+    WeiboPublishRequest,
 )
 from app.services.dialog_stream_store import (
     DialogStream,
@@ -62,6 +66,8 @@ from app.services.lark_oauth_service import lark_oauth_registry
 from app.services.product_info_service import ProductInfoService
 from app.services.product_page_scraper import get_product_screenshot_dir
 from app.services.share_service import share_store
+from app.services.social.social_service import get_social_publish_service
+from app.services.social.x_sync_poller import run_x_sync_once, x_sync_poller_loop
 from app.services.sse_resume import ResumePhase, resolve_resume_phase
 from app.utils.display_labels import (
     agent_display_label,
@@ -124,6 +130,9 @@ async def lifespan(app: FastAPI):
     sse_reaper_task = None
     if settings.SSE_SUBSCRIBER_IDLE_TTL_SECONDS > 0:
         sse_reaper_task = asyncio.create_task(_reap_stale_sse_subscribers())
+    x_sync_task = None
+    if settings.X_SYNC_ENABLED:
+        x_sync_task = asyncio.create_task(x_sync_poller_loop())
     yield
     t = getattr(app.state, "rag_warm_task", None)
     if t is not None and not t.done():
@@ -136,6 +145,12 @@ async def lifespan(app: FastAPI):
         sse_reaper_task.cancel()
         try:
             await sse_reaper_task
+        except asyncio.CancelledError:
+            pass
+    if x_sync_task is not None and not x_sync_task.done():
+        x_sync_task.cancel()
+        try:
+            await x_sync_task
         except asyncio.CancelledError:
             pass
     await close_db()
@@ -978,6 +993,79 @@ async def lark_push_review(payload: LarkPushReviewRequest):
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
         logger.warning("飞书推送失败: %s", exc)
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@app.get("/social/status", response_model=SocialStatusResponse)
+async def social_status():
+    """微博发布与 X 同步配置状态。"""
+    data = await get_social_publish_service().get_status()
+    return SocialStatusResponse(**data)
+
+
+@app.post("/social/publish/weibo", response_model=WeiboPublishCreateResponse)
+async def social_publish_weibo(payload: WeiboPublishRequest):
+    """异步发布到微博，返回 job_id 供轮询。"""
+    result: dict = {}
+    version_id = (payload.version_id or "").strip()
+
+    if version_id:
+        async with get_session() as session:
+            row = await session.get(VersionRow, version_id)
+            if row is None:
+                raise HTTPException(status_code=404, detail="版本不存在")
+            stored = dict(row.result or {})
+            result.update(stored)
+            result.setdefault("version_id", row.version_id)
+
+    for key in ("title", "content", "image_url", "share_url"):
+        val = getattr(payload, key, None)
+        if val is not None and str(val).strip():
+            result[key] = val
+
+    if payload.hashtags is not None:
+        result["hashtags"] = payload.hashtags
+
+    if payload.review_approved is not None:
+        result["review_approved"] = payload.review_approved
+
+    if not (result.get("title") or result.get("content")):
+        raise HTTPException(status_code=400, detail="需提供 title/content 或有效的 version_id")
+
+    try:
+        job_id = await get_social_publish_service().start_weibo_publish(
+            title=str(result.get("title") or ""),
+            content=str(result.get("content") or ""),
+            hashtags=result.get("hashtags"),
+            image_url=result.get("image_url"),
+            share_url=result.get("share_url"),
+            review_approved=result.get("review_approved"),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.warning("微博发布任务创建失败: %s", exc)
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    return WeiboPublishCreateResponse(job_id=job_id, status="pending")
+
+
+@app.get("/social/publish/{job_id}", response_model=PublishJobResponse)
+async def social_publish_job_status(job_id: str):
+    """查询微博发布任务状态。"""
+    job = await get_social_publish_service().get_job(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="任务不存在")
+    return PublishJobResponse(**job)
+
+
+@app.post("/social/sync/x")
+async def social_sync_x_once():
+    """手动触发一次 X → 微博同步（调试/运维）。"""
+    try:
+        return await run_x_sync_once()
+    except Exception as exc:
+        logger.warning("X 同步失败: %s", exc)
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 

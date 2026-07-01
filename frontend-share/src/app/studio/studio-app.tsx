@@ -12,6 +12,7 @@ import { atelierTheme } from '../../theme/atelier-theme';
 import DialogContent from './components/dialog-content';
 import { startNewConversation } from './lib/new-conversation';
 import ProductPool from './components/product-pool';
+import SocialSyncSettings from './components/social-sync-settings';
 import { getStudioUserId } from './lib/studio-user';
 
 import './page.css';
@@ -109,6 +110,9 @@ const StudioAppContent = () => {
             },
           ]}
         />
+        <div className="px-2 pb-2">
+          <SocialSyncSettings />
+        </div>
         <div className="mt-auto border-t border-gold/20 p-3">
           <a className="studio-logout-link" href="/logout">
             <LogoutOutlined aria-hidden="true" />
