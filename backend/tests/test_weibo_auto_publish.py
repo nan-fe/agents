@@ -1,9 +1,9 @@
-"""生成完成后自动微博发布。"""
+"""生成完成后的微博发布 eligibility 元数据。"""
 
 from __future__ import annotations
 
 import asyncio
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
 from app.config import settings
 from app.services.social.social_service import (
@@ -41,28 +41,24 @@ def test_try_auto_publish_after_generation_disabled() -> None:
     asyncio.run(_run())
 
 
-def test_try_auto_publish_starts_job() -> None:
+def test_try_auto_publish_returns_eligibility_only() -> None:
     async def _run() -> None:
         settings.WEIBO_PUBLISH_ENABLED = True
         settings.WEIBO_PUBLISH_AUTO_ON_COMPLETE = True
         settings.WEIBO_PUBLISH_SKIP_REVIEW = False
         service = SocialPublishService()
-        with patch.object(
-            service,
-            "start_weibo_publish",
-            new=AsyncMock(return_value="job123"),
-        ):
-            meta = await service.try_auto_publish_after_generation(
-                {
-                    "title": "标题",
-                    "content": "正文",
-                    "hashtags": ["测试"],
-                    "review_approved": True,
-                },
-                review_passed=True,
-            )
-        assert meta["auto_started"] is True
-        assert meta["job_id"] == "job123"
-        assert meta.get("share_id")
+        meta = await service.try_auto_publish_after_generation(
+            {
+                "title": "标题",
+                "content": "正文",
+                "hashtags": ["测试"],
+                "review_approved": True,
+            },
+            review_passed=True,
+        )
+        assert meta["eligible"] is True
+        assert meta["auto_started"] is False
+        assert meta.get("job_id") is None
+        assert meta.get("share_id") is None
 
     asyncio.run(_run())

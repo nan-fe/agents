@@ -763,6 +763,159 @@
     border-color: #c9a227 !important;
     color: #e8d48b !important;
   }
+
+  .weibo-sync-modal .ant-modal-content {
+    padding: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .weibo-sync-modal .ant-modal-body {
+    padding: 0;
+  }
+
+  .weibo-sync-modal__panel {
+    position: relative;
+    overflow: hidden;
+    padding: 2rem 1.75rem 1.75rem;
+    background: linear-gradient(165deg, #faf3e8 0%, #f0e4cc 48%, #e8dcc4 100%);
+    border: 1px solid rgba(201, 162, 39, 0.55);
+    box-shadow:
+      0 24px 48px rgba(42, 34, 24, 0.18),
+      inset 0 1px 0 rgba(255, 255, 255, 0.65);
+    animation: atelier-reveal 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  .weibo-sync-modal__corner {
+    position: absolute;
+    width: 2.5rem;
+    height: 2.5rem;
+    pointer-events: none;
+    opacity: 0.45;
+  }
+
+  .weibo-sync-modal__corner--tl {
+    top: 0;
+    left: 0;
+    border-top: 2px solid var(--color-gold);
+    border-left: 2px solid var(--color-gold);
+  }
+
+  .weibo-sync-modal__corner--br {
+    right: 0;
+    bottom: 0;
+    border-right: 2px solid var(--color-gold-dark);
+    border-bottom: 2px solid var(--color-gold-dark);
+  }
+
+  .weibo-sync-modal__eyebrow {
+    margin: 0 0 0.35rem;
+    font-family: Cinzel, 'Times New Roman', serif;
+    font-size: 0.62rem;
+    font-weight: 600;
+    letter-spacing: 0.28em;
+    text-transform: uppercase;
+    color: var(--color-gold-dark);
+  }
+
+  .weibo-sync-modal__title {
+    margin: 0 0 0.85rem;
+    font-family: Cinzel, 'Times New Roman', serif;
+    font-size: 1.35rem;
+    font-weight: 600;
+    line-height: 1.35;
+    color: var(--color-ink, #2a2218);
+  }
+
+  .weibo-sync-modal__hint {
+    margin: 0 0 1.25rem;
+    font-family: 'Cormorant Garamond', Georgia, serif;
+    font-size: 1.05rem;
+    line-height: 1.55;
+    color: rgba(42, 34, 24, 0.72);
+  }
+
+  .weibo-sync-modal__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.65rem;
+    justify-content: flex-end;
+  }
+
+  .weibo-sync-modal__btn {
+    cursor: pointer;
+    padding: 0.55rem 1.1rem;
+    font-family: Cinzel, 'Times New Roman', serif;
+    font-size: 0.68rem;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    border-radius: 2px;
+    transition:
+      background 0.2s ease,
+      color 0.2s ease,
+      border-color 0.2s ease,
+      transform 0.15s ease;
+  }
+
+  .weibo-sync-modal__btn--ghost {
+    color: var(--color-burgundy-dark);
+    background: transparent;
+    border: 1px solid rgba(107, 45, 62, 0.35);
+  }
+
+  .weibo-sync-modal__btn--ghost:hover {
+    border-color: var(--color-burgundy);
+    color: var(--color-burgundy);
+    transform: translateY(-1px);
+  }
+
+  .weibo-sync-modal__btn--primary {
+    color: #faf3e8;
+    background: linear-gradient(135deg, var(--color-burgundy) 0%, var(--color-burgundy-dark) 100%);
+    border: 1px solid rgba(74, 31, 44, 0.8);
+    box-shadow: 0 4px 14px rgba(74, 31, 44, 0.25);
+  }
+
+  .weibo-sync-modal__btn--primary:hover {
+    filter: brightness(1.06);
+    transform: translateY(-1px);
+  }
+
+  .weibo-sync-modal__progress {
+    padding-top: 0.25rem;
+  }
+
+  .weibo-sync-modal__pulse {
+    display: flex;
+    gap: 0.35rem;
+    margin-bottom: 1rem;
+  }
+
+  .weibo-sync-modal__pulse span {
+    width: 0.45rem;
+    height: 0.45rem;
+    border-radius: 50%;
+    background: var(--color-gold);
+    animation: weibo-sync-pulse 1.2s ease-in-out infinite;
+  }
+
+  .weibo-sync-modal__pulse span:nth-child(2) {
+    animation-delay: 0.15s;
+  }
+
+  .weibo-sync-modal__pulse span:nth-child(3) {
+    animation-delay: 0.3s;
+  }
+
+  .weibo-sync-modal__log {
+    margin: 0;
+    padding-left: 1.1rem;
+    font-family: 'Cormorant Garamond', Georgia, serif;
+    font-size: 0.92rem;
+    line-height: 1.5;
+    color: rgba(42, 34, 24, 0.65);
+  }
 }
 
 @keyframes atelier-reveal {
@@ -792,6 +945,20 @@
 @keyframes thinking-show {
   to {
     opacity: 1;
+  }
+}
+
+@keyframes weibo-sync-pulse {
+  0%,
+  80%,
+  100% {
+    opacity: 0.35;
+    transform: scale(0.85);
+  }
+
+  40% {
+    opacity: 1;
+    transform: scale(1);
   }
 }
 

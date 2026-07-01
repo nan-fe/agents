@@ -60,14 +60,7 @@ const WeiboPublishPrompt = ({ result }: WeiboPublishPromptProps) => {
     return null;
   }
 
-  if (!meta.eligible && !meta.auto_started && !meta.error) {
-    if (meta.enabled === false && result.review_approved) {
-      return (
-        <p className="mt-3 font-body text-xs italic text-ink-muted">
-          微博自动发布未启用：请在 backend/.env 设置 WEIBO_PUBLISH_ENABLED=true 并重启后端。
-        </p>
-      );
-    }
+  if (!meta.auto_started && !meta.error) {
     return null;
   }
 

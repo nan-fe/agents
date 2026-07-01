@@ -216,7 +216,7 @@ class DialogOrchestratorAgent:
                 await emit_log(
                     log_callback,
                     "Orchestrator",
-                    "审核通过，正在启动微博自动发布（browser-use）…",
+                    "审核通过，可在 Studio 生成分享链接时选择同步发布到微博",
                 )
             try:
                 final_result[

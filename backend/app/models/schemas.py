@@ -308,3 +308,32 @@ class SocialStatusResponse(BaseModel):
     auto_on_complete: bool = True
     publish_engine: str = "browser_use"
     dry_run: bool
+
+
+class WeiboLoginStartResponse(BaseModel):
+    session_id: str
+    logged_in: bool
+    current_url: str
+    profile_path: str
+    viewport_width: int = 1280
+    viewport_height: int = 900
+
+
+class WeiboLoginStatusResponse(BaseModel):
+    session_id: str
+    logged_in: bool
+    current_url: str
+    profile_path: str
+
+
+class WeiboLoginClickRequest(BaseModel):
+    x: float
+    y: float
+
+
+class WeiboLoginTypeRequest(BaseModel):
+    text: str
+
+
+class WeiboLoginKeyRequest(BaseModel):
+    key: str

@@ -26,6 +26,12 @@ ProgressCallback = Callable[[str], Awaitable[None] | None]
 _login_state_cache: tuple[float, dict[str, object]] | None = None
 _LOGIN_STATE_CACHE_TTL_SEC = 30
 
+
+def invalidate_weibo_login_state_cache() -> None:
+    """登录成功后清除短缓存，使 /social/status 立即反映新状态。"""
+    global _login_state_cache
+    _login_state_cache = None
+
 _COMPOSE_URLS = ("https://weibo.com/",)
 
 _TEXTAREA_SELECTORS = (
@@ -87,50 +93,92 @@ async def _download_image(url: str) -> Path | None:
         return None
 
 
+async def _check_weibo_login_state_browser_use(profile_dir: str) -> dict[str, object]:
+    from app.services.social.browser_use_support import (
+        close_weibo_browser_session,
+        create_weibo_browser_session,
+        get_focus_page_html,
+        get_focus_page_url,
+        navigate_weibo_home,
+        require_browser_use,
+    )
+
+    require_browser_use()
+    browser_session = await create_weibo_browser_session(headless=True)
+    try:
+        await navigate_weibo_home(browser_session)
+        url = await get_focus_page_url(browser_session)
+        body = await get_focus_page_html(browser_session)
+        logged_in = is_likely_logged_in_url(url) and not any(m in body for m in _LOGIN_MARKERS)
+        return {
+            "configured": True,
+            "logged_in": logged_in,
+            "current_url": url,
+            "profile_path": profile_dir,
+            "driver": "browser_use",
+        }
+    finally:
+        await close_weibo_browser_session(browser_session)
+
+
+async def _check_weibo_login_state_playwright(profile_dir: str) -> dict[str, object]:
+    from playwright.async_api import async_playwright
+
+    async with async_playwright() as playwright:
+        context = await _launch_context(playwright, headless=True)
+        pages = context.pages  # type: ignore[attr-defined]
+        page = pages[0] if pages else await context.new_page()  # type: ignore[attr-defined]
+        await page.goto(
+            "https://weibo.com",
+            wait_until="domcontentloaded",
+            timeout=settings.WEIBO_PUBLISH_TIMEOUT_MS,
+        )  # type: ignore[attr-defined]
+        await page.wait_for_timeout(1500)  # type: ignore[attr-defined]
+        url = page.url  # type: ignore[attr-defined]
+        body = await page.content()  # type: ignore[attr-defined]
+        logged_in = is_likely_logged_in_url(url) and not any(m in body for m in _LOGIN_MARKERS)
+        await context.close()  # type: ignore[attr-defined]
+        return {
+            "configured": True,
+            "logged_in": logged_in,
+            "current_url": url,
+            "profile_path": profile_dir,
+            "driver": "playwright",
+        }
+
+
 async def check_weibo_login_state(*, force_refresh: bool = False) -> dict[str, object]:
-    """检测微博登录态（轻量访问首页，后台 headless，带短缓存）。"""
+    """检测微博登录态（browser-use 或 Playwright，后台 headless，带短缓存）。"""
     global _login_state_cache
 
     if not settings.WEIBO_PUBLISH_ENABLED:
         return {"configured": False, "logged_in": False, "reason": "未启用微博发布"}
-    profile_dir = resolve_weibo_profile_dir()
     if settings.WEIBO_PUBLISH_DRY_RUN:
         return {"configured": True, "logged_in": True, "dry_run": True}
+
+    profile_dir = resolve_weibo_profile_dir()
 
     if not force_refresh and _login_state_cache is not None:
         cached_at, cached_result = _login_state_cache
         if time.time() - cached_at < _LOGIN_STATE_CACHE_TTL_SEC:
             return cached_result
 
+    engine = (settings.WEIBO_PUBLISH_ENGINE or "browser_use").strip().lower()
     try:
-        from playwright.async_api import async_playwright
+        if engine == "browser_use":
+            result = await _check_weibo_login_state_browser_use(profile_dir)
+        else:
+            result = await _check_weibo_login_state_playwright(profile_dir)
+        _login_state_cache = (time.time(), result)
+        return result
     except ImportError:
-        return {"configured": False, "logged_in": False, "reason": "playwright 未安装"}
-
-    try:
-        async with async_playwright() as playwright:
-            # 状态检测始终 headless，避免每次 /social/status 弹出浏览器窗口。
-            context = await _launch_context(playwright, headless=True)
-            pages = context.pages  # type: ignore[attr-defined]
-            page = pages[0] if pages else await context.new_page()  # type: ignore[attr-defined]
-            await page.goto(
-                "https://weibo.com",
-                wait_until="domcontentloaded",
-                timeout=settings.WEIBO_PUBLISH_TIMEOUT_MS,
-            )  # type: ignore[attr-defined]
-            await page.wait_for_timeout(1500)  # type: ignore[attr-defined]
-            url = page.url  # type: ignore[attr-defined]
-            body = await page.content()  # type: ignore[attr-defined]
-            logged_in = is_likely_logged_in_url(url) and not any(m in body for m in _LOGIN_MARKERS)
-            await context.close()  # type: ignore[attr-defined]
-            result = {
-                "configured": True,
-                "logged_in": logged_in,
-                "current_url": url,
-                "profile_path": profile_dir,
+        if engine == "browser_use":
+            return {
+                "configured": False,
+                "logged_in": False,
+                "reason": "browser-use 未安装",
             }
-            _login_state_cache = (time.time(), result)
-            return result
+        return {"configured": False, "logged_in": False, "reason": "playwright 未安装"}
     except Exception as exc:
         logger.warning("微博登录态检测失败: %s", exc)
         result = {"configured": True, "logged_in": False, "reason": str(exc)}
