@@ -13,13 +13,17 @@ from app.services.social.social_service import (
 
 
 def test_build_weibo_publish_meta() -> None:
-    meta = build_weibo_publish_meta(
-        review_passed=True,
-        auto_started=True,
-        job_id="abc",
-        share_id="share1",
-    )
-    assert meta["eligible"] is False  # WEIBO_PUBLISH_ENABLED default false
+    with patch.object(settings, "WEIBO_PUBLISH_ENABLED", False):
+        with patch.object(settings, "WEIBO_PUBLISH_AUTO_ON_COMPLETE", True):
+            meta = build_weibo_publish_meta(
+                review_passed=True,
+                auto_started=True,
+                job_id="abc",
+                share_id="share1",
+            )
+    assert meta["eligible"] is False
+    assert meta["enabled"] is False
+    assert meta["auto_on_complete"] is True
     assert meta["auto_started"] is True
     assert meta["job_id"] == "abc"
 
