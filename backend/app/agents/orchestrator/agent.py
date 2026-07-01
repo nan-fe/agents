@@ -219,11 +219,11 @@ class DialogOrchestratorAgent:
                     "审核通过，正在启动微博自动发布（browser-use）…",
                 )
             try:
-                final_result["weibo_publish"] = (
-                    await get_social_publish_service().try_auto_publish_after_generation(
-                        final_result,
-                        review_passed=True,
-                    )
+                final_result[
+                    "weibo_publish"
+                ] = await get_social_publish_service().try_auto_publish_after_generation(
+                    final_result,
+                    review_passed=True,
                 )
             except Exception as exc:
                 logger.warning("自动微博发布元数据失败（不影响生成结果）: %s", exc)

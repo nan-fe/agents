@@ -26,9 +26,7 @@ ProgressCallback = Callable[[str], Awaitable[None] | None]
 _login_state_cache: tuple[float, dict[str, object]] | None = None
 _LOGIN_STATE_CACHE_TTL_SEC = 30
 
-_COMPOSE_URLS = (
-    "https://weibo.com/",
-)
+_COMPOSE_URLS = ("https://weibo.com/",)
 
 _TEXTAREA_SELECTORS = (
     "textarea",
@@ -115,7 +113,11 @@ async def check_weibo_login_state(*, force_refresh: bool = False) -> dict[str, o
             context = await _launch_context(playwright, headless=True)
             pages = context.pages  # type: ignore[attr-defined]
             page = pages[0] if pages else await context.new_page()  # type: ignore[attr-defined]
-            await page.goto("https://weibo.com", wait_until="domcontentloaded", timeout=settings.WEIBO_PUBLISH_TIMEOUT_MS)  # type: ignore[attr-defined]
+            await page.goto(
+                "https://weibo.com",
+                wait_until="domcontentloaded",
+                timeout=settings.WEIBO_PUBLISH_TIMEOUT_MS,
+            )  # type: ignore[attr-defined]
             await page.wait_for_timeout(1500)  # type: ignore[attr-defined]
             url = page.url  # type: ignore[attr-defined]
             body = await page.content()  # type: ignore[attr-defined]
@@ -301,7 +303,11 @@ async def _publish_via_playwright(
             for url in _COMPOSE_URLS:
                 try:
                     await _emit(on_progress, f"打开 {url}")
-                    await page.goto(url, wait_until="domcontentloaded", timeout=settings.WEIBO_PUBLISH_TIMEOUT_MS)  # type: ignore[attr-defined]
+                    await page.goto(
+                        url,
+                        wait_until="domcontentloaded",
+                        timeout=settings.WEIBO_PUBLISH_TIMEOUT_MS,
+                    )  # type: ignore[attr-defined]
                     await page.wait_for_timeout(2000)  # type: ignore[attr-defined]
                     opened = True
                     break
@@ -313,7 +319,9 @@ async def _publish_via_playwright(
             current_url = page.url  # type: ignore[attr-defined]
             body = await page.content()  # type: ignore[attr-defined]
             if not is_likely_logged_in_url(current_url) or any(m in body for m in _LOGIN_MARKERS):
-                raise RuntimeError("微博未登录或需要安全验证，请使用 BROWSER_USE_PROFILE_PATH 预先登录并完成验证")
+                raise RuntimeError(
+                    "微博未登录或需要安全验证，请使用 BROWSER_USE_PROFILE_PATH 预先登录并完成验证"
+                )
 
             await _emit(on_progress, "填写正文…")
             filled = await _fill_compose(page, payload.text)

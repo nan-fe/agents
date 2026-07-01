@@ -52,7 +52,9 @@ async def _fetch_latest_tweet_text(username: str) -> tuple[str, str] | None:
             locale="en-US",
         )
         page = context.pages[0] if context.pages else await context.new_page()
-        await page.goto(url, wait_until="domcontentloaded", timeout=settings.WEIBO_PUBLISH_TIMEOUT_MS)
+        await page.goto(
+            url, wait_until="domcontentloaded", timeout=settings.WEIBO_PUBLISH_TIMEOUT_MS
+        )
         await page.wait_for_timeout(2500)
 
         # 跳过登录墙

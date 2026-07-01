@@ -94,7 +94,7 @@ async def publish_via_browser_use(
     except ImportError as exc:
         msg = (
             "browser-use 未安装。请执行："
-            "python3 -m pip install \"browser-use>=0.12.0\" -i https://pypi.org/simple"
+            'python3 -m pip install "browser-use>=0.12.0" -i https://pypi.org/simple'
         )
         if required:
             raise RuntimeError(msg) from exc
