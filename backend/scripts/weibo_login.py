@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""用与后端相同的 Playwright Profile 交互式登录微博（一次性）。"""
+"""用与后端相同的 browser-use Profile 交互式登录微博（一次性）。"""
 
 from __future__ import annotations
 
@@ -7,8 +7,14 @@ import asyncio
 import sys
 from pathlib import Path
 
+from app.services.social.browser_use_support import (
+    close_weibo_browser_session,
+    create_weibo_browser_session,
+    get_focus_page_url,
+    navigate_weibo_home,
+    require_browser_use,
+)
 from app.services.social.profile_paths import resolve_weibo_profile_dir
-from app.services.social.weibo_publisher import _launch_context
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 if str(BACKEND_ROOT) not in sys.path:
@@ -18,23 +24,17 @@ if str(BACKEND_ROOT) not in sys.path:
 async def main() -> None:
     profile_dir = resolve_weibo_profile_dir()
     print(f"Profile: {profile_dir}")
-    print("将打开浏览器，请完成微博登录/安全验证。")
+    print("将用 browser-use 打开浏览器，请完成微博登录/安全验证。")
     print("看到微博首页后回到终端按 Enter，再关闭浏览器。")
 
+    require_browser_use()
+    browser_session = await create_weibo_browser_session(headless=False)
     try:
-        from playwright.async_api import async_playwright
-    except ImportError as exc:
-        raise SystemExit(
-            "未安装 playwright。请执行: pip install playwright && playwright install chromium"
-        ) from exc
-
-    async with async_playwright() as playwright:
-        context = await _launch_context(playwright, headless=False)
-        page = context.pages[0] if context.pages else await context.new_page()
-        await page.goto("https://weibo.com/", wait_until="domcontentloaded", timeout=60000)
+        await navigate_weibo_home(browser_session)
         input("\n登录完成后按 Enter…")
-        print("当前 URL:", page.url)
-        await context.close()
+        print("当前 URL:", await get_focus_page_url(browser_session))
+    finally:
+        await close_weibo_browser_session(browser_session)
 
     print("完成。可运行: curl -s http://127.0.0.1:8000/social/status | python3 -m json.tool")
 

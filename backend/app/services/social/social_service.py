@@ -38,8 +38,8 @@ def build_weibo_publish_meta(
 
 
 class SocialPublishService:
-    async def get_status(self) -> dict[str, Any]:
-        weibo = await check_weibo_login_state()
+    async def get_status(self, *, force_refresh: bool = False) -> dict[str, Any]:
+        weibo = await check_weibo_login_state(force_refresh=force_refresh)
         return {
             "weibo_publish_enabled": settings.WEIBO_PUBLISH_ENABLED,
             "weibo": weibo,
@@ -117,56 +117,10 @@ class SocialPublishService:
         *,
         review_passed: bool,
     ) -> dict[str, Any]:
-        """内容生成且审核通过后，自动创建分享快照并启动微博发布任务。"""
+        """内容生成且审核通过后，仅返回微博发布 eligibility；实际发布由 Studio 弹窗确认。"""
         if not review_passed:
             return build_weibo_publish_meta(review_passed=False)
-        if not settings.WEIBO_PUBLISH_ENABLED or not settings.WEIBO_PUBLISH_AUTO_ON_COMPLETE:
-            return build_weibo_publish_meta(review_passed=True)
-
-        share_id: str | None = None
-        try:
-            from app.models.schemas import ShareCreateRequest
-            from app.services.share_service import share_store
-
-            snapshot = share_store.create_share(
-                ShareCreateRequest(
-                    title=str(result.get("title") or ""),
-                    content=str(result.get("content") or ""),
-                    hashtags=list(result.get("hashtags") or []),
-                    image_url=result.get("image_url"),
-                    message=result.get("message"),
-                )
-            )
-            share_id = snapshot.id
-        except Exception as exc:
-            logger.warning("自动发布：创建分享快照失败: %s", exc)
-            return build_weibo_publish_meta(
-                review_passed=True,
-                error=f"创建分享快照失败: {exc}",
-            )
-
-        try:
-            job_id = await self.start_weibo_publish(
-                title=str(result.get("title") or ""),
-                content=str(result.get("content") or ""),
-                hashtags=result.get("hashtags"),
-                image_url=result.get("image_url"),
-                share_url=f"/share/{share_id}" if share_id else None,
-                review_approved=True,
-            )
-            return build_weibo_publish_meta(
-                review_passed=True,
-                auto_started=True,
-                job_id=job_id,
-                share_id=share_id,
-            )
-        except Exception as exc:
-            logger.warning("自动微博发布启动失败: %s", exc)
-            return build_weibo_publish_meta(
-                review_passed=True,
-                share_id=share_id,
-                error=str(exc),
-            )
+        return build_weibo_publish_meta(review_passed=True)
 
     async def get_job(self, job_id: str) -> dict[str, Any] | None:
         job = await publish_job_store.get_job(job_id)

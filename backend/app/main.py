@@ -16,7 +16,7 @@ from typing import AsyncIterator
 import httpx
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.responses import JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from sse_starlette.sse import EventSourceResponse
 
@@ -53,6 +53,11 @@ from app.models.schemas import (
     SSEMessage,
     UserInput,
     VersionSnapshot,
+    WeiboLoginClickRequest,
+    WeiboLoginKeyRequest,
+    WeiboLoginStartResponse,
+    WeiboLoginStatusResponse,
+    WeiboLoginTypeRequest,
     WeiboPublishCreateResponse,
     WeiboPublishRequest,
 )
@@ -66,7 +71,10 @@ from app.services.lark_oauth_service import lark_oauth_registry
 from app.services.product_info_service import ProductInfoService
 from app.services.product_page_scraper import get_product_screenshot_dir
 from app.services.share_service import share_store
+from app.services.social.browser_use_support import VIEWPORT_HEIGHT, VIEWPORT_WIDTH
 from app.services.social.social_service import get_social_publish_service
+from app.services.social.weibo_login_session import weibo_login_session_manager
+from app.services.social.weibo_publisher import invalidate_weibo_login_state_cache
 from app.services.social.x_sync_poller import run_x_sync_once, x_sync_poller_loop
 from app.services.sse_resume import ResumePhase, resolve_resume_phase
 from app.utils.display_labels import (
@@ -997,10 +1005,126 @@ async def lark_push_review(payload: LarkPushReviewRequest):
 
 
 @app.get("/social/status", response_model=SocialStatusResponse)
-async def social_status():
+async def social_status(force_refresh: bool = False):
     """微博发布与 X 同步配置状态。"""
-    data = await get_social_publish_service().get_status()
+    data = await get_social_publish_service().get_status(force_refresh=force_refresh)
     return SocialStatusResponse(**data)
+
+
+@app.post("/social/weibo/login/start", response_model=WeiboLoginStartResponse)
+async def social_weibo_login_start():
+    """启动可视化微博登录会话（Studio 内截图交互）。"""
+    try:
+        session = await weibo_login_session_manager.start()
+        state = await session.evaluate_login()
+        if state["logged_in"]:
+            invalidate_weibo_login_state_cache()
+            await weibo_login_session_manager.close(session.session_id)
+        return WeiboLoginStartResponse(
+            session_id=session.session_id,
+            logged_in=bool(state["logged_in"]),
+            current_url=str(state["current_url"]),
+            profile_path=str(state["profile_path"]),
+            viewport_width=VIEWPORT_WIDTH,
+            viewport_height=VIEWPORT_HEIGHT,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.warning("微博登录会话启动失败: %s", exc)
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@app.get("/social/weibo/login/{session_id}/status", response_model=WeiboLoginStatusResponse)
+async def social_weibo_login_status(session_id: str):
+    """查询可视化登录会话是否已完成。"""
+    try:
+        session = await weibo_login_session_manager.get(session_id)
+        state = await session.evaluate_login()
+        if state["logged_in"]:
+            invalidate_weibo_login_state_cache()
+        return WeiboLoginStatusResponse(
+            session_id=session_id,
+            logged_in=bool(state["logged_in"]),
+            current_url=str(state["current_url"]),
+            profile_path=str(state["profile_path"]),
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.warning("微博登录状态查询失败: %s", exc)
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@app.get("/social/weibo/login/{session_id}/screenshot")
+async def social_weibo_login_screenshot(session_id: str):
+    """返回当前登录页截图（PNG）。"""
+    try:
+        session = await weibo_login_session_manager.get(session_id)
+        png = await session.screenshot_png()
+        return Response(content=png, media_type="image/png")
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.warning("微博登录截图失败: %s", exc)
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@app.post("/social/weibo/login/{session_id}/click")
+async def social_weibo_login_click(session_id: str, payload: WeiboLoginClickRequest):
+    """在截图对应坐标点击（完成扫码、输入框聚焦等）。"""
+    try:
+        session = await weibo_login_session_manager.get(session_id)
+        await session.click(payload.x, payload.y)
+        state = await session.evaluate_login()
+        if state["logged_in"]:
+            invalidate_weibo_login_state_cache()
+        return {"ok": True, **state}
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.warning("微博登录点击失败: %s", exc)
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@app.post("/social/weibo/login/{session_id}/type")
+async def social_weibo_login_type(session_id: str, payload: WeiboLoginTypeRequest):
+    """向当前焦点输入文本。"""
+    try:
+        session = await weibo_login_session_manager.get(session_id)
+        await session.type_text(payload.text)
+        return {"ok": True}
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.warning("微博登录输入失败: %s", exc)
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@app.post("/social/weibo/login/{session_id}/key")
+async def social_weibo_login_key(session_id: str, payload: WeiboLoginKeyRequest):
+    """发送键盘按键（Enter、Backspace 等）。"""
+    try:
+        session = await weibo_login_session_manager.get(session_id)
+        await session.press_key(payload.key)
+        state = await session.evaluate_login()
+        if state["logged_in"]:
+            invalidate_weibo_login_state_cache()
+        return {"ok": True, **state}
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.warning("微博登录按键失败: %s", exc)
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@app.delete("/social/weibo/login/{session_id}")
+async def social_weibo_login_close(session_id: str):
+    """结束可视化登录会话。"""
+    await weibo_login_session_manager.close(session_id)
+    return {"ok": True}
 
 
 @app.post("/social/publish/weibo", response_model=WeiboPublishCreateResponse)

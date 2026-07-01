@@ -15,11 +15,14 @@ test('creates share link and opens share page without errors', async ({ page }) 
 
   await sendStudioPromptAndWaitForGeneration(page, '写一篇平价好物分享');
 
+  const shareButton = page.getByRole('button', { name: '生成分享链接' });
+  await expect(shareButton).toBeEnabled({ timeout: 15_000 });
+
   const createShareRequestPromise = page.waitForRequest(
     (request) => request.method() === 'POST' && request.url().includes('/shares'),
   );
 
-  await page.getByRole('button', { name: '生成分享链接' }).click();
+  await shareButton.click();
 
   const createShareRequest = await createShareRequestPromise;
   expect(createShareRequest.postDataJSON()).toMatchObject({
@@ -37,7 +40,7 @@ test('creates share link and opens share page without errors', async ({ page }) 
   };
   expect(shareId).toBeTruthy();
 
-  await expect(page.getByRole('button', { name: '生成分享链接' })).toBeEnabled({
+  await expect(page.getByRole('button', { name: '复制分享链接' })).toBeEnabled({
     timeout: 10_000,
   });
 

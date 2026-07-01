@@ -1,6 +1,6 @@
 "use client";
 
-import { startTransition, useActionState, useEffect, useState } from 'react';
+import { startTransition, useActionState, useCallback, useEffect, useState } from 'react';
 import { Button, App, Collapse } from 'antd';
 import {
   getSocialStatus,
@@ -8,6 +8,7 @@ import {
   triggerXSyncOnce,
   type SocialStatusResponse,
 } from '@/services/api';
+import WeiboLoginPanel from '@/app/studio/components/weibo-login-panel';
 
 type SyncActionState = {
   message: string | null;
@@ -40,26 +41,24 @@ const syncAction = (
 const SocialSyncSettings = () => {
   const { message } = App.useApp();
   const [status, setStatus] = useState<SocialStatusResponse | null>(null);
+  const [loginOpen, setLoginOpen] = useState(false);
   const [syncState, runSync, isSyncing] = useActionState(
     syncAction(message),
     initialSyncState,
   );
 
-  useEffect(() => {
-    let cancelled = false;
-    getSocialStatus()
-      .then((data) => {
-        if (!cancelled) {
-          setStatus(data);
-        }
-      })
-      .catch((error) => {
-        reportError(error, 'social/getSocialStatus');
-      });
-    return () => {
-      cancelled = true;
-    };
+  const refreshStatus = useCallback(async (forceRefresh = false) => {
+    try {
+      const data = await getSocialStatus(forceRefresh);
+      setStatus(data);
+    } catch (error) {
+      reportError(error, 'social/getSocialStatus');
+    }
   }, []);
+
+  useEffect(() => {
+    void refreshStatus();
+  }, [refreshStatus]);
 
   if (!status?.x_sync_enabled && !status?.weibo_publish_enabled) {
     return null;
@@ -70,6 +69,13 @@ const SocialSyncSettings = () => {
 
   return (
     <div className="rounded-sm border border-gold/20 bg-canvas/40 p-2">
+      <WeiboLoginPanel
+        open={loginOpen}
+        onClose={() => setLoginOpen(false)}
+        onLoggedIn={() => {
+          void refreshStatus(true);
+        }}
+      />
       <Collapse
         ghost
         className="!bg-transparent"
@@ -87,10 +93,24 @@ const SocialSyncSettings = () => {
                   微博发布：
                   {status.weibo_publish_enabled
                     ? weiboReady
-                      ? ' 已配置'
-                      : ` 未就绪（${status.weibo.reason || '请登录微博 Profile'}）`
+                      ? ' 已登录，可自动发布'
+                      : ` 未就绪（${status.weibo.reason || '请登录微博'}）`
                     : ' 未启用'}
                 </p>
+                {status.weibo_publish_enabled && !weiboReady && !status.dry_run && (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                      size="small"
+                      className="!font-display !text-xs"
+                      onClick={() => setLoginOpen(true)}
+                    >
+                      登录微博
+                    </Button>
+                    <span className="text-ink-muted/80">
+                      在 PC 端打开可视化登录页，扫码或输入账号完成验证
+                    </span>
+                  </div>
+                )}
                 <p>
                   X 自动同步：
                   {status.x_sync_enabled
@@ -120,10 +140,9 @@ const SocialSyncSettings = () => {
                   </div>
                 )}
                 <p className="text-ink-muted/80">
-                  在 <code>backend/.env</code> 配置{' '}
-                  <code>WEIBO_PUBLISH_ENABLED</code>、
-                  <code>BROWSER_USE_PROFILE_PATH</code> 与{' '}
-                  <code>X_SYNC_*</code>。首次需用该 Profile 手动登录微博/X。
+                  微博登录与发布默认使用 <code>browser-use</code>（与{' '}
+                  <code>WEIBO_PUBLISH_ENGINE=browser_use</code> 一致），Profile 路径见{' '}
+                  <code>BROWSER_USE_PROFILE_PATH</code>。
                 </p>
               </div>
             ),

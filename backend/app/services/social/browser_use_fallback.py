@@ -107,6 +107,7 @@ async def publish_via_browser_use(
             user_data_dir=profile_dir,
             allowed_domains=["*.weibo.com", "weibo.com"],
             enable_default_extensions=False,
+            viewport={"width": 1280, "height": 900},
         )
         agent = Agent(
             task=task,

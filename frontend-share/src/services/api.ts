@@ -606,8 +606,123 @@ export type PublishJobResponse = {
   payload_summary?: Record<string, unknown>;
 };
 
-export const getSocialStatus = async (): Promise<SocialStatusResponse> => {
-  const response = await fetch(`${API_BASE_URL}/social/status`);
+export const getSocialStatus = async (
+  forceRefresh = false,
+): Promise<SocialStatusResponse> => {
+  const query = forceRefresh ? '?force_refresh=true' : '';
+  const response = await fetch(`${API_BASE_URL}/social/status${query}`);
+  if (!response.ok) {
+    await parseApiError(response);
+  }
+  return response.json();
+};
+
+export type WeiboLoginStartResponse = {
+  session_id: string;
+  logged_in: boolean;
+  current_url: string;
+  profile_path: string;
+  viewport_width: number;
+  viewport_height: number;
+};
+
+export type WeiboLoginStatusResponse = {
+  session_id: string;
+  logged_in: boolean;
+  current_url: string;
+  profile_path: string;
+};
+
+export const startWeiboLoginSession = async (): Promise<WeiboLoginStartResponse> => {
+  const response = await fetch(`${API_BASE_URL}/social/weibo/login/start`, {
+    method: 'POST',
+  });
+  if (!response.ok) {
+    await parseApiError(response);
+  }
+  return response.json();
+};
+
+export const pollWeiboLoginStatus = async (
+  sessionId: string,
+): Promise<WeiboLoginStatusResponse> => {
+  const response = await fetch(
+    `${API_BASE_URL}/social/weibo/login/${encodeURIComponent(sessionId)}/status`,
+  );
+  if (!response.ok) {
+    await parseApiError(response);
+  }
+  return response.json();
+};
+
+export const getWeiboLoginScreenshotUrl = (
+  sessionId: string,
+  cacheBust: number,
+): string =>
+  `${API_BASE_URL}/social/weibo/login/${encodeURIComponent(sessionId)}/screenshot?t=${cacheBust}`;
+
+export const clickWeiboLogin = async (
+  sessionId: string,
+  x: number,
+  y: number,
+): Promise<{ ok: boolean; logged_in?: boolean; current_url?: string }> => {
+  const response = await fetch(
+    `${API_BASE_URL}/social/weibo/login/${encodeURIComponent(sessionId)}/click`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ x, y }),
+    },
+  );
+  if (!response.ok) {
+    await parseApiError(response);
+  }
+  return response.json();
+};
+
+export const typeWeiboLogin = async (
+  sessionId: string,
+  text: string,
+): Promise<{ ok: boolean }> => {
+  const response = await fetch(
+    `${API_BASE_URL}/social/weibo/login/${encodeURIComponent(sessionId)}/type`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text }),
+    },
+  );
+  if (!response.ok) {
+    await parseApiError(response);
+  }
+  return response.json();
+};
+
+export const pressWeiboLoginKey = async (
+  sessionId: string,
+  key: string,
+): Promise<{ ok: boolean; logged_in?: boolean; current_url?: string }> => {
+  const response = await fetch(
+    `${API_BASE_URL}/social/weibo/login/${encodeURIComponent(sessionId)}/key`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key }),
+    },
+  );
+  if (!response.ok) {
+    await parseApiError(response);
+  }
+  return response.json();
+};
+
+export const closeWeiboLoginSession = async (
+  sessionId: string,
+): Promise<{ ok: boolean }> => {
+  const response = await fetch(
+    `${API_BASE_URL}/social/weibo/login/${encodeURIComponent(sessionId)}`,
+    { method: 'DELETE' },
+  );
   if (!response.ok) {
     await parseApiError(response);
   }

@@ -1,14 +1,9 @@
 "use client";
 
-import { startTransition, useActionState } from 'react';
+import { useCallback, useState } from 'react';
 import { Button, App, Collapse } from 'antd';
-import {
-  pushReviewToLark,
-  reportError,
-  type LarkPushReviewPayload,
-} from '@/services/api';
+import { pushReviewToLark, reportError } from '@/services/api';
 import type { DialogResultData } from '@/types/conversation';
-// import FeishuOAuthConnect from './feishu-oauth-connect';
 
 type PushState = {
   pushed: boolean;
@@ -31,24 +26,16 @@ const shouldShowFeishuPrompt = (result: DialogResultData): boolean => {
   return meta.auto_sent === false || meta.mode === 'prompt';
 };
 
-const pushReviewAction = (
-  messageApi: ReturnType<typeof App.useApp>['message'],
-) => async (
-  _prev: PushState,
-  payload: LarkPushReviewPayload,
-): Promise<PushState> => {
-  try {
-    await pushReviewToLark(payload);
-    messageApi.success('已推送到飞书');
-    return { pushed: true, error: null };
-  } catch (error) {
-    const detail =
-      error instanceof Error ? error.message : '推送失败，请稍后重试';
-    reportError(error, 'feishu/pushReview');
-    messageApi.error(detail);
-    return { pushed: false, error: detail };
-  }
-};
+const buildPushPayload = (result: DialogResultData) => ({
+  title: result.title,
+  content: result.content,
+  project_id: result.project_id,
+  version: result.version,
+  version_id: result.version_id,
+  image_url: result.image_url,
+  review_feedback: result.review_feedback,
+  hashtags: result.hashtags,
+});
 
 type FeishuPushPromptProps = {
   result: DialogResultData;
@@ -56,10 +43,26 @@ type FeishuPushPromptProps = {
 
 const FeishuPushPrompt = ({ result }: FeishuPushPromptProps) => {
   const { message } = App.useApp();
-  const [pushState, pushReview, isPushing] = useActionState(
-    pushReviewAction(message),
-    initialPushState,
-  );
+  const [pushState, setPushState] = useState<PushState>(initialPushState);
+  const [isPushing, setIsPushing] = useState(false);
+
+  const handlePush = useCallback(async () => {
+    setIsPushing(true);
+    const payload = buildPushPayload(result);
+    try {
+      await pushReviewToLark(payload);
+      message.success('已推送到飞书');
+      setPushState({ pushed: true, error: null });
+    } catch (error) {
+      const detail =
+        error instanceof Error ? error.message : '推送失败，请稍后重试';
+      reportError(error, 'feishu/pushReview');
+      message.error(detail);
+      setPushState({ pushed: false, error: detail });
+    } finally {
+      setIsPushing(false);
+    }
+  }, [message, result]);
 
   if (!shouldShowFeishuPrompt(result)) {
     if (result.lark_notification?.auto_sent) {
@@ -76,31 +79,9 @@ const FeishuPushPrompt = ({ result }: FeishuPushPromptProps) => {
   const promptText = meta?.prompt ?? '审核已通过。是否推送到飞书？';
   const canPush = meta?.configured;
 
-  const payload: LarkPushReviewPayload = {
-    title: result.title,
-    content: result.content,
-    project_id: result.project_id,
-    version: result.version,
-    version_id: result.version_id,
-    image_url: result.image_url,
-    review_feedback: result.review_feedback,
-    hashtags: result.hashtags,
-  };
-
   return (
     <div className="mt-4 rounded-sm border border-gold/30 bg-canvas/60 p-4">
       <p className="font-body text-sm text-ink">{promptText}</p>
-
-      {/* OAuth 连接入口暂时关闭
-      {useUserOAuth && (
-        <div className="mt-3">
-          <FeishuOAuthConnect
-            userId={userId}
-            onStatusChange={setOauthConnected}
-          />
-        </div>
-      )}
-      */}
 
       {meta?.error && (
         <p className="mt-2 font-body text-sm text-burgundy-dark">
@@ -125,9 +106,7 @@ const FeishuPushPrompt = ({ result }: FeishuPushPromptProps) => {
             disabled={!canPush}
             className="!font-display !text-xs !uppercase !tracking-wider"
             onClick={() => {
-              startTransition(() => {
-                pushReview(payload);
-              });
+              void handlePush();
             }}
           >
             推送到飞书
