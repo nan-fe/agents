@@ -31,7 +31,9 @@ def _mock_session(*, logged_in: bool = False) -> WeiboLoginSession:
     session.evaluate_login = AsyncMock(  # type: ignore[method-assign]
         return_value={
             "logged_in": logged_in,
-            "current_url": "https://weibo.com/" if logged_in else "https://passport.weibo.com/login",
+            "current_url": "https://weibo.com/"
+            if logged_in
+            else "https://passport.weibo.com/login",
             "profile_path": "/tmp/weibo-profile",
         },
     )

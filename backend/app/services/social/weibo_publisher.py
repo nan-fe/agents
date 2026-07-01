@@ -32,6 +32,7 @@ def invalidate_weibo_login_state_cache() -> None:
     global _login_state_cache
     _login_state_cache = None
 
+
 _COMPOSE_URLS = ("https://weibo.com/",)
 
 _TEXTAREA_SELECTORS = (
