@@ -6,6 +6,8 @@ backend/venv/
 backend/env/
 backend/app/data/shares.json
 backend/app/data/dialog_streams/
+data/weibo-profile/
+data/x-profiles/
 
 # 前端
 frontend-ts/node_modules/

@@ -36,7 +36,7 @@ services:
       - ./data/shares:/data/shares
       - ./data/memory:/data/memory
       - ./data/chroma:/data/chroma_taobao_v1
-      - ./data/chrome-profiles:/data/chrome-profiles
+      - ./data/weibo-profile:/data/weibo-profile
     networks:
       - app-network
     restart: unless-stopped
