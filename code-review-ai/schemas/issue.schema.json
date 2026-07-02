@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CodeReviewIssueList",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "required": ["agent", "file", "line", "message", "confidence"],
+    "additionalProperties": false,
+    "properties": {
+      "agent": {
+        "type": "string",
+        "enum": [
+          "tooling",
+          "compliance-1",
+          "cross-file-impact",
+          "obvious-errors",
+          "git-blame",
+          "requirements-traceability"
+        ]
+      },
+      "file": {
+        "type": "string",
+        "description": "Repository-relative file path"
+      },
+      "line": {
+        "type": "integer",
+        "minimum": 1
+      },
+      "message": {
+        "type": "string",
+        "description": "Human-readable issue description"
+      },
+      "confidence": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 100
+      },
+      "rule_ref": {
+        "type": "string",
+        "description": "AGENTS.md section, requirement ID (R1), or check name"
+      },
+      "evidence": {
+        "type": "string",
+        "description": "Diff snippet, grep match, blame commit, or tool output"
+      }
+    }
+  }
+}
