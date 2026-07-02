@@ -50,12 +50,26 @@ python -m playwright install chromium
 - `WEIBO_PUBLISH_ENABLED=true` — 启用微博发布
 - `WEIBO_PUBLISH_AUTO_ON_COMPLETE=true` — **内容生成且审核通过后自动发微博**（默认开启）
 - `WEIBO_PUBLISH_ENGINE=browser_use` — 使用 browser-use Agent 打开微博并发布（推荐）
-- `BROWSER_USE_PROFILE_PATH` — 浏览器 Profile 目录（路径名勿含 `chrome`；登录：`python3 scripts/weibo_login.py`）
+- `BROWSER_USE_PROFILE_PATH` — 浏览器 Profile 目录（路径名勿含 `chrome`）
 - `WEIBO_PUBLISH_DRY_RUN=true` — 本地演练，不真发
 
-browser-use 需单独安装：`pip install -r requirements-social.txt -i https://pypi.org/simple`
+**本地登录 → 线上自动发布：**
 
-检测状态：`GET http://localhost:8000/social/status`
+1. 本地登录（macOS `open` 打开 Playwright Chromium，写入 `data/weibo-profile`）：
+
+   ```bash
+   bash scripts/weibo-login.sh
+   ```
+
+   在弹出的浏览器里完成微博登录，**关闭浏览器**后再同步。
+
+2. 同步 Profile 到服务器（Docker 挂载 `/data/weibo-profile` 后自动复用 Cookie）：
+
+   ```bash
+   bash scripts/sync-weibo-profile.sh root@your-server
+   ```
+
+3. 验证：`GET http://localhost:8000/social/status`（`weibo.logged_in` 应为 `true`）
 
 ## 配置环境变量
 

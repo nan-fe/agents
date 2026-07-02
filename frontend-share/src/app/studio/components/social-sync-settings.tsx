@@ -64,8 +64,8 @@ const SocialSyncSettings = () => {
     return null;
   }
 
-  const weiboReady =
-    status.weibo.configured && (status.weibo.logged_in || status.dry_run);
+  const weiboLoggedIn = Boolean(status.weibo.logged_in);
+  const weiboReady = weiboLoggedIn || status.dry_run;
 
   return (
     <div className="rounded-sm border border-gold/20 bg-canvas/40 p-2">
@@ -97,7 +97,7 @@ const SocialSyncSettings = () => {
                       : ` 未就绪（${status.weibo.reason || '请登录微博'}）`
                     : ' 未启用'}
                 </p>
-                {status.weibo_publish_enabled && !weiboReady && !status.dry_run && (
+                {status.weibo_publish_enabled && !weiboLoggedIn && !status.dry_run && (
                   <div className="flex flex-wrap items-center gap-2">
                     <Button
                       size="small"
