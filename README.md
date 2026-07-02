@@ -9,6 +9,8 @@
 本项目采用多智能体协作架构：编排层负责意图识别、执行路径规划与内容 brief；Copywriter、Image、Reviewer 等专业 Agent 协同完成平台内容的创作、配图和审核。
 <img width="2032" height="1020" alt="demo" src="https://github.com/user-attachments/assets/34b1c6a3-1741-4944-982b-7b835baec841" />
 
+#### 自动发布至微博
+<img width="1682" height="1232" alt="20260701205120_rec_" src="https://github.com/user-attachments/assets/f0136a69-24db-4993-aa8a-2abd5e831e33" />
 
 ## 🏗️ 技术架构
 
