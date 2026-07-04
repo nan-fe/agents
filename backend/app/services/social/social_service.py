@@ -8,8 +8,8 @@ from typing import Any
 
 from app.config import settings
 from app.services.social.content_adapter import build_weibo_payload
-from app.services.social.publish_job_store import publish_job_store
 from app.services.social.profile_paths import resolve_weibo_profile_dir
+from app.services.social.publish_job_store import publish_job_store
 from app.services.social.weibo_login_session import weibo_login_session_manager
 from app.services.social.weibo_publisher import check_weibo_login_state, publish_to_weibo
 

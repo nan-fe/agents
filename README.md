@@ -348,6 +348,7 @@ pytest tests/ -m "not network"          # 默认套件（排除 DuckDuckGo 网�
 ruff check backend mcp-lark
 ruff format backend mcp-lark
 bash scripts/mypy-backend.sh            # 或 python3 -m mypy
+ruff check backend mcp-lark --fix       # 修复
 ```
 
 ### 前端（frontend-share）
