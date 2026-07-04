@@ -916,6 +916,22 @@
     line-height: 1.5;
     color: rgba(42, 34, 24, 0.65);
   }
+
+  .weibo-login-modal .ant-modal-content {
+    max-width: 440px;
+  }
+
+  .weibo-login-modal__waiting {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1.25rem;
+    padding: 0.5rem 0 0.25rem;
+  }
+
+  .weibo-login-modal__cancel {
+    min-width: 6.5rem;
+  }
 }
 
 @keyframes atelier-reveal {

@@ -1,4 +1,4 @@
-"""微博可视化登录会话：Studio 内通过 Playwright 截图 + 点击/输入完成登录。"""
+"""微博登录会话：Studio 触发 Playwright 打开真实浏览器窗口，用户在浏览器内完成登录。"""
 
 from __future__ import annotations
 
@@ -9,7 +9,6 @@ import uuid
 from dataclasses import dataclass, field
 
 from app.config import settings
-from app.services.social.content_adapter import is_likely_logged_in_url
 from app.services.social.profile_paths import resolve_weibo_profile_dir
 from app.services.social.weibo_publisher import (
     _LOGIN_MARKERS,
@@ -46,8 +45,19 @@ class WeiboLoginSession:
 
     async def evaluate_login(self) -> dict[str, object]:
         url = self.page.url  # type: ignore[attr-defined]
-        body = await self.page.content()  # type: ignore[attr-defined]
-        logged_in = is_likely_logged_in_url(url) and not any(m in body for m in _LOGIN_MARKERS)
+        # 在浏览器内轻量检测，避免 page.content() 拉取整页 HTML 干扰验证码交互
+        logged_in = await self.page.evaluate(  # type: ignore[attr-defined]
+            """(loginMarkers) => {
+                const href = location.href;
+                if (!href.includes('weibo.com')) return false;
+                if (href.includes('passport.weibo.com')
+                    || href.includes('login.sina.com.cn')
+                    || href.includes('newlogin')) return false;
+                const text = document.body?.innerText || '';
+                return !loginMarkers.some((m) => text.includes(m));
+            }""",
+            list(_LOGIN_MARKERS),
+        )
         return {
             "logged_in": logged_in,
             "current_url": url,
@@ -73,6 +83,11 @@ class WeiboLoginSessionManager:
         self._lock = asyncio.Lock()
         self._sessions: dict[str, WeiboLoginSession] = {}
 
+    async def has_active_session(self) -> bool:
+        """是否有进行中的 Studio 登录会话（与 Profile 锁互斥）。"""
+        async with self._lock:
+            return bool(self._sessions)
+
     async def start(self) -> WeiboLoginSession:
         if not settings.WEIBO_PUBLISH_ENABLED:
             raise ValueError("微博发布未启用（WEIBO_PUBLISH_ENABLED=false）")
@@ -89,7 +104,8 @@ class WeiboLoginSessionManager:
 
                 playwright = await async_playwright().start()
                 try:
-                    context = await _launch_context(playwright)
+                    # 打开可见浏览器，供用户直接操作微博页面完成登录
+                    context = await _launch_context(playwright, headless=False, for_login=True)
                     pages = context.pages  # type: ignore[attr-defined]
                     page = pages[0] if pages else await context.new_page()  # type: ignore[attr-defined]
                     await page.goto(  # type: ignore[attr-defined]

@@ -9,6 +9,8 @@ from typing import Any
 from app.config import settings
 from app.services.social.content_adapter import build_weibo_payload
 from app.services.social.publish_job_store import publish_job_store
+from app.services.social.profile_paths import resolve_weibo_profile_dir
+from app.services.social.weibo_login_session import weibo_login_session_manager
 from app.services.social.weibo_publisher import check_weibo_login_state, publish_to_weibo
 
 logger = logging.getLogger(__name__)
@@ -38,7 +40,17 @@ def build_weibo_publish_meta(
 
 class SocialPublishService:
     async def get_status(self, *, force_refresh: bool = False) -> dict[str, Any]:
-        weibo = await check_weibo_login_state(force_refresh=force_refresh)
+        # 登录弹窗已占用 Profile 时，不再启动第二个浏览器做状态检测
+        if force_refresh and await weibo_login_session_manager.has_active_session():
+            profile_dir = resolve_weibo_profile_dir()
+            weibo = {
+                "configured": True,
+                "logged_in": False,
+                "reason": "登录进行中",
+                "profile_path": profile_dir,
+            }
+        else:
+            weibo = await check_weibo_login_state(force_refresh=force_refresh)
         return {
             "weibo_publish_enabled": settings.WEIBO_PUBLISH_ENABLED,
             "weibo": weibo,

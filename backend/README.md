@@ -39,10 +39,16 @@ python -m playwright install chromium
 
 - `WEIBO_PUBLISH_ENABLED=true` — 启用微博发布
 - `WEIBO_PUBLISH_AUTO_ON_COMPLETE=true` — **内容生成且审核通过后自动发微博**（默认开启）
-- `BROWSER_USE_PROFILE_PATH` — 浏览器 Profile 目录（路径名勿含 `chrome`；登录：Studio 内「登录微博」或 `python3 scripts/weibo_login.py`）
+- `BROWSER_USE_PROFILE_PATH` — 浏览器 Profile 目录（路径名勿含 `chrome`；登录：Studio 内「登录微博」打开浏览器窗口，或 `python3 scripts/weibo_login.py`）
 - `WEIBO_PUBLISH_DRY_RUN=true` — 本地演练，不真发
 
 检测状态：`GET http://localhost:8000/social/status`
+
+微博登录若图标验证码反复失败，多为 Playwright 自带 Chromium 被风控识别。建议：
+
+- 在 `.env` 设置 `WEIBO_BROWSER_CHANNEL=chrome`（使用本机 Google Chrome）
+- 确保 Chrome 已安装；未安装时会自动回退到 Chromium
+- 全新 Profile 更容易触发验证码；登录成功后 Cookie 会持久化到 Profile 目录
 
 ## 配置环境变量
 

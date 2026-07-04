@@ -102,6 +102,8 @@ class Settings(BaseSettings):
     WEIBO_PUBLISH_HEADLESS: bool = True
     WEIBO_PUBLISH_TIMEOUT_MS: int = 45000
     BROWSER_USE_PROFILE_PATH: str = ""
+    # 登录/发布使用的浏览器通道：chrome=本机 Google Chrome（推荐，降低微博验证码风控）
+    WEIBO_BROWSER_CHANNEL: str = "chrome"
 
     # X → 微博自动同步
     X_SYNC_ENABLED: bool = False

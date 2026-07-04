@@ -31,6 +31,17 @@ _playwright_profile_lock = weibo_profile_lock
 VIEWPORT_WIDTH = 1280
 VIEWPORT_HEIGHT = 900
 
+_CHROMIUM_STEALTH_ARGS = [
+    "--disable-blink-features=AutomationControlled",
+    "--no-first-run",
+    "--no-default-browser-check",
+    "--disable-infobars",
+]
+
+_STEALTH_INIT_SCRIPT = """
+Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+"""
+
 
 def invalidate_weibo_login_state_cache() -> None:
     """登录成功后清除短缓存，使 /social/status 立即反映新状态。"""
@@ -169,19 +180,49 @@ async def check_weibo_login_state(*, force_refresh: bool = False) -> dict[str, o
             return result
 
 
-async def _launch_context(playwright: object, *, headless: bool | None = None) -> object:
+async def _launch_context(
+    playwright: object,
+    *,
+    headless: bool | None = None,
+    for_login: bool = False,
+) -> object:
+    """启动 Playwright 持久化 Profile。
+
+    for_login=True 时使用本机 Chrome + 反自动化指纹，便于用户手动过微博验证码。
+    """
     profile_dir = resolve_weibo_profile_dir()
+    resolved_headless = settings.WEIBO_PUBLISH_HEADLESS if headless is None else headless
+    channel = (settings.WEIBO_BROWSER_CHANNEL or "").strip()
+
     launch_kwargs: dict = {
-        "headless": settings.WEIBO_PUBLISH_HEADLESS if headless is None else headless,
-        "args": ["--disable-blink-features=AutomationControlled"],
+        "headless": resolved_headless,
+        "user_data_dir": profile_dir,
+        "args": list(_CHROMIUM_STEALTH_ARGS),
+        "ignore_default_args": ["--enable-automation"],
+        "locale": "zh-CN",
     }
+    if for_login and not resolved_headless:
+        launch_kwargs["no_viewport"] = True
+    else:
+        launch_kwargs["viewport"] = {"width": VIEWPORT_WIDTH, "height": VIEWPORT_HEIGHT}
+    if channel:
+        launch_kwargs["channel"] = channel
+
     chromium = playwright.chromium  # type: ignore[attr-defined]
-    context = await chromium.launch_persistent_context(
-        user_data_dir=profile_dir,
-        **launch_kwargs,
-        viewport={"width": VIEWPORT_WIDTH, "height": VIEWPORT_HEIGHT},
-        locale="zh-CN",
-    )
+    try:
+        context = await chromium.launch_persistent_context(**launch_kwargs)
+    except Exception as exc:
+        if not channel:
+            raise
+        logger.warning(
+            "无法用 channel=%s 启动浏览器，回退到 Playwright Chromium: %s",
+            channel,
+            exc,
+        )
+        fallback_kwargs = {k: v for k, v in launch_kwargs.items() if k != "channel"}
+        context = await chromium.launch_persistent_context(**fallback_kwargs)
+
+    await context.add_init_script(_STEALTH_INIT_SCRIPT)  # type: ignore[attr-defined]
     return context
 
 

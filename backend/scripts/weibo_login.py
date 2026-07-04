@@ -26,7 +26,7 @@ async def main() -> None:
         from playwright.async_api import async_playwright
 
         async with async_playwright() as playwright:
-            context = await _launch_context(playwright, headless=False)
+            context = await _launch_context(playwright, headless=False, for_login=True)
             pages = context.pages
             page = pages[0] if pages else await context.new_page()
             await page.goto(

@@ -58,11 +58,17 @@ const SocialSyncSettings = () => {
 
   useEffect(() => {
     void refreshStatus();
+  }, [refreshStatus]);
+
+  useEffect(() => {
+    if (loginOpen) {
+      return undefined;
+    }
     const timer = window.setTimeout(() => {
       void refreshStatus(true);
     }, 800);
     return () => window.clearTimeout(timer);
-  }, [refreshStatus]);
+  }, [loginOpen, refreshStatus]);
 
   if (!status?.x_sync_enabled && !status?.weibo_publish_enabled) {
     return null;
