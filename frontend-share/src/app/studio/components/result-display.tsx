@@ -138,7 +138,7 @@ const ResultDisplay = ({ result, variant = 'default' }: ResultDisplayProps) => {
           x_sync_interval_seconds: 300,
           review_required: true,
           auto_on_complete: false,
-          publish_engine: 'browser_use',
+          publish_engine: 'playwright',
           dry_run: false,
         });
       });

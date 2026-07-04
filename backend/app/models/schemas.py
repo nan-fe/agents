@@ -306,7 +306,7 @@ class SocialStatusResponse(BaseModel):
     x_sync_interval_seconds: int
     review_required: bool
     auto_on_complete: bool = True
-    publish_engine: str = "browser_use"
+    publish_engine: str = "playwright"
     dry_run: bool
 
 

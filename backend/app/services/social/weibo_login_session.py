@@ -29,6 +29,7 @@ class WeiboLoginSession:
     context: object
     page: object
     created_at: float = field(default_factory=time.time)
+    _profile_lock_held: bool = field(default=False, repr=False)
 
     async def screenshot_png(self) -> bytes:
         return await self.page.screenshot(full_page=False, type="png")  # type: ignore[attr-defined]
@@ -62,6 +63,9 @@ class WeiboLoginSession:
             await self.playwright.stop()  # type: ignore[attr-defined]
         except Exception as exc:
             logger.debug("关闭 Playwright 失败: %s", exc)
+        if self._profile_lock_held:
+            _playwright_profile_lock.release()
+            self._profile_lock_held = False
 
 
 class WeiboLoginSessionManager:
@@ -78,7 +82,9 @@ class WeiboLoginSessionManager:
         async with self._lock:
             await self._close_all_locked()
 
-            async with _playwright_profile_lock:
+            await _playwright_profile_lock.acquire()
+            lock_held = True
+            try:
                 from playwright.async_api import async_playwright
 
                 playwright = await async_playwright().start()
@@ -99,12 +105,18 @@ class WeiboLoginSessionManager:
                         playwright=playwright,
                         context=context,
                         page=page,
+                        _profile_lock_held=True,
                     )
+                    lock_held = False
                     self._sessions[session_id] = session
                     return session
                 except Exception:
                     await playwright.stop()
                     raise
+            except Exception:
+                if lock_held:
+                    _playwright_profile_lock.release()
+                raise
 
     async def get(self, session_id: str) -> WeiboLoginSession:
         async with self._lock:

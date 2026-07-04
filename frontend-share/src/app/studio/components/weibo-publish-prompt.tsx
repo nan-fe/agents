@@ -70,7 +70,7 @@ const WeiboPublishPrompt = ({ result }: WeiboPublishPromptProps) => {
     <div className="mt-3 rounded-sm border border-gold/25 bg-canvas/50 p-3 font-body text-sm text-ink-muted">
       <p className="text-ink">
         {meta.auto_started
-          ? '内容已生成，正在通过 browser-use 自动发布到微博…'
+          ? '内容已生成，正在自动发布到微博…'
           : '微博自动发布'}
       </p>
 

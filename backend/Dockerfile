@@ -9,12 +9,10 @@ RUN pip install --no-cache-dir --timeout=120 \
     -i https://pypi.tuna.tsinghua.edu.cn/simple \
     -e /mcp-lark
 
-COPY backend/requirements.txt backend/requirements-social.txt ./
+COPY backend/requirements.txt ./
 RUN pip install --no-cache-dir --timeout=120 \
     -i https://pypi.tuna.tsinghua.edu.cn/simple \
-    -r requirements.txt \
-    && pip install --no-cache-dir --timeout=120 \
-    "browser-use>=0.12.0" -i https://pypi.org/simple
+    -r requirements.txt
 
 # Playwright 商品页抓取需要 Chromium 及系统库
 RUN python -m playwright install-deps chromium \

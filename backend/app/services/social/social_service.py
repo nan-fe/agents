@@ -24,12 +24,11 @@ def build_weibo_publish_meta(
 ) -> dict[str, Any]:
     enabled = settings.WEIBO_PUBLISH_ENABLED
     auto = settings.WEIBO_PUBLISH_AUTO_ON_COMPLETE
-    engine = (settings.WEIBO_PUBLISH_ENGINE or "browser_use").strip()
     return {
         "eligible": bool(enabled and review_passed and auto),
         "enabled": enabled,
         "auto_on_complete": auto,
-        "engine": engine,
+        "engine": "playwright",
         "auto_started": auto_started,
         "job_id": job_id,
         "share_id": share_id,
@@ -48,7 +47,7 @@ class SocialPublishService:
             "x_sync_interval_seconds": settings.X_SYNC_INTERVAL_SECONDS,
             "review_required": not settings.WEIBO_PUBLISH_SKIP_REVIEW,
             "auto_on_complete": settings.WEIBO_PUBLISH_AUTO_ON_COMPLETE,
-            "publish_engine": (settings.WEIBO_PUBLISH_ENGINE or "browser_use").strip(),
+            "publish_engine": "playwright",
             "dry_run": settings.WEIBO_PUBLISH_DRY_RUN,
         }
 

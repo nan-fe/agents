@@ -94,21 +94,14 @@ class Settings(BaseSettings):
     LARK_USE_CLI: bool | None = None
     LARK_CLI_PATH: str = "lark-cli"
 
-    # 微博自动发布（browser-use / Playwright）
+    # 微博自动发布（Playwright）
     WEIBO_PUBLISH_ENABLED: bool = False
     WEIBO_PUBLISH_AUTO_ON_COMPLETE: bool = True
-    # browser_use：LLM Agent 驱动（推荐）；playwright：固定选择器脚本
-    WEIBO_PUBLISH_ENGINE: str = "browser_use"
     WEIBO_PUBLISH_DRY_RUN: bool = False
     WEIBO_PUBLISH_SKIP_REVIEW: bool = False
     WEIBO_PUBLISH_HEADLESS: bool = True
     WEIBO_PUBLISH_TIMEOUT_MS: int = 45000
     BROWSER_USE_PROFILE_PATH: str = ""
-    BROWSER_USE_FALLBACK_ENABLED: bool = True
-    # 留空则使用 BASE_MODEL；须为 MODEL_BASE_URL 支持的模型名（非 OpenAI 官方 id）
-    BROWSER_USE_LLM_MODEL: str = ""
-    # 可选：Browser Use Cloud；未配置时使用 API_KEY + MODEL_BASE_URL
-    # BROWSER_USE_API_KEY 通过环境变量读取，不写入 Settings 避免与 API_KEY 混淆
 
     # X → 微博自动同步
     X_SYNC_ENABLED: bool = False

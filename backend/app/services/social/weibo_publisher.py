@@ -13,12 +13,11 @@ from urllib.parse import urlparse
 import httpx
 
 from app.config import settings
-from app.services.social.browser_use_fallback import publish_via_browser_use
 from app.services.social.content_adapter import (
     WeiboPublishPayload,
     is_likely_logged_in_url,
 )
-from app.services.social.profile_paths import resolve_weibo_profile_dir
+from app.services.social.profile_paths import resolve_weibo_profile_dir, weibo_profile_lock
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +26,10 @@ ProgressCallback = Callable[[str], Awaitable[None] | None]
 _login_state_cache: tuple[float, dict[str, object]] | None = None
 _LOGIN_STATE_CACHE_TTL_SEC = 300
 _login_check_lock = asyncio.Lock()
-_playwright_profile_lock = asyncio.Lock()
+_playwright_profile_lock = weibo_profile_lock
+
+VIEWPORT_WIDTH = 1280
+VIEWPORT_HEIGHT = 900
 
 
 def invalidate_weibo_login_state_cache() -> None:
@@ -97,58 +99,31 @@ async def _download_image(url: str) -> Path | None:
         return None
 
 
-async def _check_weibo_login_state_browser_use(profile_dir: str) -> dict[str, object]:
-    from app.services.social.browser_use_support import (
-        close_weibo_browser_session,
-        create_weibo_browser_session,
-        get_focus_page_html,
-        get_focus_page_url,
-        navigate_weibo_home,
-        require_browser_use,
-    )
-
-    require_browser_use()
-    browser_session = await create_weibo_browser_session(headless=True)
-    try:
-        await navigate_weibo_home(browser_session)
-        url = await get_focus_page_url(browser_session)
-        body = await get_focus_page_html(browser_session)
-        logged_in = is_likely_logged_in_url(url) and not any(m in body for m in _LOGIN_MARKERS)
-        return {
-            "configured": True,
-            "logged_in": logged_in,
-            "current_url": url,
-            "profile_path": profile_dir,
-            "driver": "browser_use",
-        }
-    finally:
-        await close_weibo_browser_session(browser_session)
-
-
 async def _check_weibo_login_state_playwright(profile_dir: str) -> dict[str, object]:
     from playwright.async_api import async_playwright
 
-    async with async_playwright() as playwright:
-        context = await _launch_context(playwright, headless=True)
-        pages = context.pages  # type: ignore[attr-defined]
-        page = pages[0] if pages else await context.new_page()  # type: ignore[attr-defined]
-        await page.goto(
-            "https://weibo.com",
-            wait_until="domcontentloaded",
-            timeout=settings.WEIBO_PUBLISH_TIMEOUT_MS,
-        )  # type: ignore[attr-defined]
-        await page.wait_for_timeout(1500)  # type: ignore[attr-defined]
-        url = page.url  # type: ignore[attr-defined]
-        body = await page.content()  # type: ignore[attr-defined]
-        logged_in = is_likely_logged_in_url(url) and not any(m in body for m in _LOGIN_MARKERS)
-        await context.close()  # type: ignore[attr-defined]
-        return {
-            "configured": True,
-            "logged_in": logged_in,
-            "current_url": url,
-            "profile_path": profile_dir,
-            "driver": "playwright",
-        }
+    async with weibo_profile_lock:
+        async with async_playwright() as playwright:
+            context = await _launch_context(playwright, headless=True)
+            pages = context.pages  # type: ignore[attr-defined]
+            page = pages[0] if pages else await context.new_page()  # type: ignore[attr-defined]
+            await page.goto(
+                "https://weibo.com",
+                wait_until="domcontentloaded",
+                timeout=settings.WEIBO_PUBLISH_TIMEOUT_MS,
+            )  # type: ignore[attr-defined]
+            await page.wait_for_timeout(1500)  # type: ignore[attr-defined]
+            url = page.url  # type: ignore[attr-defined]
+            body = await page.content()  # type: ignore[attr-defined]
+            logged_in = is_likely_logged_in_url(url) and not any(m in body for m in _LOGIN_MARKERS)
+            await context.close()  # type: ignore[attr-defined]
+            return {
+                "configured": True,
+                "logged_in": logged_in,
+                "current_url": url,
+                "profile_path": profile_dir,
+                "driver": "playwright",
+            }
 
 
 async def check_weibo_login_state(*, force_refresh: bool = False) -> dict[str, object]:
@@ -204,7 +179,7 @@ async def _launch_context(playwright: object, *, headless: bool | None = None) -
     context = await chromium.launch_persistent_context(
         user_data_dir=profile_dir,
         **launch_kwargs,
-        viewport={"width": 1280, "height": 900},
+        viewport={"width": VIEWPORT_WIDTH, "height": VIEWPORT_HEIGHT},
         locale="zh-CN",
     )
     return context
@@ -291,54 +266,12 @@ async def publish_to_weibo(
 
     resolve_weibo_profile_dir()
 
-    engine = (settings.WEIBO_PUBLISH_ENGINE or "browser_use").strip().lower()
-
     image_path: Path | None = None
     if payload.image_url:
         await _emit(on_progress, "下载配图中…")
         image_path = await _download_image(payload.image_url)
 
     try:
-        if engine == "browser_use" and settings.BROWSER_USE_FALLBACK_ENABLED:
-            try:
-                return await _publish_via_playwright(
-                    payload,
-                    image_path=image_path,
-                    on_progress=on_progress,
-                    allow_browser_use_fallback=True,
-                )
-            except Exception as exc:
-                await _emit(
-                    on_progress,
-                    f"Playwright 失败，尝试 browser-use Agent：{exc}",
-                )
-
-        if engine == "browser_use":
-            await _emit(on_progress, "browser-use Agent 打开微博并发布…")
-            try:
-                post_url = await publish_via_browser_use(
-                    text=payload.text,
-                    image_path=str(image_path) if image_path else None,
-                    on_progress=on_progress,
-                    required=True,
-                )
-                if not post_url:
-                    raise RuntimeError("browser-use 发布未返回微博链接")
-                return post_url, None
-            except Exception as exc:
-                if not settings.BROWSER_USE_FALLBACK_ENABLED:
-                    raise
-                await _emit(
-                    on_progress,
-                    f"browser-use 失败，改用 Playwright：{exc}",
-                )
-                return await _publish_via_playwright(
-                    payload,
-                    image_path=image_path,
-                    on_progress=on_progress,
-                    allow_browser_use_fallback=False,
-                )
-
         return await _publish_via_playwright(
             payload,
             image_path=image_path,
@@ -357,85 +290,77 @@ async def _publish_via_playwright(
     *,
     image_path: Path | None,
     on_progress: ProgressCallback | None = None,
-    allow_browser_use_fallback: bool = True,
 ) -> tuple[str | None, str | None]:
     from playwright.async_api import async_playwright
 
-    screenshot_path: str | None = None
+    primary_exc: Exception | None = None
     try:
-        async with _playwright_profile_lock:
+        async with weibo_profile_lock:
             async with async_playwright() as playwright:
                 await _emit(on_progress, "启动 Playwright 浏览器…")
                 context = await _launch_context(playwright)
                 pages = context.pages  # type: ignore[attr-defined]
                 page = pages[0] if pages else await context.new_page()  # type: ignore[attr-defined]
 
-                opened = False
-                for url in _COMPOSE_URLS:
+                try:
+                    opened = False
+                    for url in _COMPOSE_URLS:
+                        try:
+                            await _emit(on_progress, f"打开 {url}")
+                            await page.goto(
+                                url,
+                                wait_until="domcontentloaded",
+                                timeout=settings.WEIBO_PUBLISH_TIMEOUT_MS,
+                            )  # type: ignore[attr-defined]
+                            await page.wait_for_timeout(2000)  # type: ignore[attr-defined]
+                            opened = True
+                            break
+                        except Exception:
+                            continue
+                    if not opened:
+                        raise RuntimeError("无法打开微博页面")
+
+                    current_url = page.url  # type: ignore[attr-defined]
+                    body = await page.content()  # type: ignore[attr-defined]
+                    if not is_likely_logged_in_url(current_url) or any(
+                        m in body for m in _LOGIN_MARKERS
+                    ):
+                        raise RuntimeError(
+                            "微博未登录或需要安全验证，请先在 Studio 登录微博或配置 Profile 路径"
+                        )
+
+                    await _emit(on_progress, "填写正文…")
+                    filled = await _fill_compose(page, payload.text)
+                    if not filled:
+                        raise RuntimeError("未找到微博编辑器")
+
+                    if image_path is not None:
+                        await _emit(on_progress, "上传配图…")
+                        uploaded = await _upload_image(page, image_path)
+                        if not uploaded:
+                            await _emit(on_progress, "配图上传失败，继续纯文本发布")
+
+                    await _emit(on_progress, "点击发布…")
+                    published = await _click_publish(page)
+                    if not published:
+                        raise RuntimeError("未找到发布按钮")
+
+                    await page.wait_for_timeout(3000)  # type: ignore[attr-defined]
+                    post_url = page.url  # type: ignore[attr-defined]
+                    await _emit(on_progress, "发布完成")
+                    return post_url, None
+                except Exception as exc:
+                    primary_exc = exc
+                    logger.warning("Playwright 微博发布失败: %s", exc)
+                    shot = _screenshot_dir() / f"weibo_fail_{int(time.time())}.png"
                     try:
-                        await _emit(on_progress, f"打开 {url}")
-                        await page.goto(
-                            url,
-                            wait_until="domcontentloaded",
-                            timeout=settings.WEIBO_PUBLISH_TIMEOUT_MS,
-                        )  # type: ignore[attr-defined]
-                        await page.wait_for_timeout(2000)  # type: ignore[attr-defined]
-                        opened = True
-                        break
+                        await page.screenshot(path=str(shot), full_page=True)  # type: ignore[attr-defined]
                     except Exception:
-                        continue
-                if not opened:
-                    raise RuntimeError("无法打开微博页面")
-
-                current_url = page.url  # type: ignore[attr-defined]
-                body = await page.content()  # type: ignore[attr-defined]
-                if not is_likely_logged_in_url(current_url) or any(m in body for m in _LOGIN_MARKERS):
-                    raise RuntimeError(
-                        "微博未登录或需要安全验证，请使用 BROWSER_USE_PROFILE_PATH 预先登录并完成验证"
-                    )
-
-                await _emit(on_progress, "填写正文…")
-                filled = await _fill_compose(page, payload.text)
-                if not filled:
-                    raise RuntimeError("未找到微博编辑器")
-
-                if image_path is not None:
-                    await _emit(on_progress, "上传配图…")
-                    uploaded = await _upload_image(page, image_path)
-                    if not uploaded:
-                        await _emit(on_progress, "配图上传失败，继续纯文本发布")
-
-                await _emit(on_progress, "点击发布…")
-                published = await _click_publish(page)
-                if not published:
-                    raise RuntimeError("未找到发布按钮")
-
-                await page.wait_for_timeout(3000)  # type: ignore[attr-defined]
-                post_url = page.url  # type: ignore[attr-defined]
-                await context.close()  # type: ignore[attr-defined]
-                await _emit(on_progress, "发布完成")
-                return post_url, None
-    except Exception as primary_exc:
-        logger.warning("Playwright 微博发布失败: %s", primary_exc)
-        shot = _screenshot_dir() / f"weibo_fail_{int(time.time())}.png"
-        screenshot_path = str(shot)
-        try:
-            async with async_playwright() as playwright:
-                context = await _launch_context(playwright)
-                page = context.pages[0] if context.pages else await context.new_page()  # type: ignore[attr-defined]
-                await page.screenshot(path=screenshot_path, full_page=True)  # type: ignore[attr-defined]
-                await context.close()  # type: ignore[attr-defined]
-        except Exception:
-            screenshot_path = None
-
-        if allow_browser_use_fallback and settings.BROWSER_USE_FALLBACK_ENABLED:
-            await _emit(on_progress, "Playwright 失败，尝试 browser-use 兜底…")
-            fallback_url = await publish_via_browser_use(
-                text=payload.text,
-                image_path=str(image_path) if image_path else None,
-                on_progress=on_progress,
-                required=False,
-            )
-            if fallback_url:
-                return fallback_url, None
+                        pass
+                    raise
+                finally:
+                    await context.close()  # type: ignore[attr-defined]
+    except Exception:
+        if primary_exc is None:
+            raise
         raise RuntimeError(str(primary_exc)) from primary_exc

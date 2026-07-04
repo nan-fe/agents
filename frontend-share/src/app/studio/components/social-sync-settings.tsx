@@ -141,8 +141,7 @@ const SocialSyncSettings = () => {
                   </div>
                 )}
                 <p className="text-ink-muted/80">
-                  微博登录与发布默认使用 <code>browser-use</code>（与{' '}
-                  <code>WEIBO_PUBLISH_ENGINE=browser_use</code> 一致），Profile 路径见{' '}
+                  微博登录与发布使用 Playwright，Profile 路径见{' '}
                   <code>BROWSER_USE_PROFILE_PATH</code>。
                 </p>
               </div>

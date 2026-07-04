@@ -1,8 +1,17 @@
-2026/07/04-21:15:10.007 4d7210 Reusing MANIFEST /Users/lixuefu/Documents/trae_projects/agents/xhs-multi-agent-creator/data/weibo-profile/Default/Local Storage/leveldb/MANIFEST-000001
-2026/07/04-21:15:10.014 4d7210 Recovering log #20
-2026/07/04-21:15:10.017 4d7210 Level-0 table #22: started
-2026/07/04-21:15:10.023 4d7210 Level-0 table #22: 179961 bytes OK
-2026/07/04-21:15:10.038 4d7210 Delete type=0 #20
-2026/07/04-21:15:19.891 4d7213 Level-0 table #25: started
-2026/07/04-21:15:19.896 4d7213 Level-0 table #25: 143294 bytes OK
-2026/07/04-21:15:19.900 4d7213 Delete type=0 #23
+2026/07/04-21:30:33.307 4dea33 Reusing MANIFEST /Users/lixuefu/Documents/trae_projects/agents/xhs-multi-agent-creator/data/weibo-profile/Default/Local Storage/leveldb/MANIFEST-000001
+2026/07/04-21:30:33.315 4dea33 Recovering log #34
+2026/07/04-21:30:33.319 4dea33 Level-0 table #36: started
+2026/07/04-21:30:33.330 4dea33 Level-0 table #36: 187535 bytes OK
+2026/07/04-21:30:33.338 4dea33 Delete type=0 #34
+2026/07/04-21:30:44.064 4dea37 Level-0 table #39: started
+2026/07/04-21:30:44.070 4dea37 Level-0 table #39: 202096 bytes OK
+2026/07/04-21:30:44.072 4dea37 Delete type=0 #37
+2026/07/04-21:30:44.074 4dea33 Compacting 4@0 + 1@1 files
+2026/07/04-21:30:44.084 4dea33 Generated table #40@0: 7 keys, 202124 bytes
+2026/07/04-21:30:44.084 4dea33 Compacted 4@0 + 1@1 files => 202124 bytes
+2026/07/04-21:30:44.086 4dea33 compacted to: files[ 0 1 1 0 0 0 0 ]
+2026/07/04-21:30:44.087 4dea33 Delete type=2 #29
+2026/07/04-21:30:44.087 4dea33 Delete type=2 #39
+2026/07/04-21:30:44.087 4dea33 Delete type=2 #36
+2026/07/04-21:30:44.087 4dea33 Delete type=2 #33
+2026/07/04-21:30:44.087 4dea33 Delete type=2 #31
