@@ -1,6 +1,15 @@
+import os
+from pathlib import Path
 from typing import Tuple
 
 import tiktoken
+
+_TIKTOKEN_CACHE_DIR = Path(__file__).resolve().parent.parent / "data" / "tiktoken"
+
+
+def _configure_tiktoken_cache() -> None:
+    """Use project-local tiktoken cache to avoid network fetch at import time."""
+    os.environ.setdefault("TIKTOKEN_CACHE_DIR", str(_TIKTOKEN_CACHE_DIR))
 
 
 class TokenCounter:
@@ -24,6 +33,7 @@ class TokenCounter:
         }
 
         # 编码器（所有模型都用 cl100k_base）
+        _configure_tiktoken_cache()
         self.encoder = tiktoken.get_encoding("cl100k_base")
 
     def count_tokens(self, text: str) -> int:

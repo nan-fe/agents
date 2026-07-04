@@ -43,6 +43,12 @@
       "skillPath": "skills/frontend-ui-ux-design/SKILL.md",
       "computedHash": "9b248bd883108d9e4a8ae9149f1042b8b50adc7b9b99b9f40a26f7d4b5092ed4"
     },
+    "karpathy-guidelines": {
+      "source": "szkocot/andrej-karpathy-skills",
+      "sourceType": "github",
+      "skillPath": "skills/karpathy-guidelines/SKILL.md",
+      "computedHash": "41e8ca055bbde13d240776a14a076a59614057200340c243130a76ba4e64cac8"
+    },
     "sentry-nextjs-sdk": {
       "source": "getsentry/sentry-agent-skills",
       "sourceType": "github",

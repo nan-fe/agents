@@ -71,10 +71,13 @@ from app.services.lark_oauth_service import lark_oauth_registry
 from app.services.product_info_service import ProductInfoService
 from app.services.product_page_scraper import get_product_screenshot_dir
 from app.services.share_service import share_store
-from app.services.social.browser_use_support import VIEWPORT_HEIGHT, VIEWPORT_WIDTH
 from app.services.social.social_service import get_social_publish_service
 from app.services.social.weibo_login_session import weibo_login_session_manager
-from app.services.social.weibo_publisher import invalidate_weibo_login_state_cache
+from app.services.social.weibo_publisher import (
+    VIEWPORT_HEIGHT,
+    VIEWPORT_WIDTH,
+    invalidate_weibo_login_state_cache,
+)
 from app.services.social.x_sync_poller import run_x_sync_once, x_sync_poller_loop
 from app.services.sse_resume import ResumePhase, resolve_resume_phase
 from app.utils.display_labels import (

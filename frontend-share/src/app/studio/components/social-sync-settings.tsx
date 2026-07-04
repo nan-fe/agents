@@ -60,6 +60,16 @@ const SocialSyncSettings = () => {
     void refreshStatus();
   }, [refreshStatus]);
 
+  useEffect(() => {
+    if (loginOpen) {
+      return undefined;
+    }
+    const timer = window.setTimeout(() => {
+      void refreshStatus(true);
+    }, 800);
+    return () => window.clearTimeout(timer);
+  }, [loginOpen, refreshStatus]);
+
   if (!status?.x_sync_enabled && !status?.weibo_publish_enabled) {
     return null;
   }
@@ -68,7 +78,7 @@ const SocialSyncSettings = () => {
     status.weibo.configured && (status.weibo.logged_in || status.dry_run);
 
   return (
-    <div className="rounded-sm border border-gold/20 bg-canvas/40 p-2">
+    <div className="space-y-2">
       <WeiboLoginPanel
         open={loginOpen}
         onClose={() => setLoginOpen(false)}
@@ -76,6 +86,17 @@ const SocialSyncSettings = () => {
           void refreshStatus(true);
         }}
       />
+      {status.weibo_publish_enabled && (
+        <Button
+          block
+          size="small"
+          className="!font-display !text-xs"
+          onClick={() => setLoginOpen(true)}
+        >
+          {weiboReady ? '微博已登录' : '登录微博'}
+        </Button>
+      )}
+      <div className="rounded-sm border border-gold/20 bg-canvas/40 p-2">
       <Collapse
         ghost
         className="!bg-transparent"
@@ -97,20 +118,6 @@ const SocialSyncSettings = () => {
                       : ` 未就绪（${status.weibo.reason || '请登录微博'}）`
                     : ' 未启用'}
                 </p>
-                {status.weibo_publish_enabled && !weiboReady && !status.dry_run && (
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Button
-                      size="small"
-                      className="!font-display !text-xs"
-                      onClick={() => setLoginOpen(true)}
-                    >
-                      登录微博
-                    </Button>
-                    <span className="text-ink-muted/80">
-                      在 PC 端打开可视化登录页，扫码或输入账号完成验证
-                    </span>
-                  </div>
-                )}
                 <p>
                   X 自动同步：
                   {status.x_sync_enabled
@@ -140,8 +147,7 @@ const SocialSyncSettings = () => {
                   </div>
                 )}
                 <p className="text-ink-muted/80">
-                  微博登录与发布默认使用 <code>browser-use</code>（与{' '}
-                  <code>WEIBO_PUBLISH_ENGINE=browser_use</code> 一致），Profile 路径见{' '}
+                  微博登录与发布使用 Playwright，Profile 路径见{' '}
                   <code>BROWSER_USE_PROFILE_PATH</code>。
                 </p>
               </div>
@@ -149,6 +155,7 @@ const SocialSyncSettings = () => {
           },
         ]}
       />
+      </div>
     </div>
   );
 };

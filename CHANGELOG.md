@@ -2,6 +2,26 @@
 
 All notable changes to this project will be documented in this file.
 
+### Changed 2026-07-04 — 微博自动发布（Auto Publish）
+
+- **一键同步微博**
+  - 内容生成并审核通过后，创作台可确认将图文同步发布到微博，并自动生成分享链接
+  - 发布过程中可查看任务状态与进度日志，完成后可直接跳转查看微博
+
+- **微博登录**
+  - Studio 内点击「登录微博」会打开真实浏览器窗口完成登录，登录态保存到 Profile，供后续发博复用
+  - 优先使用本机 Chrome（`WEIBO_BROWSER_CHANNEL=chrome`），降低微博验证码风控拦截
+  - 登录进行中不再重复启动检测浏览器，避免与登录会话争抢 Profile
+
+- **发布引擎与配置**
+  - 微博发布统一为 Playwright，移除 browser-use 依赖，本地与 Docker 部署更简单
+  - 后端通过 `WEIBO_PUBLISH_ENABLED` 等环境变量控制；Profile 路径见 `BROWSER_USE_PROFILE_PATH`
+  - 侧边栏「社交媒体发布设置」可查看微博 / X 同步状态
+
+- **创作台交互**
+  - 新增微博同步确认弹窗（`weibo-share-sync-modal`），与现有 atelier 视觉风格一致
+  - 登录等待弹窗精简为状态提示，用户在浏览器窗口内完成验证
+
 ### Changed 2026-06-25 — 历史删除、用户隔离与 SSE 复用安全
 
 - **历史对话删除**

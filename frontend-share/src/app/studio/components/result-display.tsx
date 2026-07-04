@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { Button, App } from 'antd';
 import ReactMarkdown from 'react-markdown';
@@ -18,6 +18,14 @@ import {
 const WeiboShareSyncModal = dynamic(() => import('./weibo-share-sync-modal'), {
   ssr: false,
 });
+
+const WeiboLoginPanel = dynamic(() => import('./weibo-login-panel'), {
+  ssr: false,
+});
+
+const isWeiboReady = (status: SocialStatusResponse | null): boolean =>
+  Boolean(status?.dry_run) ||
+  Boolean(status?.weibo.configured && status?.weibo.logged_in);
 
 type ResultDisplayProps = {
   result?: ShareResult;
@@ -110,6 +118,8 @@ const ResultDisplay = ({ result, variant = 'default' }: ResultDisplayProps) => {
   const [modalOpen, setModalOpen] = useState(false);
   const [modalPhase, setModalPhase] = useState<'confirm' | 'publishing'>('confirm');
   const [modalPublishJob, setModalPublishJob] = useState<PublishJobResponse | null>(null);
+  const [loginOpen, setLoginOpen] = useState(false);
+  const publishAfterLoginRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -128,7 +138,7 @@ const ResultDisplay = ({ result, variant = 'default' }: ResultDisplayProps) => {
           x_sync_interval_seconds: 300,
           review_required: true,
           auto_on_complete: false,
-          publish_engine: 'browser_use',
+          publish_engine: 'playwright',
           dry_run: false,
         });
       });
@@ -265,8 +275,18 @@ const ResultDisplay = ({ result, variant = 'default' }: ResultDisplayProps) => {
 
   const canPromptWeibo =
     Boolean(socialStatus?.weibo_publish_enabled) &&
-    Boolean(socialStatus?.auto_on_complete) &&
     (!socialStatus?.review_required || result?.review_approved === true);
+
+  const handleConfirmWeiboPublish = () => {
+    if (!isWeiboReady(socialStatus)) {
+      publishAfterLoginRef.current = true;
+      setModalOpen(false);
+      setLoginOpen(true);
+      return;
+    }
+    setIsWorking(true);
+    void publishThenShare();
+  };
 
   const copyExistingShare = useCallback(async () => {
     if (!result) {
@@ -337,15 +357,34 @@ const ResultDisplay = ({ result, variant = 'default' }: ResultDisplayProps) => {
 
   return (
     <>
+      <WeiboLoginPanel
+        open={loginOpen}
+        onClose={() => {
+          publishAfterLoginRef.current = false;
+          setLoginOpen(false);
+        }}
+        onLoggedIn={() => {
+          void getSocialStatus(true)
+            .then((status) => {
+              setSocialStatus(status);
+              if (publishAfterLoginRef.current && isWeiboReady(status)) {
+                publishAfterLoginRef.current = false;
+                setIsWorking(true);
+                void publishThenShare();
+              }
+            })
+            .catch((error) => {
+              reportError(error, 'result/getSocialStatus');
+            });
+        }}
+      />
+
       {modalOpen && (
         <WeiboShareSyncModal
           open={modalOpen}
           phase={modalPhase}
           publishJob={modalPublishJob}
-          onConfirm={() => {
-            setIsWorking(true);
-            void publishThenShare();
-          }}
+          onConfirm={handleConfirmWeiboPublish}
           onShareOnly={() => {
             setModalOpen(false);
             void createShareOnly();

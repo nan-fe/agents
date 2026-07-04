@@ -22,7 +22,9 @@ def memory_db(monkeypatch):
 def _mock_session(*, logged_in: bool = False) -> WeiboLoginSession:
     session = WeiboLoginSession(
         session_id="test-session",
-        browser_session=MagicMock(),
+        playwright=MagicMock(),
+        context=MagicMock(),
+        page=MagicMock(),
     )
     session.screenshot_png = AsyncMock(return_value=b"png-bytes")  # type: ignore[method-assign]
     session.click = AsyncMock()  # type: ignore[method-assign]
