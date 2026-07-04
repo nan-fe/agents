@@ -22,9 +22,7 @@ RUN python -m playwright install-deps chromium \
 
 COPY backend .
 
-RUN mkdir -p /app/app/data/tiktoken && \
-    python -c "import urllib.request; urllib.request.urlretrieve('https://openaipublic.blob.core.windows.net/encodings/cl100k_base.tiktoken', '/app/app/data/tiktoken/cl100k_base.tiktoken')"
-
+ENV TIKTOKEN_CACHE_DIR=/app/app/data/tiktoken
 ENV PYTHONUNBUFFERED=1
 
 EXPOSE 8000

@@ -7,6 +7,7 @@ import os
 from typing import Any, Awaitable, Callable
 
 from app.config import settings
+from app.services.social.browser_use_support import _weibo_browser_lock
 from app.services.social.profile_paths import resolve_weibo_profile_dir
 
 logger = logging.getLogger(__name__)
@@ -114,7 +115,8 @@ async def publish_via_browser_use(
             llm=llm,
             browser_profile=browser_profile,
         )
-        history = await agent.run()
+        async with _weibo_browser_lock:
+            history = await agent.run()
     except Exception as exc:
         msg = f"browser-use Agent 执行失败: {exc}"
         if required:

@@ -1,4 +1,4 @@
-"""微博可视化登录会话：Studio 内通过 browser-use 截图 + 点击/输入完成登录。"""
+"""微博可视化登录会话：Studio 内通过 Playwright 截图 + 点击/输入完成登录。"""
 
 from __future__ import annotations
 
@@ -9,21 +9,13 @@ import uuid
 from dataclasses import dataclass, field
 
 from app.config import settings
-from app.services.social.browser_use_support import (
-    click_page,
-    close_weibo_browser_session,
-    create_weibo_browser_session,
-    get_focus_page_html,
-    get_focus_page_url,
-    navigate_weibo_home,
-    press_page_key,
-    require_browser_use,
-    screenshot_page_png,
-    type_on_page,
-)
 from app.services.social.content_adapter import is_likely_logged_in_url
 from app.services.social.profile_paths import resolve_weibo_profile_dir
-from app.services.social.weibo_publisher import _LOGIN_MARKERS
+from app.services.social.weibo_publisher import (
+    _LOGIN_MARKERS,
+    _launch_context,
+    _playwright_profile_lock,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -33,25 +25,27 @@ _SESSION_TTL_SEC = 600
 @dataclass
 class WeiboLoginSession:
     session_id: str
-    browser_session: object
+    playwright: object
+    context: object
+    page: object
     created_at: float = field(default_factory=time.time)
 
     async def screenshot_png(self) -> bytes:
-        return await screenshot_page_png(self.browser_session)  # type: ignore[arg-type]
+        return await self.page.screenshot(full_page=False, type="png")  # type: ignore[attr-defined]
 
     async def click(self, x: float, y: float) -> None:
-        await click_page(self.browser_session, x, y)  # type: ignore[arg-type]
+        await self.page.mouse.click(int(x), int(y))  # type: ignore[attr-defined]
+        await asyncio.sleep(0.4)
 
     async def type_text(self, text: str) -> None:
-        await type_on_page(self.browser_session, text)  # type: ignore[arg-type]
+        await self.page.keyboard.insert_text(text)  # type: ignore[attr-defined]
 
     async def press_key(self, key: str) -> None:
-        await press_page_key(self.browser_session, key)  # type: ignore[arg-type]
+        await self.page.keyboard.press(key)  # type: ignore[attr-defined]
 
     async def evaluate_login(self) -> dict[str, object]:
-        browser_session = self.browser_session
-        url = await get_focus_page_url(browser_session)  # type: ignore[arg-type]
-        body = await get_focus_page_html(browser_session)  # type: ignore[arg-type]
+        url = self.page.url  # type: ignore[attr-defined]
+        body = await self.page.content()  # type: ignore[attr-defined]
         logged_in = is_likely_logged_in_url(url) and not any(m in body for m in _LOGIN_MARKERS)
         return {
             "logged_in": logged_in,
@@ -60,7 +54,14 @@ class WeiboLoginSession:
         }
 
     async def close(self) -> None:
-        await close_weibo_browser_session(self.browser_session)  # type: ignore[arg-type]
+        try:
+            await self.context.close()  # type: ignore[attr-defined]
+        except Exception as exc:
+            logger.debug("关闭 Playwright context 失败: %s", exc)
+        try:
+            await self.playwright.stop()  # type: ignore[attr-defined]
+        except Exception as exc:
+            logger.debug("关闭 Playwright 失败: %s", exc)
 
 
 class WeiboLoginSessionManager:
@@ -74,25 +75,36 @@ class WeiboLoginSessionManager:
         if settings.WEIBO_PUBLISH_DRY_RUN:
             raise ValueError("DRY RUN 模式下无需登录")
 
-        require_browser_use()
-
         async with self._lock:
             await self._close_all_locked()
 
-            browser_session = await create_weibo_browser_session(headless=True)
-            try:
-                await navigate_weibo_home(browser_session)
+            async with _playwright_profile_lock:
+                from playwright.async_api import async_playwright
 
-                session_id = uuid.uuid4().hex
-                session = WeiboLoginSession(
-                    session_id=session_id,
-                    browser_session=browser_session,
-                )
-                self._sessions[session_id] = session
-                return session
-            except Exception:
-                await close_weibo_browser_session(browser_session)
-                raise
+                playwright = await async_playwright().start()
+                try:
+                    context = await _launch_context(playwright)
+                    pages = context.pages  # type: ignore[attr-defined]
+                    page = pages[0] if pages else await context.new_page()  # type: ignore[attr-defined]
+                    await page.goto(  # type: ignore[attr-defined]
+                        "https://weibo.com/",
+                        wait_until="domcontentloaded",
+                        timeout=settings.WEIBO_PUBLISH_TIMEOUT_MS,
+                    )
+                    await page.wait_for_timeout(1200)  # type: ignore[attr-defined]
+
+                    session_id = uuid.uuid4().hex
+                    session = WeiboLoginSession(
+                        session_id=session_id,
+                        playwright=playwright,
+                        context=context,
+                        page=page,
+                    )
+                    self._sessions[session_id] = session
+                    return session
+                except Exception:
+                    await playwright.stop()
+                    raise
 
     async def get(self, session_id: str) -> WeiboLoginSession:
         async with self._lock:

@@ -3,13 +3,35 @@
 from __future__ import annotations
 
 import asyncio
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 from app.config import settings
 from app.services.social.social_service import (
     SocialPublishService,
     build_weibo_publish_meta,
 )
+from app.services.social.weibo_publisher import (
+    check_weibo_login_state,
+    invalidate_weibo_login_state_cache,
+)
+
+
+def test_check_weibo_login_state_skips_browser_without_force_refresh() -> None:
+    async def _run() -> None:
+        invalidate_weibo_login_state_cache()
+        settings.WEIBO_PUBLISH_ENABLED = True
+        settings.WEIBO_PUBLISH_DRY_RUN = False
+        mock_browser = AsyncMock()
+        with patch(
+            "app.services.social.weibo_publisher._check_weibo_login_state_browser_use",
+            mock_browser,
+        ):
+            result = await check_weibo_login_state(force_refresh=False)
+        assert result["logged_in"] is False
+        assert result["reason"] == "未检测"
+        mock_browser.assert_not_called()
+
+    asyncio.run(_run())
 
 
 def test_build_weibo_publish_meta() -> None:

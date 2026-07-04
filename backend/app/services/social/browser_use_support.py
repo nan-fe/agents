@@ -13,6 +13,8 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+_weibo_browser_lock = asyncio.Lock()
+
 VIEWPORT_WIDTH = 1280
 VIEWPORT_HEIGHT = 900
 
@@ -32,17 +34,18 @@ def require_browser_use() -> Any:
 
 async def create_weibo_browser_session(*, headless: bool) -> BrowserSession:
     """启动与发微博相同的 browser-use 本地会话（复用 user_data_dir）。"""
-    BrowserSession = require_browser_use()
-    profile_dir = resolve_weibo_profile_dir()
-    session = BrowserSession(
-        headless=headless,
-        user_data_dir=profile_dir,
-        allowed_domains=_WEIBO_ALLOWED_DOMAINS,
-        enable_default_extensions=False,
-        viewport={"width": VIEWPORT_WIDTH, "height": VIEWPORT_HEIGHT},
-    )
-    await session.start()
-    return session
+    async with _weibo_browser_lock:
+        BrowserSession = require_browser_use()
+        profile_dir = resolve_weibo_profile_dir()
+        session = BrowserSession(
+            headless=headless,
+            user_data_dir=profile_dir,
+            allowed_domains=_WEIBO_ALLOWED_DOMAINS,
+            enable_default_extensions=False,
+            viewport={"width": VIEWPORT_WIDTH, "height": VIEWPORT_HEIGHT},
+        )
+        await session.start()
+        return session
 
 
 async def close_weibo_browser_session(session: BrowserSession) -> None:

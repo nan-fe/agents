@@ -4,6 +4,7 @@ uvloop
 langchain
 langchain-openai
 openai
+tiktoken
 python-dotenv
 replicate
 sse-starlette

@@ -1,5 +1,5 @@
-2026/07/01-20:51:48.772 328b5a Reusing MANIFEST /Users/lixuefu/Documents/trae_projects/agents/xhs-multi-agent-creator/data/weibo-profile/Default/Local Storage/leveldb/MANIFEST-000001
-2026/07/01-20:51:48.783 328b5a Recovering log #90
-2026/07/01-20:51:48.789 328b5a Level-0 table #93: started
-2026/07/01-20:51:48.852 328b5a Level-0 table #93: 183723 bytes OK
-2026/07/01-20:51:48.859 328b5a Delete type=0 #90
+2026/07/04-21:14:24.432 4d6b45 Reusing MANIFEST /Users/lixuefu/Documents/trae_projects/agents/xhs-multi-agent-creator/data/weibo-profile/Default/Local Storage/leveldb/MANIFEST-000001
+2026/07/04-21:14:24.455 4d6b45 Recovering log #16
+2026/07/04-21:14:24.458 4d6b45 Level-0 table #19: started
+2026/07/04-21:14:24.464 4d6b45 Level-0 table #19: 169103 bytes OK
+2026/07/04-21:14:24.477 4d6b45 Delete type=0 #16
