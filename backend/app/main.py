@@ -1036,8 +1036,10 @@ async def social_weibo_login_start():
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except Exception as exc:
+        from app.services.social.weibo_publisher import format_weibo_browser_error
+
         logger.warning("微博登录会话启动失败: %s", exc)
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+        raise HTTPException(status_code=502, detail=format_weibo_browser_error(exc)) from exc
 
 
 @app.get("/social/weibo/login/{session_id}/status", response_model=WeiboLoginStatusResponse)

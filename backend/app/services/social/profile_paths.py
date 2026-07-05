@@ -8,11 +8,19 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from pathlib import Path
 
 from app.config import settings
 
 logger = logging.getLogger(__name__)
+
+_CHROMIUM_LOCK_FILES = ("SingletonLock", "SingletonCookie", "lockfile")
+
+
+def _lock_file_present(path: Path) -> bool:
+    return path.is_symlink() or path.exists()
+
 
 # Playwright 共用同一 Profile，任意时刻只允许一个会话持有。
 weibo_profile_lock = asyncio.Lock()
@@ -36,3 +44,57 @@ def resolve_weibo_profile_dir() -> str:
         )
     path.mkdir(parents=True, exist_ok=True)
     return resolved
+
+
+def _pid_alive(pid: int) -> bool:
+    if pid <= 0:
+        return False
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    else:
+        return True
+
+
+def _parse_singleton_pid(lock_path: Path) -> int | None:
+    try:
+        if lock_path.is_symlink():
+            target = os.readlink(lock_path)
+        elif lock_path.exists():
+            target = lock_path.read_text(encoding="utf-8", errors="ignore").strip()
+        else:
+            return None
+        if "-" in target:
+            return int(target.rsplit("-", 1)[-1])
+    except (OSError, ValueError):
+        return None
+    return None
+
+
+def clear_stale_chromium_profile_lock(profile_dir: str | Path) -> list[str]:
+    """若 Chromium 锁文件对应进程已退出，则清理残留锁（常见于容器重启后）。"""
+    root = Path(profile_dir)
+    lock_path = root / "SingletonLock"
+    if not any(_lock_file_present(root / name) for name in _CHROMIUM_LOCK_FILES):
+        return []
+
+    pid = _parse_singleton_pid(lock_path) if _lock_file_present(lock_path) else None
+    if pid is not None and _pid_alive(pid):
+        return []
+
+    removed: list[str] = []
+    for name in _CHROMIUM_LOCK_FILES:
+        path = root / name
+        if not _lock_file_present(path):
+            continue
+        try:
+            path.unlink(missing_ok=True)
+            removed.append(name)
+        except OSError as exc:
+            logger.warning("无法删除 Chromium 锁文件 %s: %s", path, exc)
+    if removed:
+        logger.info("已清理过期 Chromium Profile 锁: %s", ", ".join(removed))
+    return removed

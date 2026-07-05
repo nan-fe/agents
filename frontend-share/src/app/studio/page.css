@@ -918,7 +918,7 @@
   }
 
   .weibo-login-modal .ant-modal-content {
-    max-width: 440px;
+    max-width: 720px;
   }
 
   .weibo-login-modal__waiting {
@@ -927,6 +927,16 @@
     align-items: center;
     gap: 1.25rem;
     padding: 0.5rem 0 0.25rem;
+  }
+
+  .weibo-login-modal__screenshot {
+    width: 100%;
+    max-height: 70vh;
+    object-fit: contain;
+    border: 1px solid rgba(107, 45, 62, 0.2);
+    border-radius: 4px;
+    cursor: crosshair;
+    background: #f8f4ee;
   }
 
   .weibo-login-modal__cancel {
