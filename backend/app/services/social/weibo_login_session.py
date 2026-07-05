@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -19,6 +20,11 @@ from app.services.social.weibo_publisher import (
 logger = logging.getLogger(__name__)
 
 _SESSION_TTL_SEC = 600
+
+
+def _login_uses_headless_browser() -> bool:
+    """Docker/服务器无 DISPLAY 时用 headless + Studio 截图完成登录。"""
+    return not os.environ.get("DISPLAY", "").strip()
 
 
 @dataclass
@@ -104,8 +110,13 @@ class WeiboLoginSessionManager:
 
                 playwright = await async_playwright().start()
                 try:
-                    # 打开可见浏览器，供用户直接操作微博页面完成登录
-                    context = await _launch_context(playwright, headless=False, for_login=True)
+                    # 本机有图形界面时打开可见浏览器；服务器/Docker 用 headless + 截图交互
+                    use_headless = _login_uses_headless_browser()
+                    context = await _launch_context(
+                        playwright,
+                        headless=use_headless,
+                        for_login=True,
+                    )
                     pages = context.pages  # type: ignore[attr-defined]
                     page = pages[0] if pages else await context.new_page()  # type: ignore[attr-defined]
                     await page.goto(  # type: ignore[attr-defined]

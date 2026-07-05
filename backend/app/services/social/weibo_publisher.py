@@ -17,7 +17,11 @@ from app.services.social.content_adapter import (
     WeiboPublishPayload,
     is_likely_logged_in_url,
 )
-from app.services.social.profile_paths import resolve_weibo_profile_dir, weibo_profile_lock
+from app.services.social.profile_paths import (
+    clear_stale_chromium_profile_lock,
+    resolve_weibo_profile_dir,
+    weibo_profile_lock,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -180,6 +184,26 @@ async def check_weibo_login_state(*, force_refresh: bool = False) -> dict[str, o
             return result
 
 
+def is_chromium_profile_lock_error(exc: BaseException) -> bool:
+    message = str(exc).lower()
+    return "profile appears to be in use" in message or "processsingleton" in message
+
+
+def format_weibo_browser_error(exc: BaseException) -> str:
+    message = str(exc)
+    if is_chromium_profile_lock_error(exc):
+        return (
+            "微博浏览器 Profile 被占用，请稍后重试；"
+            "若持续失败，请联系管理员清理 Profile 目录中的锁文件"
+        )
+    if "executable doesn't exist" in message.lower():
+        return "服务器未安装 Playwright Chromium，请联系管理员执行 playwright install chromium"
+    first_line = message.splitlines()[0].strip()
+    if len(first_line) > 240:
+        return first_line[:240] + "…"
+    return first_line or "无法启动微博登录浏览器"
+
+
 async def _launch_context(
     playwright: object,
     *,
@@ -209,8 +233,22 @@ async def _launch_context(
         launch_kwargs["channel"] = channel
 
     chromium = playwright.chromium  # type: ignore[attr-defined]
+
+    async def _try_launch(kwargs: dict) -> object:
+        clear_stale_chromium_profile_lock(profile_dir)
+        try:
+            return await chromium.launch_persistent_context(**kwargs)
+        except Exception as exc:
+            if not is_chromium_profile_lock_error(exc):
+                raise
+            removed = clear_stale_chromium_profile_lock(profile_dir)
+            if not removed:
+                raise
+            logger.warning("检测到过期 Profile 锁，清理后重试启动浏览器")
+            return await chromium.launch_persistent_context(**kwargs)
+
     try:
-        context = await chromium.launch_persistent_context(**launch_kwargs)
+        context = await _try_launch(launch_kwargs)
     except Exception as exc:
         if not channel:
             raise
@@ -220,7 +258,7 @@ async def _launch_context(
             exc,
         )
         fallback_kwargs = {k: v for k, v in launch_kwargs.items() if k != "channel"}
-        context = await chromium.launch_persistent_context(**fallback_kwargs)
+        context = await _try_launch(fallback_kwargs)
 
     await context.add_init_script(_STEALTH_INIT_SCRIPT)  # type: ignore[attr-defined]
     return context
