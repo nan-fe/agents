@@ -21,6 +21,7 @@ _CHROMIUM_LOCK_FILES = ("SingletonLock", "SingletonCookie", "lockfile")
 def _lock_file_present(path: Path) -> bool:
     return path.is_symlink() or path.exists()
 
+
 # Playwright 共用同一 Profile，任意时刻只允许一个会话持有。
 weibo_profile_lock = asyncio.Lock()
 
