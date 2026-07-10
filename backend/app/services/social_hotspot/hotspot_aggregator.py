@@ -415,9 +415,7 @@ def build_analysis_result(
         platforms=platforms,
         hotspots=hotspots,
         summary=synthesis.summary.strip()[:800],
-        cross_platform_hotspots=[
-            s.strip() for s in synthesis.cross_platform_hotspots if s.strip()
-        ],
+        cross_platform_hotspots=[s.strip() for s in synthesis.cross_platform_hotspots if s.strip()],
         marketing_insights=[s.strip() for s in synthesis.marketing_insights if s.strip()],
         data_source_notes=synthesis.data_source_notes.strip()[:1000],
         partial_errors=partial_errors,

@@ -98,7 +98,13 @@ def test_weibo_login_confirm_not_logged_in() -> None:
         transport = ASGITransport(app=app)
         with patch(
             "app.main.weibo_login_session_manager.confirm",
-            AsyncMock(return_value={"logged_in": False, "current_url": "https://passport.weibo.com", "profile_path": "/tmp/p"}),
+            AsyncMock(
+                return_value={
+                    "logged_in": False,
+                    "current_url": "https://passport.weibo.com",
+                    "profile_path": "/tmp/p",
+                }
+            ),
         ):
             async with AsyncClient(transport=transport, base_url="http://test") as client:
                 resp = await client.post("/social/weibo/login/test-session/confirm")
