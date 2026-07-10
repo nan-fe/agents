@@ -22,6 +22,7 @@ from app.services.social.profile_paths import (
     resolve_weibo_profile_dir,
     weibo_profile_lock,
 )
+from app.services.social.weibo_auth_store import get_weibo_auth
 
 logger = logging.getLogger(__name__)
 
@@ -152,6 +153,17 @@ async def check_weibo_login_state(*, force_refresh: bool = False) -> dict[str, o
 
     profile_dir = resolve_weibo_profile_dir()
 
+    stored = await get_weibo_auth()
+    if stored and stored.get("logged_in") and stored.get("profile_path") == profile_dir:
+        return {
+            "configured": True,
+            "logged_in": True,
+            "profile_path": profile_dir,
+            "current_url": stored.get("current_url"),
+            "confirmed_at": stored.get("confirmed_at"),
+            "driver": "playwright",
+        }
+
     if _login_state_cache is not None:
         cached_at, cached_result = _login_state_cache
         if time.time() - cached_at < _LOGIN_STATE_CACHE_TTL_SEC:
@@ -173,6 +185,14 @@ async def check_weibo_login_state(*, force_refresh: bool = False) -> dict[str, o
 
         try:
             result = await _check_weibo_login_state_playwright(profile_dir)
+            if result.get("logged_in"):
+                from app.services.social.weibo_auth_store import save_weibo_auth
+
+                await save_weibo_auth(
+                    profile_path=profile_dir,
+                    logged_in=True,
+                    current_url=str(result.get("current_url") or ""),
+                )
             _login_state_cache = (time.time(), result)
             return result
         except ImportError:

@@ -427,10 +427,73 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Social Status */
+        /**
+         * Social Status
+         * @description 微博发布与 X 同步配置状态。
+         */
         get: operations["social_status_social_status_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/social/weibo/login/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Social Weibo Login Start
+         * @description 启动微博登录会话（打开 Profile 浏览器，用户手动完成登录）。
+         */
+        post: operations["social_weibo_login_start_social_weibo_login_start_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/social/weibo/login/{session_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Social Weibo Login Close
+         * @description 结束可视化登录会话。
+         */
+        delete: operations["social_weibo_login_close_social_weibo_login__session_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/social/weibo/login/{session_id}/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Social Weibo Login Confirm
+         * @description 用户确认已在浏览器完成登录：检测并持久化 Profile。
+         */
+        post: operations["social_weibo_login_confirm_social_weibo_login__session_id__confirm_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -446,7 +509,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Social Publish Weibo */
+        /**
+         * Social Publish Weibo
+         * @description 异步发布到微博，返回 job_id 供轮询。
+         */
         post: operations["social_publish_weibo_social_publish_weibo_post"];
         delete?: never;
         options?: never;
@@ -461,7 +527,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Social Publish Job Status */
+        /**
+         * Social Publish Job Status
+         * @description 查询微博发布任务状态。
+         */
         get: operations["social_publish_job_status_social_publish__job_id__get"];
         put?: never;
         post?: never;
@@ -480,8 +549,91 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Social Sync X Once */
+        /**
+         * Social Sync X Once
+         * @description 手动触发一次 X → 微博同步（调试/运维）。
+         */
         post: operations["social_sync_x_once_social_sync_x_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/social-hotspots/platforms": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Social Hotspots Platforms
+         * @description 返回支持的热点分析平台列表。
+         */
+        get: operations["social_hotspots_platforms_social_hotspots_platforms_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/social-hotspots/analyze": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Social Hotspots Analyze
+         * @description 创建社交媒体热点分析任务。
+         */
+        post: operations["social_hotspots_analyze_social_hotspots_analyze_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/social-hotspots/analyze/stream": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Social Hotspots Analyze Stream
+         * @description SSE 流式热点分析：阶段性返回检索与大模型整合结果。
+         */
+        post: operations["social_hotspots_analyze_stream_social_hotspots_analyze_stream_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/social-hotspots/{job_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Social Hotspots Job Status
+         * @description 查询热点分析任务状态与结果。
+         */
+        get: operations["social_hotspots_job_status_social_hotspots__job_id__get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -516,6 +668,147 @@ export interface components {
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
+        };
+        /** HotspotAnalysisResult */
+        HotspotAnalysisResult: {
+            /** Keyword */
+            keyword: string;
+            /**
+             * Generated At
+             * Format: date-time
+             */
+            generated_at: string;
+            /** Platforms */
+            platforms: ("weibo" | "xhs" | "douyin" | "x" | "reddit")[];
+            /** Summary */
+            summary: string;
+            /** Hotspots */
+            hotspots?: components["schemas"]["HotspotItem"][];
+            /** Trend Series */
+            trend_series?: components["schemas"]["TrendPoint"][];
+            /** Platform Stats */
+            platform_stats?: components["schemas"]["PlatformStat"][];
+            /** Cross Platform Hotspots */
+            cross_platform_hotspots?: string[];
+            /** Marketing Insights */
+            marketing_insights?: string[];
+            /**
+             * Data Source Notes
+             * @default
+             */
+            data_source_notes: string;
+            /** Partial Errors */
+            partial_errors?: {
+                [key: string]: string;
+            };
+        };
+        /** HotspotAnalyzeCreateResponse */
+        HotspotAnalyzeCreateResponse: {
+            /** Job Id */
+            job_id: string;
+            /**
+             * Status
+             * @default pending
+             */
+            status: string;
+        };
+        /**
+         * HotspotAnalyzeRequest
+         * @description 社交媒体热点分析请求。
+         */
+        HotspotAnalyzeRequest: {
+            /**
+             * Keyword
+             * @default 商品宣传 营销 推广 种草 带货 品牌 新品 爆款
+             */
+            keyword: string;
+            /** Platforms */
+            platforms?: ("weibo" | "xhs" | "douyin" | "x" | "reddit")[];
+            /**
+             * Max Items Per Platform
+             * @default 5
+             */
+            max_items_per_platform: number;
+            /**
+             * Locale
+             * @default zh-CN
+             */
+            locale: string;
+        };
+        /** HotspotItem */
+        HotspotItem: {
+            /** Id */
+            id: string;
+            /**
+             * Platform
+             * @enum {string}
+             */
+            platform: "weibo" | "xhs" | "douyin" | "x" | "reddit";
+            /** Title */
+            title: string;
+            /** Summary */
+            summary: string;
+            /**
+             * Promotion Relevance
+             * @default
+             */
+            promotion_relevance: string;
+            /** Heat Score */
+            heat_score: number;
+            /**
+             * Trend
+             * @default unknown
+             * @enum {string}
+             */
+            trend: "rising" | "stable" | "falling" | "unknown";
+            /** Source Url */
+            source_url: string;
+            /** Published At */
+            published_at?: string | null;
+            /** Tags */
+            tags?: string[];
+            /**
+             * Suspicious
+             * @default false
+             */
+            suspicious: boolean;
+        };
+        /** HotspotJobResponse */
+        HotspotJobResponse: {
+            /** Job Id */
+            job_id: string;
+            /** Status */
+            status: string;
+            /** Progress */
+            progress?: string[];
+            result?: components["schemas"]["HotspotAnalysisResult"] | null;
+            /** Error */
+            error?: string | null;
+            /** Created At */
+            created_at: number;
+            /** Updated At */
+            updated_at: number;
+            /** Payload Summary */
+            payload_summary?: {
+                [key: string]: unknown;
+            };
+        };
+        /** HotspotPlatformInfo */
+        HotspotPlatformInfo: {
+            /**
+             * Id
+             * @enum {string}
+             */
+            id: "weibo" | "xhs" | "douyin" | "x" | "reddit";
+            /** Label */
+            label: string;
+            /** Description */
+            description: string;
+        };
+        /** HotspotPlatformsResponse */
+        HotspotPlatformsResponse: {
+            /** Platforms */
+            platforms: components["schemas"]["HotspotPlatformInfo"][];
         };
         /**
          * LarkOAuthRegisterRequest
@@ -610,47 +903,17 @@ export interface components {
                 [key: string]: unknown;
             } | null;
         };
-        /** WeiboPublishRequest */
-        WeiboPublishRequest: {
-            title?: string | null;
-            content?: string | null;
-            hashtags?: string[] | null;
-            image_url?: string | null;
-            share_url?: string | null;
-            review_approved?: boolean | null;
-            version_id?: string | null;
-        };
-        /** WeiboPublishCreateResponse */
-        WeiboPublishCreateResponse: {
-            job_id: string;
-            status: string;
-        };
-        /** PublishJobResponse */
-        PublishJobResponse: {
-            job_id: string;
-            platform: string;
-            status: string;
-            progress: string[];
-            post_url?: string | null;
-            error?: string | null;
-            screenshot_path?: string | null;
-            created_at: number;
-            updated_at: number;
-            payload_summary: {
-                [key: string]: unknown;
-            };
-        };
-        /** SocialStatusResponse */
-        SocialStatusResponse: {
-            weibo_publish_enabled: boolean;
-            weibo: {
-                [key: string]: unknown;
-            };
-            x_sync_enabled: boolean;
-            x_sync_username?: string | null;
-            x_sync_interval_seconds: number;
-            review_required: boolean;
-            dry_run: boolean;
+        /** PlatformStat */
+        PlatformStat: {
+            /**
+             * Platform
+             * @enum {string}
+             */
+            platform: "weibo" | "xhs" | "douyin" | "x" | "reddit";
+            /** Count */
+            count: number;
+            /** Avg Heat */
+            avg_heat: number;
         };
         /**
          * ProductComment
@@ -863,6 +1126,31 @@ export interface components {
             /** Projects */
             projects?: components["schemas"]["ProjectListItem"][];
         };
+        /** PublishJobResponse */
+        PublishJobResponse: {
+            /** Job Id */
+            job_id: string;
+            /** Platform */
+            platform: string;
+            /** Status */
+            status: string;
+            /** Progress */
+            progress?: string[];
+            /** Post Url */
+            post_url?: string | null;
+            /** Error */
+            error?: string | null;
+            /** Screenshot Path */
+            screenshot_path?: string | null;
+            /** Created At */
+            created_at: number;
+            /** Updated At */
+            updated_at: number;
+            /** Payload Summary */
+            payload_summary?: {
+                [key: string]: unknown;
+            };
+        };
         /**
          * ShareCreateRequest
          * @description 创建公开分享快照的请求
@@ -925,6 +1213,44 @@ export interface components {
             /** Expires At */
             expires_at?: string | null;
         };
+        /** SocialStatusResponse */
+        SocialStatusResponse: {
+            /** Weibo Publish Enabled */
+            weibo_publish_enabled: boolean;
+            /** Weibo */
+            weibo: {
+                [key: string]: unknown;
+            };
+            /** X Sync Enabled */
+            x_sync_enabled: boolean;
+            /** X Sync Username */
+            x_sync_username?: string | null;
+            /** X Sync Interval Seconds */
+            x_sync_interval_seconds: number;
+            /** Review Required */
+            review_required: boolean;
+            /**
+             * Auto On Complete
+             * @default true
+             */
+            auto_on_complete: boolean;
+            /**
+             * Publish Engine
+             * @default playwright
+             */
+            publish_engine: string;
+            /** Dry Run */
+            dry_run: boolean;
+        };
+        /** TrendPoint */
+        TrendPoint: {
+            /** Date */
+            date: string;
+            /** Count */
+            count: number;
+            /** Avg Heat */
+            avg_heat: number;
+        };
         /**
          * UserInput
          * @description 用户输入模型
@@ -982,6 +1308,68 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+        };
+        /** WeiboLoginStartResponse */
+        WeiboLoginStartResponse: {
+            /** Session Id */
+            session_id: string;
+            /** Logged In */
+            logged_in: boolean;
+            /** Current Url */
+            current_url: string;
+            /** Profile Path */
+            profile_path: string;
+            /**
+             * Viewport Width
+             * @default 1280
+             */
+            viewport_width: number;
+            /**
+             * Viewport Height
+             * @default 900
+             */
+            viewport_height: number;
+        };
+        /** WeiboLoginStatusResponse */
+        WeiboLoginStatusResponse: {
+            /** Session Id */
+            session_id: string;
+            /** Logged In */
+            logged_in: boolean;
+            /** Current Url */
+            current_url: string;
+            /** Profile Path */
+            profile_path: string;
+        };
+        /** WeiboPublishCreateResponse */
+        WeiboPublishCreateResponse: {
+            /** Job Id */
+            job_id: string;
+            /**
+             * Status
+             * @default pending
+             */
+            status: string;
+        };
+        /**
+         * WeiboPublishRequest
+         * @description 触发微博自动发布。
+         */
+        WeiboPublishRequest: {
+            /** Title */
+            title?: string | null;
+            /** Content */
+            content?: string | null;
+            /** Hashtags */
+            hashtags?: string[] | null;
+            /** Image Url */
+            image_url?: string | null;
+            /** Share Url */
+            share_url?: string | null;
+            /** Review Approved */
+            review_approved?: boolean | null;
+            /** Version Id */
+            version_id?: string | null;
         };
     };
     responses: never;
@@ -1720,6 +2108,37 @@ export interface operations {
     };
     social_status_social_status_get: {
         parameters: {
+            query?: {
+                force_refresh?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SocialStatusResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    social_weibo_login_start_social_weibo_login_start_post: {
+        parameters: {
             query?: never;
             header?: never;
             path?: never;
@@ -1727,12 +2146,75 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["SocialStatusResponse"];
+                    "application/json": components["schemas"]["WeiboLoginStartResponse"];
+                };
+            };
+        };
+    };
+    social_weibo_login_close_social_weibo_login__session_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    social_weibo_login_confirm_social_weibo_login__session_id__confirm_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WeiboLoginStatusResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -1750,6 +2232,7 @@ export interface operations {
             };
         };
         responses: {
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -1758,6 +2241,7 @@ export interface operations {
                     "application/json": components["schemas"]["WeiboPublishCreateResponse"];
                 };
             };
+            /** @description Validation Error */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -1779,6 +2263,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -1787,6 +2272,7 @@ export interface operations {
                     "application/json": components["schemas"]["PublishJobResponse"];
                 };
             };
+            /** @description Validation Error */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -1806,14 +2292,130 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    social_hotspots_platforms_social_hotspots_platforms_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HotspotPlatformsResponse"];
+                };
+            };
+        };
+    };
+    social_hotspots_analyze_social_hotspots_analyze_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HotspotAnalyzeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HotspotAnalyzeCreateResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    social_hotspots_analyze_stream_social_hotspots_analyze_stream_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HotspotAnalyzeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    social_hotspots_job_status_social_hotspots__job_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HotspotJobResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

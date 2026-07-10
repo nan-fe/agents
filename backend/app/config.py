@@ -111,6 +111,11 @@ class Settings(BaseSettings):
     X_SYNC_PROFILE_PATH: str = ""
     X_SYNC_INTERVAL_SECONDS: int = 300
 
+    # 社交媒体热点分析
+    SOCIAL_HOTSPOT_ENABLED: bool = True
+    SOCIAL_HOTSPOT_LLM_TIMEOUT_SEC: float = 45.0
+    SOCIAL_HOTSPOT_CACHE_TTL_SEC: float = 300.0
+
     # LangSmith
     LANGCHAIN_TRACING_V2: bool = True
     # Optional: LangSmith API key to access deployed graph

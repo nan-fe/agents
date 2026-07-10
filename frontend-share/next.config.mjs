@@ -38,6 +38,7 @@ const nextConfig = {
         source: '/social/:path*',
         destination: `${apiUpstream}/social/:path*`,
       },
+      // /social-hotspots/analyze/stream 由 app/social-hotspots/analyze/stream/route.ts 流式代理（不可走 rewrite）
       {
         source: '/lark/:path*',
         destination: `${apiUpstream}/lark/:path*`,

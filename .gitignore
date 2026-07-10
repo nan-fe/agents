@@ -6,8 +6,8 @@ backend/venv/
 backend/env/
 backend/app/data/shares.json
 backend/app/data/dialog_streams/
-data/weibo-profile/
-data/x-profiles/
+backend/app/data/memory.db
+data/*
 
 # 前端
 frontend-ts/node_modules/
@@ -15,6 +15,7 @@ frontend-ts/dist/
 frontend-share/node_modules/
 frontend-share/.next/
 frontend-share/out/
+frontend-share/tsconfig.tsbuildinfo
 frontend-share/.env
 frontend-share/.env.sentry-build-plugin
 

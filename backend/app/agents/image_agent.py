@@ -41,6 +41,53 @@ class ImageAgent(BaseAgent):
         except Exception:
             return 1024, 1024
 
+    @staticmethod
+    def _build_image_prompt(input_data: dict) -> str:
+        """组装可直接喂给 diffusion 的画面描述（非 LLM 任务说明）。"""
+        target_audience = input_data.get("target_audience") or []
+        if not isinstance(target_audience, list):
+            target_audience = [str(target_audience)]
+
+        core_selling_points = input_data.get("core_selling_points") or []
+        if not isinstance(core_selling_points, list):
+            core_selling_points = [str(core_selling_points)]
+
+        product_category = input_data.get("product_category") or "商品"
+        image_requirements = input_data.get("image_requirements") or "产品实物主图，清晰明亮"
+        topic = input_data.get("topic") or ""
+        tone_style = input_data.get("tone_style") or "自然清新"
+        user_input = (input_data.get("user_input") or "").strip()
+        history = (input_data.get("history") or "").strip()
+
+        audience_text = "、".join(str(a) for a in target_audience) or "一般消费者"
+        selling_text = "、".join(str(s) for s in core_selling_points)
+        scene_hint = user_input or image_requirements
+
+        parts = [
+            "小红书电商产品摄影，真实照片质感，生活化静物摆拍。",
+            (
+                f"画面主体：{product_category}商品本体占画面约50%-70%，"
+                "前景居中或45度摆放，包装与标签清晰可见，材质颜色细节可辨。"
+            ),
+            (
+                f"场景与道具：{scene_hint}；"
+                f"符合{audience_text}的日常环境，商品摆放在相关道具旁，"
+                f"氛围贴合「{topic}」主题。"
+            ),
+            f"画面氛围：{tone_style}，温暖清新，自然舒适。",
+            "拍摄效果：手机或相机实拍，自然光，真实阴影，浅景深，轻微背景虚化。",
+            "真实细节：桌面纹理、布料褶皱、自然摆放的小物件。",
+        ]
+        if selling_text:
+            parts.append(f"视觉卖点暗示：{selling_text}。")
+        if history:
+            parts.append(f"补充调整：{history}")
+        parts.append(
+            "画面中不出现：人物脸部特写、涂抹动作、AI蜡像感、3D渲染感、"
+            "塑料质感、过度磨皮、不真实光效、夸张广告摆拍、完美对称摆放。"
+        )
+        return "\n".join(parts)
+
     async def _siliconflow_generate(self, prompt: str, size: str) -> str:
         async def once():
             response = await self.client.images.generate(
@@ -99,41 +146,8 @@ class ImageAgent(BaseAgent):
         else:
             input_data_dict = input_data.model_dump()
 
-        target_audience = input_data_dict.get("target_audience") or []
-        if not isinstance(target_audience, list):
-            target_audience = [str(target_audience)]
-
-        core_selling_points = input_data_dict.get("core_selling_points") or []
-        if not isinstance(core_selling_points, list):
-            core_selling_points = [str(core_selling_points)]
-
-        prompt = f"""
-        你是一位资深电商摄影师和设计师，擅长根据商品类别和营销文案，构思出**极具真实感、像实拍照片**的商品图描述。
-
-        请根据以下信息，生成一段用于图像生成模型（如Midjourney、DALL-E）的图片描述，要求图片看起来像是**真实拍摄**，而不是AI生成或渲染图。
-        
-        请根据以下信息生成一张商品介绍的图片描述：
-        
-        目标人群：{", ".join(target_audience)}
-        核心卖点：{", ".join(core_selling_points)}
-        语气风格：{input_data_dict.get("tone_style", "")}
-        文案内容：{input_data_dict.get("copywriting_content", "")}
-        文案主题：{input_data_dict.get("topic", "")}
-        商品类别：{input_data_dict.get("product_category", "")}
-        历史数据：{input_data_dict.get("history", "")}
-        
-        【真实感强制要求】（必须严格遵守）：
-        1. **拒绝完美主义**：不要出现完美无瑕的光滑表面、零反差的柔光、过于对称的构图。允许轻微的自然瑕疵（如指纹、灰尘、布料褶皱、自然色差）。
-        2. **日常环境**：将商品放置在真实生活场景中（如木桌、地毯、厨房台面、水泥地面、卧室床头），避免纯色无缝背景或影棚渐变背景。
-        3. **自然或混合光线**：优先使用窗边自然光、室内暖光、阴天漫反射光，避免多灯无影布光。允许柔和阴影和轻微曝光不均。
-        4. **真实色彩与质感**：色彩保持自然饱和度，不追求高艳。突出材质纹理（如棉麻的纤维、金属的拉丝、皮革的毛孔），不要过度锐化或平滑。
-        5. **适度构图**：采用类似手机或入门相机随手拍的视角（如平视、轻微俯拍、略带偏移），允许非完美裁切、前景虚化、轻微镜头畸变或噪点。
-        6. **生活化细节**：添加符合场景的辅助元素（如半杯咖啡、使用中的手机、散落的叶子、卷尺、购物小票），但不要喧宾夺主。
-        7. **避免AI常见痕迹**：禁止出现"光晕"、"辉光"、"CGI渲染感"、"塑料质感"、"极度对称"、"无瑕疵倒影"等特征。
-        8. **历史数据使用**：如果有历史数据，则按照历史信息，结合用户输入的意见重新调整图片描述。
-        """
-
-        await self.log("生成图片描述...", log_callback)
+        prompt = self._build_image_prompt(input_data_dict)
+        await self.log("正在生成配图...", log_callback)
         deadline = time.monotonic() + settings.IMAGE_GEN_TOTAL_BUDGET_SECONDS
         prompt_variants = [prompt, self._compact_prompt_for_retry(prompt)]
         size_variants = ["1024x1024", "512x512"]

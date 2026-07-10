@@ -643,85 +643,25 @@ export const startWeiboLoginSession = async (): Promise<WeiboLoginStartResponse>
   return response.json();
 };
 
-export const pollWeiboLoginStatus = async (
-  sessionId: string,
-): Promise<WeiboLoginStatusResponse> => {
-  const response = await fetch(
-    `${API_BASE_URL}/social/weibo/login/${encodeURIComponent(sessionId)}/status`,
-  );
-  if (!response.ok) {
-    await parseApiError(response);
-  }
-  return response.json();
-};
-
-export const getWeiboLoginScreenshotUrl = (
-  sessionId: string,
-  cacheBust: number,
-): string =>
-  `${API_BASE_URL}/social/weibo/login/${encodeURIComponent(sessionId)}/screenshot?t=${cacheBust}`;
-
-export const clickWeiboLogin = async (
-  sessionId: string,
-  x: number,
-  y: number,
-): Promise<{ ok: boolean; logged_in?: boolean; current_url?: string }> => {
-  const response = await fetch(
-    `${API_BASE_URL}/social/weibo/login/${encodeURIComponent(sessionId)}/click`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ x, y }),
-    },
-  );
-  if (!response.ok) {
-    await parseApiError(response);
-  }
-  return response.json();
-};
-
-export const typeWeiboLogin = async (
-  sessionId: string,
-  text: string,
-): Promise<{ ok: boolean }> => {
-  const response = await fetch(
-    `${API_BASE_URL}/social/weibo/login/${encodeURIComponent(sessionId)}/type`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text }),
-    },
-  );
-  if (!response.ok) {
-    await parseApiError(response);
-  }
-  return response.json();
-};
-
-export const pressWeiboLoginKey = async (
-  sessionId: string,
-  key: string,
-): Promise<{ ok: boolean; logged_in?: boolean; current_url?: string }> => {
-  const response = await fetch(
-    `${API_BASE_URL}/social/weibo/login/${encodeURIComponent(sessionId)}/key`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ key }),
-    },
-  );
-  if (!response.ok) {
-    await parseApiError(response);
-  }
-  return response.json();
-};
-
 export const closeWeiboLoginSession = async (
   sessionId: string,
 ): Promise<{ ok: boolean }> => {
   const response = await fetch(
     `${API_BASE_URL}/social/weibo/login/${encodeURIComponent(sessionId)}`,
     { method: 'DELETE' },
+  );
+  if (!response.ok) {
+    await parseApiError(response);
+  }
+  return response.json();
+};
+
+export const confirmWeiboLogin = async (
+  sessionId: string,
+): Promise<WeiboLoginStatusResponse> => {
+  const response = await fetch(
+    `${API_BASE_URL}/social/weibo/login/${encodeURIComponent(sessionId)}/confirm`,
+    { method: 'POST' },
   );
   if (!response.ok) {
     await parseApiError(response);
@@ -763,4 +703,110 @@ export const triggerXSyncOnce = async (): Promise<Record<string, unknown>> => {
     await parseApiError(response);
   }
   return response.json();
+};
+
+export type HotspotPlatform = 'weibo' | 'xhs' | 'douyin' | 'x' | 'reddit';
+
+export type HotspotAnalyzeRequest = {
+  keyword?: string;
+  platforms?: HotspotPlatform[];
+  max_items_per_platform?: number;
+  locale?: string;
+};
+
+export type HotspotTrend = 'rising' | 'stable' | 'falling' | 'unknown';
+
+export type HotspotItem = {
+  id: string;
+  platform: HotspotPlatform;
+  title: string;
+  summary: string;
+  promotion_relevance?: string;
+  heat_score: number;
+  trend: HotspotTrend;
+  source_url: string;
+  published_at?: string | null;
+  tags: string[];
+  suspicious?: boolean;
+};
+
+export type TrendPoint = {
+  date: string;
+  count: number;
+  avg_heat: number;
+};
+
+export type PlatformStat = {
+  platform: HotspotPlatform;
+  count: number;
+  avg_heat: number;
+};
+
+export type HotspotAnalysisResult = {
+  keyword: string;
+  generated_at: string;
+  platforms: HotspotPlatform[];
+  summary: string;
+  hotspots: HotspotItem[];
+  trend_series: TrendPoint[];
+  platform_stats: PlatformStat[];
+  cross_platform_hotspots?: string[];
+  marketing_insights?: string[];
+  data_source_notes?: string;
+  partial_errors: Record<string, string>;
+};
+
+export type HotspotSSEMessage = {
+  type: string;
+  data: Record<string, unknown>;
+};
+
+export const createHotspotAnalyzeStreamRequest = (
+  payload: HotspotAnalyzeRequest = {},
+  signal?: AbortSignal,
+) =>
+  fetch(`${API_BASE_URL}/social-hotspots/analyze/stream`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "text/event-stream",
+    },
+    body: JSON.stringify(payload),
+    signal,
+  });
+
+export const streamSocialHotspotsAnalyze = async (options: {
+  payload?: HotspotAnalyzeRequest;
+  signal?: AbortSignal;
+  onEvent: (message: HotspotSSEMessage) => void;
+}): Promise<HotspotAnalysisResult | null> => {
+  const response = await createHotspotAnalyzeStreamRequest(
+    options.payload,
+    options.signal,
+  );
+  if (!response.ok) {
+    await parseApiError(response);
+  }
+
+  const reader = response.body?.getReader();
+  if (!reader) {
+    return null;
+  }
+
+  let finalResult: HotspotAnalysisResult | null = null;
+  await parseSSEStream({
+    reader,
+    parseMessage: (payload) => JSON.parse(payload) as HotspotSSEMessage,
+    onMessage: (message) => {
+      options.onEvent(message);
+      if (message.type === "result") {
+        finalResult = message.data as unknown as HotspotAnalysisResult;
+      }
+    },
+    onParseError: (error) => {
+      console.error("热点 SSE 解析失败:", error);
+    },
+  });
+
+  return finalResult;
 };

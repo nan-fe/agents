@@ -326,14 +326,59 @@ class WeiboLoginStatusResponse(BaseModel):
     profile_path: str
 
 
-class WeiboLoginClickRequest(BaseModel):
-    x: float
-    y: float
+HotspotPlatform = Literal["weibo", "xhs", "douyin", "x", "reddit"]
+HotspotTrend = Literal["rising", "stable", "falling", "unknown"]
+
+DEFAULT_HOTSPOT_PLATFORMS: list[str] = ["weibo", "xhs", "douyin", "x", "reddit"]
+DEFAULT_HOTSPOT_KEYWORD = "商品宣传 营销 推广 种草 带货 品牌 新品 爆款"
 
 
-class WeiboLoginTypeRequest(BaseModel):
-    text: str
+class HotspotAnalyzeRequest(BaseModel):
+    """社交媒体热点分析请求。"""
+
+    keyword: str = Field(default=DEFAULT_HOTSPOT_KEYWORD, max_length=100)
+    platforms: List[HotspotPlatform] = Field(
+        default_factory=lambda: list(DEFAULT_HOTSPOT_PLATFORMS)
+    )
+    max_items_per_platform: int = Field(default=5, ge=1, le=5)
+    locale: str = "zh-CN"
 
 
-class WeiboLoginKeyRequest(BaseModel):
-    key: str
+class HotspotItem(BaseModel):
+    id: str
+    platform: HotspotPlatform
+    title: str
+    summary: str
+    promotion_relevance: str = ""
+    heat_score: int = Field(ge=0, le=100)
+    trend: HotspotTrend = "unknown"
+    source_url: str
+    published_at: str | None = None
+    tags: List[str] = Field(default_factory=list)
+    suspicious: bool = False
+
+
+class TrendPoint(BaseModel):
+    date: str
+    count: int = Field(ge=0)
+    avg_heat: float = Field(ge=0, le=100)
+
+
+class PlatformStat(BaseModel):
+    platform: HotspotPlatform
+    count: int = Field(ge=0)
+    avg_heat: float = Field(ge=0, le=100)
+
+
+class HotspotAnalysisResult(BaseModel):
+    keyword: str
+    generated_at: datetime
+    platforms: List[HotspotPlatform]
+    summary: str
+    hotspots: List[HotspotItem] = Field(default_factory=list)
+    trend_series: List[TrendPoint] = Field(default_factory=list)
+    platform_stats: List[PlatformStat] = Field(default_factory=list)
+    cross_platform_hotspots: List[str] = Field(default_factory=list)
+    marketing_insights: List[str] = Field(default_factory=list)
+    data_source_notes: str = ""
+    partial_errors: dict[str, str] = Field(default_factory=dict)
