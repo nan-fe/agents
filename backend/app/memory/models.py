@@ -2,7 +2,7 @@
 
 from datetime import UTC, datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy.types import JSON, TypeDecorator
 
@@ -92,6 +92,19 @@ class LarkOAuthClientRow(Base):
     redirect_uris: Mapped[list[str]] = mapped_column(JSON, nullable=False)
     scopes: Mapped[str] = mapped_column(String(512), nullable=False, default="")
     created_at: Mapped[datetime] = mapped_column(_utc_datetime, nullable=False, default=_utcnow)
+
+
+class WeiboAuthRow(Base):
+    """微博 Playwright Profile 登录确认记录（单例，对应 BROWSER_USE_PROFILE_PATH）。"""
+
+    __tablename__ = "weibo_auth"
+
+    id: Mapped[str] = mapped_column(String(16), primary_key=True, default="default")
+    profile_path: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    logged_in: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    current_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    confirmed_at: Mapped[datetime | None] = mapped_column(_utc_datetime, nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(_utc_datetime, nullable=False, default=_utcnow)
 
 
 class LarkUserTokenRow(Base):

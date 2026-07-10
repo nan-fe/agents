@@ -147,8 +147,7 @@ const SocialSyncSettings = () => {
                   </div>
                 )}
                 <p className="text-ink-muted/80">
-                  微博登录与发布使用 Playwright，Profile 路径见{' '}
-                  <code>BROWSER_USE_PROFILE_PATH</code>。
+                  点击「登录微博」会打开 Profile 浏览器，完成登录后点「我已登录」保存。
                 </p>
               </div>
             ),

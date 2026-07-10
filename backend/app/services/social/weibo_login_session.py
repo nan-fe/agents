@@ -4,27 +4,23 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
 import time
 import uuid
 from dataclasses import dataclass, field
 
 from app.config import settings
 from app.services.social.profile_paths import resolve_weibo_profile_dir
+from app.services.social.weibo_auth_store import save_weibo_auth
 from app.services.social.weibo_publisher import (
     _LOGIN_MARKERS,
     _launch_context,
     _playwright_profile_lock,
+    invalidate_weibo_login_state_cache,
 )
 
 logger = logging.getLogger(__name__)
 
 _SESSION_TTL_SEC = 600
-
-
-def _login_uses_headless_browser() -> bool:
-    """Docker/服务器无 DISPLAY 时用 headless + Studio 截图完成登录。"""
-    return not os.environ.get("DISPLAY", "").strip()
 
 
 @dataclass
@@ -35,19 +31,6 @@ class WeiboLoginSession:
     page: object
     created_at: float = field(default_factory=time.time)
     _profile_lock_held: bool = field(default=False, repr=False)
-
-    async def screenshot_png(self) -> bytes:
-        return await self.page.screenshot(full_page=False, type="png")  # type: ignore[attr-defined]
-
-    async def click(self, x: float, y: float) -> None:
-        await self.page.mouse.click(int(x), int(y))  # type: ignore[attr-defined]
-        await asyncio.sleep(0.4)
-
-    async def type_text(self, text: str) -> None:
-        await self.page.keyboard.insert_text(text)  # type: ignore[attr-defined]
-
-    async def press_key(self, key: str) -> None:
-        await self.page.keyboard.press(key)  # type: ignore[attr-defined]
 
     async def evaluate_login(self) -> dict[str, object]:
         url = self.page.url  # type: ignore[attr-defined]
@@ -110,11 +93,10 @@ class WeiboLoginSessionManager:
 
                 playwright = await async_playwright().start()
                 try:
-                    # 本机有图形界面时打开可见浏览器；服务器/Docker 用 headless + 截图交互
-                    use_headless = _login_uses_headless_browser()
+                    # 登录始终打开可见浏览器，由用户在窗口内手动完成账号/扫码
                     context = await _launch_context(
                         playwright,
-                        headless=use_headless,
+                        headless=False,
                         for_login=True,
                     )
                     pages = context.pages  # type: ignore[attr-defined]
@@ -145,7 +127,12 @@ class WeiboLoginSessionManager:
                     _playwright_profile_lock.release()
                 raise
 
-    async def get(self, session_id: str) -> WeiboLoginSession:
+    async def close(self, session_id: str) -> None:
+        async with self._lock:
+            await self._close_locked(session_id)
+
+    async def confirm(self, session_id: str) -> dict[str, object]:
+        """用户点击「我已登录」：检测登录态，成功则持久化 Profile 并关闭浏览器。"""
         async with self._lock:
             session = self._sessions.get(session_id)
             if session is None:
@@ -153,11 +140,20 @@ class WeiboLoginSessionManager:
             if time.time() - session.created_at > _SESSION_TTL_SEC:
                 await self._close_locked(session_id)
                 raise KeyError("登录会话已过期，请重新开始")
-            return session
 
-    async def close(self, session_id: str) -> None:
-        async with self._lock:
-            await self._close_locked(session_id)
+        state = await session.evaluate_login()
+        if state["logged_in"]:
+            profile_path = str(state["profile_path"])
+            current_url = str(state["current_url"])
+            await save_weibo_auth(
+                profile_path=profile_path,
+                logged_in=True,
+                current_url=current_url,
+            )
+            invalidate_weibo_login_state_cache()
+            async with self._lock:
+                await self._close_locked(session_id)
+        return state
 
     async def _close_all_locked(self) -> None:
         for session_id in list(self._sessions):

@@ -23,10 +23,14 @@ def test_check_weibo_login_state_skips_browser_without_force_refresh() -> None:
         settings.WEIBO_PUBLISH_DRY_RUN = False
         mock_browser = AsyncMock()
         with patch(
-            "app.services.social.weibo_publisher._check_weibo_login_state_playwright",
-            mock_browser,
+            "app.services.social.weibo_publisher.get_weibo_auth",
+            AsyncMock(return_value=None),
         ):
-            result = await check_weibo_login_state(force_refresh=False)
+            with patch(
+                "app.services.social.weibo_publisher._check_weibo_login_state_playwright",
+                mock_browser,
+            ):
+                result = await check_weibo_login_state(force_refresh=False)
         assert result["logged_in"] is False
         assert result["reason"] == "未检测"
         mock_browser.assert_not_called()
@@ -48,12 +52,52 @@ def test_check_weibo_login_state_uses_playwright_on_force_refresh() -> None:
         }
         mock_browser = AsyncMock(return_value=mock_result)
         with patch(
-            "app.services.social.weibo_publisher._check_weibo_login_state_playwright",
-            mock_browser,
+            "app.services.social.weibo_publisher.get_weibo_auth",
+            AsyncMock(return_value=None),
         ):
-            result = await check_weibo_login_state(force_refresh=True)
+            with patch(
+                "app.services.social.weibo_publisher._check_weibo_login_state_playwright",
+                mock_browser,
+            ):
+                with patch(
+                    "app.services.social.weibo_auth_store.save_weibo_auth",
+                    AsyncMock(),
+                ):
+                    result = await check_weibo_login_state(force_refresh=True)
         assert result["logged_in"] is True
         mock_browser.assert_awaited_once()
+
+    asyncio.run(_run())
+
+
+def test_check_weibo_login_state_uses_db_when_confirmed() -> None:
+    async def _run() -> None:
+        invalidate_weibo_login_state_cache()
+        settings.WEIBO_PUBLISH_ENABLED = True
+        settings.WEIBO_PUBLISH_DRY_RUN = False
+        mock_browser = AsyncMock()
+        with patch(
+            "app.services.social.weibo_publisher.resolve_weibo_profile_dir",
+            return_value="/tmp/weibo-profile",
+        ):
+            with patch(
+                "app.services.social.weibo_publisher.get_weibo_auth",
+                AsyncMock(
+                    return_value={
+                        "logged_in": True,
+                        "profile_path": "/tmp/weibo-profile",
+                        "current_url": "https://weibo.com/",
+                        "confirmed_at": "2026-01-01T00:00:00+00:00",
+                    },
+                ),
+            ):
+                with patch(
+                    "app.services.social.weibo_publisher._check_weibo_login_state_playwright",
+                    mock_browser,
+                ):
+                    result = await check_weibo_login_state(force_refresh=False)
+        assert result["logged_in"] is True
+        mock_browser.assert_not_called()
 
     asyncio.run(_run())
 

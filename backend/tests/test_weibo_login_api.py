@@ -26,10 +26,6 @@ def _mock_session(*, logged_in: bool = False) -> WeiboLoginSession:
         context=MagicMock(),
         page=MagicMock(),
     )
-    session.screenshot_png = AsyncMock(return_value=b"png-bytes")  # type: ignore[method-assign]
-    session.click = AsyncMock()  # type: ignore[method-assign]
-    session.type_text = AsyncMock()  # type: ignore[method-assign]
-    session.press_key = AsyncMock()  # type: ignore[method-assign]
     session.evaluate_login = AsyncMock(  # type: ignore[method-assign]
         return_value={
             "logged_in": logged_in,
@@ -54,6 +50,7 @@ def test_weibo_login_api_flow() -> None:
         settings.WEIBO_PUBLISH_DRY_RUN = False
 
         session = _mock_session(logged_in=False)
+        logged_in_session = _mock_session(logged_in=True)
 
         transport = ASGITransport(app=app)
         with patch(
@@ -61,8 +58,8 @@ def test_weibo_login_api_flow() -> None:
             AsyncMock(return_value=session),
         ):
             with patch(
-                "app.main.weibo_login_session_manager.get",
-                AsyncMock(return_value=session),
+                "app.main.weibo_login_session_manager.confirm",
+                AsyncMock(return_value=logged_in_session.evaluate_login.return_value),
             ):
                 with patch(
                     "app.main.weibo_login_session_manager.close",
@@ -75,18 +72,11 @@ def test_weibo_login_api_flow() -> None:
                         assert body["session_id"] == "test-session"
                         assert body["logged_in"] is False
 
-                        shot_resp = await client.get(
-                            "/social/weibo/login/test-session/screenshot",
+                        confirm_resp = await client.post(
+                            "/social/weibo/login/test-session/confirm",
                         )
-                        assert shot_resp.status_code == 200
-                        assert shot_resp.content == b"png-bytes"
-
-                        click_resp = await client.post(
-                            "/social/weibo/login/test-session/click",
-                            json={"x": 100, "y": 200},
-                        )
-                        assert click_resp.status_code == 200
-                        assert click_resp.json()["ok"] is True
+                        assert confirm_resp.status_code == 200
+                        assert confirm_resp.json()["logged_in"] is True
 
                         close_resp = await client.delete(
                             "/social/weibo/login/test-session",
@@ -95,6 +85,25 @@ def test_weibo_login_api_flow() -> None:
 
         settings.WEIBO_PUBLISH_ENABLED = prev_enabled
         settings.WEIBO_PUBLISH_DRY_RUN = prev_dry
+        await close_db()
+
+    asyncio.run(_run())
+
+
+def test_weibo_login_confirm_not_logged_in() -> None:
+    async def _run() -> None:
+        await close_db()
+        await init_db()
+
+        transport = ASGITransport(app=app)
+        with patch(
+            "app.main.weibo_login_session_manager.confirm",
+            AsyncMock(return_value={"logged_in": False, "current_url": "https://passport.weibo.com", "profile_path": "/tmp/p"}),
+        ):
+            async with AsyncClient(transport=transport, base_url="http://test") as client:
+                resp = await client.post("/social/weibo/login/test-session/confirm")
+                assert resp.status_code == 400
+
         await close_db()
 
     asyncio.run(_run())

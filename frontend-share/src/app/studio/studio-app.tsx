@@ -1,8 +1,9 @@
 "use client";
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { SessionProvider, useSession } from 'next-auth/react';
 import {
   LogoutOutlined,
+  FireOutlined,
   PlusOutlined,
   ShoppingOutlined,
   VideoCameraOutlined,
@@ -12,6 +13,7 @@ import { atelierTheme } from '../../theme/atelier-theme';
 import DialogContent from './components/dialog-content';
 import { startNewConversation } from './lib/new-conversation';
 import ProductPool from './components/product-pool';
+import SocialHotspotAnalysis from './components/social-hotspot-analysis';
 import SocialSyncSettings from './components/social-sync-settings';
 import { getStudioUserId } from './lib/studio-user';
 
@@ -21,6 +23,7 @@ const { Sider, Content } = Layout;
 enum PageMenu {
   DIALOG_CONTENT = 1,
   PRODUCT_MARKETING,
+  SOCIAL_HOTSPOT,
 }
 
 const STUDIO_ACTIVE_MENU_KEY = 'studio_active_menu';
@@ -32,7 +35,8 @@ const readStoredActiveMenu = (): string => {
   const stored = sessionStorage.getItem(STUDIO_ACTIVE_MENU_KEY);
   if (
     stored === String(PageMenu.DIALOG_CONTENT) ||
-    stored === String(PageMenu.PRODUCT_MARKETING)
+    stored === String(PageMenu.PRODUCT_MARKETING) ||
+    stored === String(PageMenu.SOCIAL_HOTSPOT)
   ) {
     return stored;
   }
@@ -108,6 +112,11 @@ const StudioAppContent = () => {
               icon: <ShoppingOutlined aria-hidden="true" />,
               label: '选品池',
             },
+            {
+              key: String(PageMenu.SOCIAL_HOTSPOT),
+              icon: <FireOutlined aria-hidden="true" />,
+              label: '热点分析',
+            },
           ]}
         />
         <div className="px-2 pb-2">
@@ -126,6 +135,7 @@ const StudioAppContent = () => {
             <DialogContent key={chatSessionKey} userId={userId} />
           )}
           {activeMenu === String(PageMenu.PRODUCT_MARKETING) && <ProductPool />}
+          {activeMenu === String(PageMenu.SOCIAL_HOTSPOT) && <SocialHotspotAnalysis />}
         </Content>
       </Layout>
     </Layout>

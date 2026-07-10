@@ -3,13 +3,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import { App, Modal } from 'antd';
 import {
-  clickWeiboLogin,
   closeWeiboLoginSession,
-  getWeiboLoginScreenshotUrl,
+  confirmWeiboLogin,
   reportError,
   startWeiboLoginSession,
   type WeiboLoginStartResponse,
-  pollWeiboLoginStatus,
 } from '@/services/api';
 
 type WeiboLoginPanelProps = {
@@ -18,16 +16,12 @@ type WeiboLoginPanelProps = {
   onLoggedIn: () => void;
 };
 
-const POLL_INTERVAL_MS = 5000;
-const SCREENSHOT_REFRESH_MS = 1500;
-
 const WeiboLoginPanel = ({ open, onClose, onLoggedIn }: WeiboLoginPanelProps) => {
   const { message } = App.useApp();
   const [session, setSession] = useState<WeiboLoginStartResponse | null>(null);
   const [loading, setLoading] = useState(false);
+  const [confirming, setConfirming] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
-  const [screenshotTick, setScreenshotTick] = useState(0);
-  const [clicking, setClicking] = useState(false);
 
   const finishLogin = useCallback(async () => {
     if (session?.session_id) {
@@ -59,7 +53,6 @@ const WeiboLoginPanel = ({ open, onClose, onLoggedIn }: WeiboLoginPanelProps) =>
         return;
       }
       setSession(data);
-      setScreenshotTick((tick) => tick + 1);
     } catch (error) {
       reportError(error, 'social/startWeiboLogin');
       const detail = error instanceof Error ? error.message : '无法启动微博登录';
@@ -79,88 +72,40 @@ const WeiboLoginPanel = ({ open, onClose, onLoggedIn }: WeiboLoginPanelProps) =>
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
-  useEffect(() => {
-    if (!open || !session?.session_id) {
-      return undefined;
+  const handleConfirm = useCallback(async () => {
+    if (!session?.session_id || confirming) {
+      return;
     }
-
-    const interval = window.setInterval(async () => {
-      try {
-        const status = await pollWeiboLoginStatus(session.session_id);
-        if (status.logged_in) {
-          window.clearInterval(interval);
-          await finishLogin();
-        }
-      } catch {
-        // 会话过期时静默停止轮询
-      }
-    }, POLL_INTERVAL_MS);
-
-    return () => window.clearInterval(interval);
-  }, [finishLogin, open, session?.session_id]);
-
-  useEffect(() => {
-    if (!open || !session?.session_id || startError) {
-      return undefined;
+    setConfirming(true);
+    try {
+      await confirmWeiboLogin(session.session_id);
+      setSession(null);
+      setStartError(null);
+      onLoggedIn();
+      onClose();
+      message.success('微博登录成功');
+    } catch (error) {
+      reportError(error, 'social/confirmWeiboLogin');
+      const detail = error instanceof Error ? error.message : '尚未检测到登录';
+      message.warning(detail);
+    } finally {
+      setConfirming(false);
     }
-
-    const interval = window.setInterval(() => {
-      setScreenshotTick((tick) => tick + 1);
-    }, SCREENSHOT_REFRESH_MS);
-
-    return () => window.clearInterval(interval);
-  }, [open, session?.session_id, startError]);
-
-  const handleScreenshotClick = useCallback(
-    async (event: React.MouseEvent<HTMLImageElement>) => {
-      if (!session?.session_id || clicking) {
-        return;
-      }
-
-      const img = event.currentTarget;
-      const rect = img.getBoundingClientRect();
-      if (rect.width <= 0 || rect.height <= 0) {
-        return;
-      }
-
-      const scaleX = session.viewport_width / rect.width;
-      const scaleY = session.viewport_height / rect.height;
-      const x = (event.clientX - rect.left) * scaleX;
-      const y = (event.clientY - rect.top) * scaleY;
-
-      setClicking(true);
-      try {
-        const result = await clickWeiboLogin(session.session_id, x, y);
-        setScreenshotTick((tick) => tick + 1);
-        if (result.logged_in) {
-          await finishLogin();
-        }
-      } catch (error) {
-        reportError(error, 'social/clickWeiboLogin');
-      } finally {
-        setClicking(false);
-      }
-    },
-    [clicking, finishLogin, session],
-  );
+  }, [confirming, message, onClose, onLoggedIn, session?.session_id]);
 
   const waiting = loading || (session != null && !startError);
-  const screenshotUrl =
-    session?.session_id != null
-      ? getWeiboLoginScreenshotUrl(session.session_id, screenshotTick)
-      : null;
 
   return (
     <Modal
       open={open}
       title={null}
       footer={null}
-      closable={!loading}
-      mask={{ closable: !loading }}
+      closable={!loading && !confirming}
+      mask={{ closable: !loading && !confirming }}
       onCancel={() => {
         void handleClose();
       }}
-      width={session && !startError ? 720 : 440}
+      width={480}
       centered
       destroyOnHidden
       className="weibo-sync-modal weibo-login-modal"
@@ -200,38 +145,43 @@ const WeiboLoginPanel = ({ open, onClose, onLoggedIn }: WeiboLoginPanelProps) =>
           </>
         ) : (
           <div className="weibo-login-modal__waiting">
-            {screenshotUrl ? (
-              <>
-                <p className="weibo-sync-modal__hint">
-                  在下方页面中点击输入账号密码或扫码，登录成功后会自动关闭
-                </p>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={screenshotUrl}
-                  alt="微博登录页面"
-                  className="weibo-login-modal__screenshot"
-                  onClick={(event) => {
-                    void handleScreenshotClick(event);
-                  }}
-                />
-              </>
-            ) : (
+            {waiting ? (
               <div className="weibo-sync-modal__pulse" aria-hidden="true">
                 <span />
                 <span />
                 <span />
               </div>
-            )}
-            <button
-              type="button"
-              className="weibo-sync-modal__btn weibo-sync-modal__btn--ghost weibo-login-modal__cancel"
-              disabled={loading || clicking}
-              onClick={() => {
-                void handleClose();
-              }}
-            >
-              取消
-            </button>
+            ) : null}
+            <p className="weibo-sync-modal__hint">
+              已为你打开微博 Profile 浏览器窗口。请在浏览器中完成账号登录或扫码，成功后点击下方「我已登录」保存登录态。
+            </p>
+            {session?.profile_path ? (
+              <p className="weibo-sync-modal__hint text-ink-muted/70">
+                Profile 路径：<code>{session.profile_path}</code>
+              </p>
+            ) : null}
+            <div className="weibo-sync-modal__actions">
+              <button
+                type="button"
+                className="weibo-sync-modal__btn weibo-sync-modal__btn--ghost"
+                disabled={loading || confirming}
+                onClick={() => {
+                  void handleClose();
+                }}
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                className="weibo-sync-modal__btn weibo-sync-modal__btn--primary"
+                disabled={!session?.session_id || loading || confirming}
+                onClick={() => {
+                  void handleConfirm();
+                }}
+              >
+                {confirming ? '检测中…' : '我已登录'}
+              </button>
+            </div>
           </div>
         )}
       </div>
