@@ -569,13 +569,25 @@ export type SocialStatusResponse = {
     dry_run?: boolean;
     current_url?: string;
   };
+  x_publish_enabled: boolean;
+  x_oauth_configured?: boolean;
+  x: {
+    configured?: boolean;
+    logged_in?: boolean;
+    reason?: string;
+    dry_run?: boolean;
+    current_url?: string;
+  };
   x_sync_enabled: boolean;
   x_sync_username?: string | null;
   x_sync_interval_seconds: number;
   review_required: boolean;
+  x_review_required: boolean;
   auto_on_complete: boolean;
   publish_engine: string;
+  x_publish_engine: string;
   dry_run: boolean;
+  x_dry_run: boolean;
 };
 
 export type WeiboPublishPayload = {
@@ -608,8 +620,16 @@ export type PublishJobResponse = {
 
 export const getSocialStatus = async (
   forceRefresh = false,
+  userId?: string,
 ): Promise<SocialStatusResponse> => {
-  const query = forceRefresh ? '?force_refresh=true' : '';
+  const params = new URLSearchParams();
+  if (forceRefresh) {
+    params.set('force_refresh', 'true');
+  }
+  if (userId) {
+    params.set('user_id', userId);
+  }
+  const query = params.toString() ? `?${params.toString()}` : '';
   const response = await fetch(`${API_BASE_URL}/social/status${query}`);
   if (!response.ok) {
     await parseApiError(response);
@@ -669,10 +689,185 @@ export const confirmWeiboLogin = async (
   return response.json();
 };
 
+export const startXLoginSession = async (
+  userId: string,
+): Promise<WeiboLoginStartResponse> => {
+  const response = await fetch(`${API_BASE_URL}/social/x/login/start`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ user_id: userId }),
+  });
+  if (!response.ok) {
+    await parseApiError(response);
+  }
+  return response.json();
+};
+
+export const closeXLoginSession = async (
+  sessionId: string,
+): Promise<{ ok: boolean }> => {
+  const response = await fetch(
+    `${API_BASE_URL}/social/x/login/${encodeURIComponent(sessionId)}`,
+    { method: 'DELETE' },
+  );
+  if (!response.ok) {
+    await parseApiError(response);
+  }
+  return response.json();
+};
+
+export const confirmXLogin = async (
+  sessionId: string,
+): Promise<WeiboLoginStatusResponse> => {
+  const response = await fetch(
+    `${API_BASE_URL}/social/x/login/${encodeURIComponent(sessionId)}/confirm`,
+    { method: 'POST' },
+  );
+  if (!response.ok) {
+    await parseApiError(response);
+  }
+  return response.json();
+};
+
 export const publishToWeibo = async (
   payload: WeiboPublishPayload,
 ): Promise<WeiboPublishCreateResponse> => {
   const response = await fetch(`${API_BASE_URL}/social/publish/weibo`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    await parseApiError(response);
+  }
+  return response.json();
+};
+
+export type XPublishPayload = {
+  user_id?: string;
+  title?: string;
+  content?: string;
+  hashtags?: string[];
+  image_url?: string;
+  share_url?: string;
+  review_approved?: boolean;
+  version_id?: string;
+};
+
+export type XPublishCreateResponse = {
+  job_id: string;
+  status: string;
+};
+
+export type XOAuthUserStatus = {
+  connected: boolean;
+  oauth_connected?: boolean;
+  profile_ready?: boolean;
+  user_id: string;
+  x_user_id?: string | null;
+  x_username?: string | null;
+  expires_at?: string;
+  has_refresh_token?: boolean;
+  scope?: string | null;
+  profile?: SocialStatusResponse['x'];
+};
+
+export type XOAuthSessionResponse = {
+  session_id: string;
+  user_id: string;
+  logged_in: boolean;
+  oauth_completed: boolean;
+  oauth_error?: string | null;
+  x_username?: string | null;
+  current_url: string;
+  profile_path: string;
+  viewport_width: number;
+  viewport_height: number;
+};
+
+export const startXOAuthSession = async (
+  userId: string,
+): Promise<XOAuthSessionResponse> => {
+  const response = await fetch(`${API_BASE_URL}/social/x/oauth/start`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ user_id: userId }),
+  });
+  if (!response.ok) {
+    await parseApiError(response);
+  }
+  return response.json();
+};
+
+export const getXOAuthSessionStatus = async (
+  sessionId: string,
+): Promise<XOAuthSessionResponse> => {
+  const response = await fetch(
+    `${API_BASE_URL}/social/x/oauth/session/${encodeURIComponent(sessionId)}`,
+  );
+  if (!response.ok) {
+    await parseApiError(response);
+  }
+  return response.json();
+};
+
+export const confirmXOAuthSession = async (
+  sessionId: string,
+): Promise<WeiboLoginStatusResponse> => {
+  const response = await fetch(
+    `${API_BASE_URL}/social/x/oauth/session/${encodeURIComponent(sessionId)}/confirm`,
+    { method: 'POST' },
+  );
+  if (!response.ok) {
+    await parseApiError(response);
+  }
+  return response.json();
+};
+
+export const closeXOAuthSession = async (
+  sessionId: string,
+): Promise<{ ok: boolean }> => {
+  const response = await fetch(
+    `${API_BASE_URL}/social/x/oauth/session/${encodeURIComponent(sessionId)}`,
+    { method: 'DELETE' },
+  );
+  if (!response.ok) {
+    await parseApiError(response);
+  }
+  return response.json();
+};
+
+export const getXOAuthUserStatus = async (
+  userId: string,
+  forceRefresh = false,
+): Promise<XOAuthUserStatus> => {
+  const params = new URLSearchParams({ user_id: userId });
+  if (forceRefresh) {
+    params.set('force_refresh', 'true');
+  }
+  const response = await fetch(
+    `${API_BASE_URL}/social/x/oauth/user?${params.toString()}`,
+  );
+  if (!response.ok) {
+    await parseApiError(response);
+  }
+  return response.json();
+};
+
+export const disconnectXOAuth = async (userId: string): Promise<void> => {
+  const response = await fetch(
+    `${API_BASE_URL}/social/x/oauth/user?user_id=${encodeURIComponent(userId)}`,
+    { method: 'DELETE' },
+  );
+  if (!response.ok) {
+    await parseApiError(response);
+  }
+};
+
+export const publishToX = async (
+  payload: XPublishPayload,
+): Promise<XPublishCreateResponse> => {
+  const response = await fetch(`${API_BASE_URL}/social/publish/x`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),

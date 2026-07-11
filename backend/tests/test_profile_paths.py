@@ -10,7 +10,21 @@ from app.services.social.profile_paths import (
     _parse_singleton_pid,
     clear_stale_chromium_profile_lock,
     resolve_weibo_profile_dir,
+    resolve_x_profile_dir,
 )
+
+
+def test_resolve_x_profile_dir_per_user(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(
+        __import__("app.services.social.profile_paths", fromlist=["settings"]).settings,
+        "X_PUBLISH_PROFILE_PATH",
+        str(tmp_path / "x-profiles"),
+    )
+    path_a = resolve_x_profile_dir("user-a")
+    path_b = resolve_x_profile_dir("user-b")
+    assert path_a != path_b
+    assert path_a.endswith("user-a")
+    assert path_b.endswith("user-b")
 
 
 def test_resolve_weibo_profile_dir_warns_on_chrome_in_path(caplog) -> None:

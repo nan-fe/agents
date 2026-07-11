@@ -107,6 +107,19 @@ class WeiboAuthRow(Base):
     updated_at: Mapped[datetime] = mapped_column(_utc_datetime, nullable=False, default=_utcnow)
 
 
+class XAuthRow(Base):
+    """X Playwright Profile 登录确认记录（按 Studio user_id）。"""
+
+    __tablename__ = "x_auth"
+
+    id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    profile_path: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    logged_in: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    current_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    confirmed_at: Mapped[datetime | None] = mapped_column(_utc_datetime, nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(_utc_datetime, nullable=False, default=_utcnow)
+
+
 class LarkUserTokenRow(Base):
     """用户飞书 OAuth 授权后的 user_access_token。"""
 
@@ -117,5 +130,20 @@ class LarkUserTokenRow(Base):
     refresh_token: Mapped[str | None] = mapped_column(Text, nullable=True)
     expires_at: Mapped[datetime] = mapped_column(_utc_datetime, nullable=False)
     refresh_expires_at: Mapped[datetime | None] = mapped_column(_utc_datetime, nullable=True)
+    scope: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(_utc_datetime, nullable=False, default=_utcnow)
+
+
+class XUserTokenRow(Base):
+    """用户 X OAuth 2.0 授权后的 access_token。"""
+
+    __tablename__ = "x_user_tokens"
+
+    user_id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    access_token: Mapped[str] = mapped_column(Text, nullable=False)
+    refresh_token: Mapped[str | None] = mapped_column(Text, nullable=True)
+    expires_at: Mapped[datetime] = mapped_column(_utc_datetime, nullable=False)
+    x_user_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    x_username: Mapped[str | None] = mapped_column(String(128), nullable=True)
     scope: Mapped[str | None] = mapped_column(String(512), nullable=True)
     updated_at: Mapped[datetime] = mapped_column(_utc_datetime, nullable=False, default=_utcnow)

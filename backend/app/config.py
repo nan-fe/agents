@@ -111,6 +111,22 @@ class Settings(BaseSettings):
     X_SYNC_PROFILE_PATH: str = ""
     X_SYNC_INTERVAL_SECONDS: int = 300
 
+    # X 自动发布（Playwright Profile 浏览器）
+    X_PUBLISH_ENABLED: bool = True
+    X_PUBLISH_DRY_RUN: bool = False
+    X_PUBLISH_SKIP_REVIEW: bool = False
+    X_PUBLISH_HEADLESS: bool = False
+    X_PUBLISH_TIMEOUT_MS: int = 45000
+    X_PUBLISH_PROFILE_PATH: str = ""
+    X_BROWSER_CHANNEL: str = ""
+    # OAuth 2.0：仅用于连接身份（users.read），发帖走 Playwright Web UI
+    X_OAUTH_CLIENT_ID: str = "QVc3czBiR1RIbjFKRGlzZHRlV0M6MTpjaQ"
+    X_OAUTH_CLIENT_SECRET: str = "5vL1yqJ83pNC2DGx9Xu7e0-3KsDhsCHYxBJqHNISazw7jSKLtt"
+    X_OAUTH_CALLBACK_URL: str = "http://localhost:8000/social/x/oauth/callback"
+    X_OAUTH_SCOPES: str = "users.read offline.access"
+    X_OAUTH_STATE_SECRET: str = ""
+    X_HTTP_PROXY: str = ""
+
     # 社交媒体热点分析
     SOCIAL_HOTSPOT_ENABLED: bool = True
     SOCIAL_HOTSPOT_LLM_TIMEOUT_SEC: float = 45.0

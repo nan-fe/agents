@@ -16,7 +16,7 @@ from typing import AsyncIterator
 import httpx
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from sse_starlette.sse import EventSourceResponse
 
@@ -57,6 +57,10 @@ from app.models.schemas import (
     WeiboLoginStatusResponse,
     WeiboPublishCreateResponse,
     WeiboPublishRequest,
+    XPublishCreateResponse,
+    XPublishRequest,
+    XOAuthStartRequest,
+    XOAuthSessionResponse,
 )
 from app.services.dialog_stream_store import (
     DialogStream,
@@ -74,6 +78,12 @@ from app.services.social.weibo_publisher import (
     VIEWPORT_HEIGHT,
     VIEWPORT_WIDTH,
     invalidate_weibo_login_state_cache,
+)
+from app.services.social.x_login_session import x_login_session_manager
+from app.services.social.x_oauth_login_session import x_oauth_login_session_manager
+from app.services.social.x_oauth_service import XOAuthError, x_oauth_service
+from app.services.social.x_publisher import (
+    invalidate_x_login_state_cache,
 )
 from app.services.social.x_sync_poller import run_x_sync_once, x_sync_poller_loop
 from app.services.social_hotspot import hotspot_service
@@ -986,9 +996,12 @@ async def lark_push_review(payload: LarkPushReviewRequest):
 
 
 @app.get("/social/status", response_model=SocialStatusResponse)
-async def social_status(force_refresh: bool = False):
+async def social_status(user_id: str = "", force_refresh: bool = False):
     """微博发布与 X 同步配置状态。"""
-    data = await get_social_publish_service().get_status(force_refresh=force_refresh)
+    data = await get_social_publish_service().get_status(
+        user_id=user_id,
+        force_refresh=force_refresh,
+    )
     return SocialStatusResponse(**data)
 
 
@@ -1106,9 +1119,249 @@ async def social_publish_weibo(payload: WeiboPublishRequest):
     return WeiboPublishCreateResponse(job_id=job_id, status="pending")
 
 
+@app.post("/social/x/oauth/start", response_model=XOAuthSessionResponse)
+async def social_x_oauth_start(payload: XOAuthStartRequest):
+    """在 Playwright Profile 内启动 X OAuth 授权。"""
+    uid = (payload.user_id or "").strip()
+    if not uid:
+        raise HTTPException(status_code=400, detail="user_id 不能为空")
+    try:
+        session = await x_oauth_login_session_manager.start(user_id=uid)
+        state = await session.evaluate_profile_login()
+        return XOAuthSessionResponse(
+            session_id=session.session_id,
+            user_id=uid,
+            logged_in=bool(state.get("logged_in")),
+            oauth_completed=session.oauth_completed,
+            oauth_error=session.oauth_error,
+            x_username=session.x_username,
+            current_url=str(state.get("current_url") or ""),
+            profile_path=str(state.get("profile_path") or ""),
+            viewport_width=VIEWPORT_WIDTH,
+            viewport_height=VIEWPORT_HEIGHT,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except Exception as exc:
+        from app.services.social.x_publisher import format_x_browser_error
+
+        logger.warning("X OAuth 会话启动失败: %s", exc)
+        raise HTTPException(status_code=502, detail=format_x_browser_error(exc)) from exc
+
+
+@app.get("/social/x/oauth/session/{session_id}", response_model=XOAuthSessionResponse)
+async def social_x_oauth_session_status(session_id: str):
+    session = await x_oauth_login_session_manager.get_session(session_id)
+    if session is None:
+        raise HTTPException(status_code=404, detail="OAuth 会话不存在或已过期")
+    state = await session.evaluate_profile_login()
+    return XOAuthSessionResponse(
+        session_id=session.session_id,
+        user_id=session.user_id,
+        logged_in=bool(state.get("logged_in")),
+        oauth_completed=session.oauth_completed,
+        oauth_error=session.oauth_error,
+        x_username=session.x_username,
+        current_url=str(state.get("current_url") or ""),
+        profile_path=str(state.get("profile_path") or ""),
+        viewport_width=VIEWPORT_WIDTH,
+        viewport_height=VIEWPORT_HEIGHT,
+    )
+
+
+@app.delete("/social/x/oauth/session/{session_id}")
+async def social_x_oauth_session_close(session_id: str):
+    await x_oauth_login_session_manager.close(session_id)
+    return {"ok": True}
+
+
+@app.post("/social/x/oauth/session/{session_id}/confirm", response_model=WeiboLoginStatusResponse)
+async def social_x_oauth_session_confirm(session_id: str):
+    try:
+        state = await x_oauth_login_session_manager.confirm(session_id)
+        return WeiboLoginStatusResponse(
+            session_id=session_id,
+            logged_in=True,
+            current_url=str(state.get("current_url") or ""),
+            profile_path=str(state.get("profile_path") or ""),
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except XOAuthError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.warning("X OAuth 确认失败: %s", exc)
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@app.get("/social/x/oauth/callback")
+async def social_x_oauth_callback(
+    code: str | None = None,
+    state: str | None = None,
+    error: str | None = None,
+):
+    """X OAuth 浏览器回调页（token 交换由 Playwright 会话内监听完成）。"""
+    if error:
+        return HTMLResponse(
+            f"<html><body><h2>授权失败</h2><p>{error}</p></body></html>",
+            status_code=400,
+        )
+    if code and state:
+        return HTMLResponse(
+            "<html><body><h2>正在处理 X 授权…</h2>"
+            "<p>请返回 Studio 并点击「我已完成授权」。</p></body></html>"
+        )
+    return HTMLResponse(
+        "<html><body><h2>缺少授权参数</h2></body></html>",
+        status_code=400,
+    )
+
+
+@app.get("/social/x/oauth/user")
+async def social_x_oauth_user_status(user_id: str, force_refresh: bool = False):
+    uid = (user_id or "").strip()
+    if not uid:
+        raise HTTPException(status_code=400, detail="user_id 不能为空")
+    return await get_social_publish_service().get_x_user_status(uid, force_refresh=force_refresh)
+
+
+@app.delete("/social/x/oauth/user")
+async def social_x_oauth_disconnect(user_id: str):
+    uid = (user_id or "").strip()
+    if not uid:
+        raise HTTPException(status_code=400, detail="user_id 不能为空")
+    removed = await x_oauth_service.disconnect_user(uid)
+    from app.services.social.x_auth_store import clear_x_auth
+
+    await clear_x_auth(uid)
+    invalidate_x_login_state_cache(uid)
+    return {"ok": removed}
+
+
+@app.post("/social/x/login/start", response_model=WeiboLoginStartResponse)
+async def social_x_login_start(payload: XOAuthStartRequest):
+    """Fallback：手动 Profile 登录 X（OAuth 未配置时使用）。"""
+    uid = (payload.user_id or "").strip()
+    if not uid:
+        raise HTTPException(status_code=400, detail="user_id 不能为空")
+    try:
+        session = await x_login_session_manager.start(user_id=uid)
+        state = await session.evaluate_login()
+        if state["logged_in"]:
+            invalidate_x_login_state_cache(uid)
+            from app.services.social.x_auth_store import save_x_auth
+
+            await save_x_auth(
+                user_id=uid,
+                profile_path=str(state["profile_path"]),
+                logged_in=True,
+                current_url=str(state["current_url"]),
+            )
+            await x_login_session_manager.close(session.session_id)
+        return WeiboLoginStartResponse(
+            session_id=session.session_id,
+            logged_in=bool(state["logged_in"]),
+            current_url=str(state["current_url"]),
+            profile_path=str(state["profile_path"]),
+            viewport_width=VIEWPORT_WIDTH,
+            viewport_height=VIEWPORT_HEIGHT,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except Exception as exc:
+        from app.services.social.x_publisher import format_x_browser_error
+
+        logger.warning("X 登录会话启动失败: %s", exc)
+        raise HTTPException(status_code=502, detail=format_x_browser_error(exc)) from exc
+
+
+@app.delete("/social/x/login/{session_id}")
+async def social_x_login_close(session_id: str):
+    """结束 X 可视化登录会话。"""
+    await x_login_session_manager.close(session_id)
+    return {"ok": True}
+
+
+@app.post("/social/x/login/{session_id}/confirm", response_model=WeiboLoginStatusResponse)
+async def social_x_login_confirm(session_id: str):
+    """用户确认已在浏览器完成 X 登录：检测并持久化 Profile。"""
+    try:
+        state = await x_login_session_manager.confirm(session_id)
+        if not state["logged_in"]:
+            raise HTTPException(
+                status_code=400,
+                detail="尚未检测到 X 登录，请先在弹出的浏览器窗口完成登录",
+            )
+        return WeiboLoginStatusResponse(
+            session_id=session_id,
+            logged_in=True,
+            current_url=str(state["current_url"]),
+            profile_path=str(state["profile_path"]),
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.warning("X 登录确认失败: %s", exc)
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@app.post("/social/publish/x", response_model=XPublishCreateResponse)
+async def social_publish_x(payload: XPublishRequest):
+    """异步发布到 X，返回 job_id 供轮询。"""
+    result: dict = {}
+    version_id = (payload.version_id or "").strip()
+
+    if version_id:
+        async with get_session() as session:
+            row = await session.get(VersionRow, version_id)
+            if row is None:
+                raise HTTPException(status_code=404, detail="版本不存在")
+            stored = dict(row.result or {})
+            result.update(stored)
+            result.setdefault("version_id", row.version_id)
+
+    for key in ("title", "content", "image_url", "share_url"):
+        val = getattr(payload, key, None)
+        if val is not None and str(val).strip():
+            result[key] = val
+
+    if payload.hashtags is not None:
+        result["hashtags"] = payload.hashtags
+
+    if payload.review_approved is not None:
+        result["review_approved"] = payload.review_approved
+
+    if not (result.get("title") or result.get("content")):
+        raise HTTPException(status_code=400, detail="需提供 title/content 或有效的 version_id")
+
+    try:
+        job_id = await get_social_publish_service().start_x_publish(
+            user_id=payload.user_id,
+            title=str(result.get("title") or ""),
+            content=str(result.get("content") or ""),
+            hashtags=result.get("hashtags"),
+            image_url=result.get("image_url"),
+            share_url=result.get("share_url"),
+            review_approved=result.get("review_approved"),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.warning("X 发布任务创建失败: %s", exc)
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    return XPublishCreateResponse(job_id=job_id, status="pending")
+
+
 @app.get("/social/publish/{job_id}", response_model=PublishJobResponse)
 async def social_publish_job_status(job_id: str):
-    """查询微博发布任务状态。"""
+    """查询社交媒体发布任务状态（微博 / X）。"""
     job = await get_social_publish_service().get_job(job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="任务不存在")

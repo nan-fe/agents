@@ -1,6 +1,6 @@
 # 主创作台 · 多轮对话创作与发布
 
-「内容生成」Tab：多轮对话迭代小红书图文，版本切换，分享页，可选微博发布与飞书推送。
+「内容生成」Tab：多轮对话迭代小红书图文，版本切换，分享页，可选微博/X 发布与飞书推送。
 
 **入口**：`/studio` → 侧栏「内容生成」（`PageMenu.DIALOG_CONTENT`）
 
@@ -33,7 +33,7 @@ flowchart TD
     E --> C
     E --> F[分享 POST /shares]
     F --> G[/share/id]
-    E -.-> H[可选：微博/飞书]
+    E -.-> H[可选：微博/X/飞书]
 ```
 
 | 操作 | 调用链 |
@@ -44,6 +44,9 @@ flowchart TD
 | 新对话 | `POST /projects/finalize` → 新 session + project |
 | 分享 | `POST /shares` → `/share/{shareId}` |
 | 发微博 | `POST /social/publish/weibo` → 轮询 job |
+| 发 X | `POST /social/publish/x` → 轮询 job（Playwright Profile） |
+| 连接 X（OAuth） | `POST /social/x/oauth/start` → Profile 内授权 → `confirm` |
+| 连接 X（手动） | `POST /social/x/login/start` → 浏览器登录 → `confirm`（OAuth 未配置时） |
 | 关页 | `sendBeacon` → `POST /projects/finalize` |
 
 ---
@@ -51,9 +54,16 @@ flowchart TD
 ## 数据库层
 
 ```
-projects    project_id, user_id, topic, final_version, project_summary, last_accessed_at …
-versions    version_id, project_id, parent_version_id, intent, user_input, result JSONB …
+projects       project_id, user_id, topic, final_version, project_summary, last_accessed_at …
+versions       version_id, project_id, parent_version_id, intent, user_input, result JSONB …
+weibo_auth     Playwright Profile 登录确认（单例）
+x_auth         X Playwright Profile 登录确认（按 Studio user_id）
+x_user_tokens  X OAuth token（身份绑定；发帖仍走 Playwright Web UI）
 ```
+
+- 微博登录态：`weibo_auth`（Playwright Profile 单例）
+- X 登录态：`x_auth`（Profile Cookie）+ 可选 `x_user_tokens`（OAuth 身份）
+- **connected** = OAuth token 有效 ∧ Profile 已登录（OAuth 未配置时仅看 Profile）
 
 - 每轮成功 → `append_version` 即时落库
 - `finalize_project` → 汇总进 `projects` 行
@@ -68,7 +78,10 @@ versions    version_id, project_id, parent_version_id, intent, user_input, resul
 | GET/POST/DELETE | `/projects` … | CRUD + finalize |
 | POST | `/dialog/generate` | SSE 多 Agent 生成 |
 | POST/GET | `/shares` … | 分享快照 |
-| POST | `/social/publish/weibo` | 异步发微博 |
+| POST | `/social/publish/weibo` | 异步发微博（Playwright） |
+| POST/GET/DELETE | `/social/x/oauth/*` | X OAuth + Profile 连接 |
+| POST/DELETE | `/social/x/login/*` | X 手动 Profile 登录（fallback） |
+| POST | `/social/publish/x` | 异步发 X（Playwright Web UI） |
 | POST | `/lark/push-review` | 飞书推送 |
 
 ```
@@ -89,7 +102,7 @@ SSE 事件：`log` · `meta` · `result`（支持 `last_event_id` 续传）
 
 ```
 studio/page.tsx · studio-app.tsx · components/dialog-content.tsx
-conversation-turn · pending-turn · result-display · project-history-drawer
+conversation-turn · pending-turn · result-display · social-sync-settings · x-oauth-connect-panel · x-login-panel
 lib/session.ts · project-conversation.ts · hooks/use-sse-client.ts
 app/dialog/generate/route.ts          SSE 代理，不可 rewrite
 app/share/[shareId]/page.tsx          ISR 公开页
@@ -109,6 +122,7 @@ services/api.ts
 
 - 勿把 `/dialog/generate` SSE 走 `next.config` rewrite
 - 勿在 Python 后端做画室 session 校验（见 `auth-login-register.md`）
+- 勿把 OAuth access_token 注入 Playwright 发 X（微博 / X 均用 Profile 浏览器）
 - 勿把选品池/热点分析逻辑塞进 `dialog-content.tsx`
 
 ---
@@ -118,4 +132,4 @@ services/api.ts
 | 类型 | 位置 |
 |------|------|
 | E2E | `e2e/login-studio.spec.ts` · `e2e/helpers/dialog.ts` |
-| 后端 | `test_project_api.py` · `test_project_memory.py` · `test_social_publish_api.py` · `test_lark_push_api.py` |
+| 后端 | `test_social_publish_api.py` · `test_x_login_api.py` · `test_x_publisher.py` · `test_lark_push_api.py` |

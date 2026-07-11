@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
+import { useSession } from 'next-auth/react';
 import { Button, App } from 'antd';
 import ReactMarkdown from 'react-markdown';
 import {
@@ -8,14 +9,19 @@ import {
   createShare,
   getPublishJobStatus,
   getSocialStatus,
+  getXOAuthUserStatus,
   publishToWeibo,
+  publishToX,
   reportError,
   type PublishJobResponse,
   type ShareResult,
   type SocialStatusResponse,
+  type XOAuthUserStatus,
 } from '@/services/api';
+import { getStudioUserId } from '@/app/studio/lib/studio-user';
+import type { SocialPublishPlatform } from './social-share-sync-modal';
 
-const WeiboShareSyncModal = dynamic(() => import('./weibo-share-sync-modal'), {
+const SocialShareSyncModal = dynamic(() => import('./social-share-sync-modal'), {
   ssr: false,
 });
 
@@ -23,9 +29,42 @@ const WeiboLoginPanel = dynamic(() => import('./weibo-login-panel'), {
   ssr: false,
 });
 
+const XOAuthConnectPanel = dynamic(() => import('./x-oauth-connect-panel'), {
+  ssr: false,
+});
+
+const XLoginPanel = dynamic(() => import('./x-login-panel'), {
+  ssr: false,
+});
+
 const isWeiboReady = (status: SocialStatusResponse | null): boolean =>
   Boolean(status?.dry_run) ||
   Boolean(status?.weibo.configured && status?.weibo.logged_in);
+
+const isXReady = (
+  status: SocialStatusResponse | null,
+  oauthStatus: XOAuthUserStatus | null,
+): boolean =>
+  Boolean(status?.x_dry_run) ||
+  Boolean(
+    status?.x_oauth_configured
+      ? oauthStatus?.connected
+      : status?.x?.logged_in || oauthStatus?.connected,
+  );
+
+const canPromptWeibo = (
+  status: SocialStatusResponse,
+  result: ShareResult,
+): boolean =>
+  Boolean(status.weibo_publish_enabled) &&
+  (!status.review_required || result.review_approved === true);
+
+const canPromptX = (
+  status: SocialStatusResponse,
+  result: ShareResult,
+): boolean =>
+  Boolean(status.x_publish_enabled) &&
+  (!status.x_review_required || result.review_approved === true);
 
 type ResultDisplayProps = {
   result?: ShareResult;
@@ -82,10 +121,12 @@ const pollPublishJob = async (
 
 const resolvePublishJob = async (
   result: ShareResult,
+  platform: SocialPublishPlatform,
+  userId: string,
   onUpdate: (job: PublishJobResponse) => void,
 ): Promise<PublishJobResponse> => {
   const existingJobId = result.weibo_publish?.job_id?.trim();
-  if (existingJobId) {
+  if (platform === 'weibo' && existingJobId) {
     const current = await getPublishJobStatus(existingJobId);
     onUpdate(current);
     if (current.status === 'pending' || current.status === 'running') {
@@ -96,55 +137,93 @@ const resolvePublishJob = async (
     }
   }
 
-  const publishResp = await publishToWeibo({
-    title: result.title,
-    content: result.content,
-    hashtags: result.hashtags,
-    image_url: result.image_url,
-    review_approved: result.review_approved,
-    version_id: result.version_id,
-  });
+  const publishResp =
+    platform === 'x'
+      ? await publishToX({
+          user_id: userId,
+          title: result.title,
+          content: result.content,
+          hashtags: result.hashtags,
+          image_url: result.image_url,
+          review_approved: result.review_approved,
+          version_id: result.version_id,
+        })
+      : await publishToWeibo({
+          title: result.title,
+          content: result.content,
+          hashtags: result.hashtags,
+          image_url: result.image_url,
+          review_approved: result.review_approved,
+          version_id: result.version_id,
+        });
   return pollPublishJob(publishResp.job_id, onUpdate);
 };
 
 const ResultDisplay = ({ result, variant = 'default' }: ResultDisplayProps) => {
   const { message } = App.useApp();
+  const { data: session } = useSession();
+  const userId = getStudioUserId(session);
   const [socialStatus, setSocialStatus] = useState<SocialStatusResponse | null>(null);
+  const [xOAuthStatus, setXOAuthStatus] = useState<XOAuthUserStatus | null>(null);
   const [shareUrl, setShareUrl] = useState('');
   const [publishJobId, setPublishJobId] = useState('');
   const [publishJob, setPublishJob] = useState<PublishJobResponse | null>(null);
   const [publishError, setPublishError] = useState<string | null>(null);
   const [isWorking, setIsWorking] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
-  const [modalPhase, setModalPhase] = useState<'confirm' | 'publishing'>('confirm');
+  const [modalPhase, setModalPhase] = useState<'choose' | 'confirm' | 'publishing'>('confirm');
+  const [modalPlatform, setModalPlatform] = useState<SocialPublishPlatform>('weibo');
   const [modalPublishJob, setModalPublishJob] = useState<PublishJobResponse | null>(null);
   const [loginOpen, setLoginOpen] = useState(false);
+  const [xOAuthOpen, setXOAuthOpen] = useState(false);
+  const [xLoginOpen, setXLoginOpen] = useState(false);
   const publishAfterLoginRef = useRef(false);
+  const pendingPlatformRef = useRef<SocialPublishPlatform>('weibo');
 
   const ensureSocialStatus = useCallback(async (): Promise<SocialStatusResponse> => {
     if (socialStatus) {
       return socialStatus;
     }
     try {
-      const status = await getSocialStatus();
+      const status = await getSocialStatus(false, userId || undefined);
       setSocialStatus(status);
+      if (userId && status.x_publish_enabled) {
+        const oauth = await getXOAuthUserStatus(userId);
+        setXOAuthStatus(oauth);
+      }
       return status;
     } catch (error) {
       reportError(error, 'result/getSocialStatus');
       const fallback: SocialStatusResponse = {
         weibo_publish_enabled: false,
         weibo: { configured: false, logged_in: false },
+        x_publish_enabled: false,
+        x: { configured: false, logged_in: false },
+        x_oauth_configured: false,
         x_sync_enabled: false,
         x_sync_interval_seconds: 300,
         review_required: true,
+        x_review_required: true,
         auto_on_complete: false,
         publish_engine: 'playwright',
+        x_publish_engine: 'playwright',
         dry_run: false,
+        x_dry_run: false,
       };
       setSocialStatus(fallback);
       return fallback;
     }
-  }, [socialStatus]);
+  }, [socialStatus, userId]);
+
+  useEffect(() => {
+    if (!userId) {
+      setXOAuthStatus(null);
+      return;
+    }
+    void getXOAuthUserStatus(userId)
+      .then((status) => setXOAuthStatus(status))
+      .catch((error) => reportError(error, 'result/getXOAuthUserStatus'));
+  }, [userId]);
 
   useEffect(() => {
     const jobId = publishJobId;
@@ -233,28 +312,39 @@ const ResultDisplay = ({ result, variant = 'default' }: ResultDisplayProps) => {
     if (!result) {
       return;
     }
+    if (modalPlatform === 'x' && !userId) {
+      message.error('请先登录 Studio 账号');
+      return;
+    }
 
     setModalPhase('publishing');
     setModalPublishJob(null);
     setPublishError(null);
 
     try {
-      const job = await resolvePublishJob(result, setModalPublishJob);
+      const job = await resolvePublishJob(
+        result,
+        modalPlatform,
+        userId,
+        setModalPublishJob,
+      );
       setPublishJobId(job.job_id);
       setPublishJob(job);
       setModalPublishJob(job);
 
+      const platformLabel = modalPlatform === 'x' ? 'X' : '微博';
       if (job.status === 'succeeded') {
-        message.success('已成功发布到微博');
+        message.success(`已成功发布到${platformLabel}`);
       } else if (job.error) {
         setPublishError(job.error);
-        message.error(`微博发布失败：${job.error}`);
+        message.error(`${platformLabel}发布失败：${job.error}`);
       }
     } catch (error) {
+      const platformLabel = modalPlatform === 'x' ? 'X' : '微博';
       const detail =
-        error instanceof Error ? error.message : '微博发布失败';
+        error instanceof Error ? error.message : `${platformLabel}发布失败`;
       setPublishError(detail);
-      reportError(error, 'result/publishToWeibo');
+      reportError(error, 'result/publishToSocial');
       message.error(detail);
     }
 
@@ -270,13 +360,25 @@ const ResultDisplay = ({ result, variant = 'default' }: ResultDisplayProps) => {
       setModalPublishJob(null);
       setIsWorking(false);
     }
-  }, [finalizeShare, message, result]);
+  }, [finalizeShare, message, modalPlatform, result, userId]);
 
-  const handleConfirmWeiboPublish = () => {
-    if (!isWeiboReady(socialStatus)) {
+  const handleConfirmPublish = () => {
+    if (modalPlatform === 'weibo' && !isWeiboReady(socialStatus)) {
       publishAfterLoginRef.current = true;
+      pendingPlatformRef.current = 'weibo';
       setModalOpen(false);
       setLoginOpen(true);
+      return;
+    }
+    if (modalPlatform === 'x' && !isXReady(socialStatus, xOAuthStatus)) {
+      publishAfterLoginRef.current = true;
+      pendingPlatformRef.current = 'x';
+      setModalOpen(false);
+      if (socialStatus?.x_oauth_configured) {
+        setXOAuthOpen(true);
+      } else {
+        setXLoginOpen(true);
+      }
       return;
     }
     setIsWorking(true);
@@ -313,11 +415,24 @@ const ResultDisplay = ({ result, variant = 'default' }: ResultDisplayProps) => {
 
     void (async () => {
       const status = await ensureSocialStatus();
-      const canPromptWeibo =
-        Boolean(status.weibo_publish_enabled) &&
-        (!status.review_required || result.review_approved === true);
+      const weiboEligible = canPromptWeibo(status, result);
+      const xEligible = canPromptX(status, result);
 
-      if (canPromptWeibo) {
+      if (weiboEligible && xEligible) {
+        setModalPhase('choose');
+        setModalOpen(true);
+        return;
+      }
+
+      if (weiboEligible) {
+        setModalPlatform('weibo');
+        setModalPhase('confirm');
+        setModalOpen(true);
+        return;
+      }
+
+      if (xEligible) {
+        setModalPlatform('x');
         setModalPhase('confirm');
         setModalOpen(true);
         return;
@@ -357,6 +472,9 @@ const ResultDisplay = ({ result, variant = 'default' }: ResultDisplayProps) => {
 
   const shareButtonLabel = shareUrl ? '复制分享链接' : '生成分享链接';
 
+  const platformLabel =
+    publishJob?.platform === 'x' || modalPlatform === 'x' ? 'X' : '微博';
+
   return (
     <>
       <WeiboLoginPanel
@@ -369,10 +487,15 @@ const ResultDisplay = ({ result, variant = 'default' }: ResultDisplayProps) => {
           void getSocialStatus(true)
             .then((status) => {
               setSocialStatus(status);
-              if (publishAfterLoginRef.current && isWeiboReady(status)) {
+              if (
+                publishAfterLoginRef.current &&
+                pendingPlatformRef.current === 'weibo' &&
+                isWeiboReady(status)
+              ) {
                 publishAfterLoginRef.current = false;
-                setIsWorking(true);
-                void publishThenShare();
+                setModalPlatform('weibo');
+                setModalPhase('confirm');
+                setModalOpen(true);
               }
             })
             .catch((error) => {
@@ -381,12 +504,84 @@ const ResultDisplay = ({ result, variant = 'default' }: ResultDisplayProps) => {
         }}
       />
 
+      {userId && (
+        <>
+          <XOAuthConnectPanel
+            open={xOAuthOpen}
+            userId={userId}
+            onClose={() => {
+              publishAfterLoginRef.current = false;
+              setXOAuthOpen(false);
+            }}
+            onConnected={() => {
+              void getXOAuthUserStatus(userId, true)
+                .then(async (oauth) => {
+                  setXOAuthStatus(oauth);
+                  const status = await getSocialStatus(true, userId);
+                  setSocialStatus(status);
+                  if (
+                    publishAfterLoginRef.current &&
+                    pendingPlatformRef.current === 'x' &&
+                    isXReady(status, oauth)
+                  ) {
+                    publishAfterLoginRef.current = false;
+                    setModalPlatform('x');
+                    setModalPhase('confirm');
+                    setModalOpen(true);
+                  }
+                })
+                .catch((error) => {
+                  reportError(error, 'result/getXOAuthUserStatus');
+                });
+            }}
+          />
+          <XLoginPanel
+            open={xLoginOpen}
+            userId={userId}
+            onClose={() => {
+              publishAfterLoginRef.current = false;
+              setXLoginOpen(false);
+            }}
+            onLoggedIn={() => {
+              void getSocialStatus(true, userId)
+                .then((status) => {
+                  setSocialStatus(status);
+                  return getXOAuthUserStatus(userId, true);
+                })
+                .then((oauth) => {
+                  setXOAuthStatus(oauth);
+                  if (
+                    publishAfterLoginRef.current &&
+                    pendingPlatformRef.current === 'x' &&
+                    isXReady(socialStatus, oauth)
+                  ) {
+                    publishAfterLoginRef.current = false;
+                    setModalPlatform('x');
+                    setModalPhase('confirm');
+                    setModalOpen(true);
+                  }
+                })
+                .catch((error) => {
+                  reportError(error, 'result/getSocialStatus');
+                });
+            }}
+          />
+        </>
+      )}
+
       {modalOpen && (
-        <WeiboShareSyncModal
+        <SocialShareSyncModal
           open={modalOpen}
           phase={modalPhase}
+          platform={modalPlatform}
           publishJob={modalPublishJob}
-          onConfirm={handleConfirmWeiboPublish}
+          showWeibo={Boolean(socialStatus?.weibo_publish_enabled)}
+          showX={Boolean(socialStatus?.x_publish_enabled)}
+          onSelectPlatform={(platform) => {
+            setModalPlatform(platform);
+            setModalPhase('confirm');
+          }}
+          onConfirm={handleConfirmPublish}
           onShareOnly={() => {
             setModalOpen(false);
             void createShareOnly();
@@ -487,18 +682,18 @@ const ResultDisplay = ({ result, variant = 'default' }: ResultDisplayProps) => {
 
             {publishError && (
               <p className="mt-2 font-body text-sm text-burgundy-dark">
-                微博发布失败：{publishError}
+                {platformLabel}发布失败：{publishError}
               </p>
             )}
 
             {publishJob && (
               <div className="mt-3 font-body text-sm text-ink-muted">
                 {isPublishing && (
-                  <p className="italic text-gold-dark">正在发布到微博…</p>
+                  <p className="italic text-gold-dark">正在发布到{platformLabel}…</p>
                 )}
                 {publishJob.status === 'succeeded' && (
                   <p className="text-gold-dark">
-                    已发布到微博
+                    已发布到{platformLabel}
                     {publishJob.post_url ? (
                       <>
                         {' '}
@@ -508,14 +703,16 @@ const ResultDisplay = ({ result, variant = 'default' }: ResultDisplayProps) => {
                           target="_blank"
                           rel="noopener noreferrer"
                         >
-                          查看微博
+                          查看帖子
                         </a>
                       </>
                     ) : null}
                   </p>
                 )}
                 {publishJob.status === 'failed' && publishJob.error && (
-                  <p className="text-burgundy-dark">微博发布失败：{publishJob.error}</p>
+                  <p className="text-burgundy-dark">
+                    {platformLabel}发布失败：{publishJob.error}
+                  </p>
                 )}
                 {publishJob.progress.length > 0 && (
                   <ul className="mt-1 list-inside list-disc text-xs">

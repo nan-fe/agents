@@ -279,6 +279,41 @@ class WeiboPublishCreateResponse(BaseModel):
     status: str = "pending"
 
 
+class XPublishRequest(BaseModel):
+    """触发 X 自动发布（Playwright Profile）。"""
+
+    user_id: str = ""
+    title: str | None = None
+    content: str | None = None
+    hashtags: List[str] | None = None
+    image_url: str | None = None
+    share_url: str | None = None
+    review_approved: bool | None = None
+    version_id: str | None = None
+
+
+class XPublishCreateResponse(BaseModel):
+    job_id: str
+    status: str = "pending"
+
+
+class XOAuthStartRequest(BaseModel):
+    user_id: str
+
+
+class XOAuthSessionResponse(BaseModel):
+    session_id: str
+    user_id: str
+    logged_in: bool
+    oauth_completed: bool = False
+    oauth_error: str | None = None
+    x_username: str | None = None
+    current_url: str
+    profile_path: str
+    viewport_width: int = 1280
+    viewport_height: int = 900
+
+
 class PublishJobResponse(BaseModel):
     job_id: str
     platform: str
@@ -295,13 +330,19 @@ class PublishJobResponse(BaseModel):
 class SocialStatusResponse(BaseModel):
     weibo_publish_enabled: bool
     weibo: dict
+    x_publish_enabled: bool = False
+    x: dict = Field(default_factory=dict)
+    x_oauth_configured: bool = False
     x_sync_enabled: bool
     x_sync_username: str | None = None
     x_sync_interval_seconds: int
     review_required: bool
+    x_review_required: bool = True
     auto_on_complete: bool = True
     publish_engine: str = "playwright"
+    x_publish_engine: str = "playwright"
     dry_run: bool
+    x_dry_run: bool = False
 
 
 class WeiboLoginStartResponse(BaseModel):

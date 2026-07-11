@@ -500,6 +500,179 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/social/x/oauth/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Social X Oauth Start
+         * @description 在 Playwright Profile 内启动 X OAuth 授权。
+         */
+        post: operations["social_x_oauth_start_social_x_oauth_start_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/social/x/oauth/session/{session_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Social X Oauth Session Status */
+        get: operations["social_x_oauth_session_status_social_x_oauth_session__session_id__get"];
+        put?: never;
+        post?: never;
+        /** Social X Oauth Session Close */
+        delete: operations["social_x_oauth_session_close_social_x_oauth_session__session_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/social/x/oauth/session/{session_id}/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Social X Oauth Session Confirm */
+        post: operations["social_x_oauth_session_confirm_social_x_oauth_session__session_id__confirm_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/social/x/oauth/callback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Social X Oauth Callback
+         * @description X OAuth 浏览器回调页（token 交换由 Playwright 会话内监听完成）。
+         */
+        get: operations["social_x_oauth_callback_social_x_oauth_callback_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/social/x/oauth/user": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Social X Oauth User Status */
+        get: operations["social_x_oauth_user_status_social_x_oauth_user_get"];
+        put?: never;
+        post?: never;
+        /** Social X Oauth Disconnect */
+        delete: operations["social_x_oauth_disconnect_social_x_oauth_user_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/social/x/login/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Social X Login Start
+         * @description Fallback：手动 Profile 登录 X（OAuth 未配置时使用）。
+         */
+        post: operations["social_x_login_start_social_x_login_start_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/social/x/login/{session_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Social X Login Close
+         * @description 结束 X 可视化登录会话。
+         */
+        delete: operations["social_x_login_close_social_x_login__session_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/social/x/login/{session_id}/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Social X Login Confirm
+         * @description 用户确认已在浏览器完成 X 登录：检测并持久化 Profile。
+         */
+        post: operations["social_x_login_confirm_social_x_login__session_id__confirm_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/social/publish/x": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Social Publish X
+         * @description 异步发布到 X，返回 job_id 供轮询。
+         */
+        post: operations["social_publish_x_social_publish_x_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/social/publish/{job_id}": {
         parameters: {
             query?: never;
@@ -509,7 +682,7 @@ export interface paths {
         };
         /**
          * Social Publish Job Status
-         * @description 查询微博发布任务状态。
+         * @description 查询社交媒体发布任务状态（微博 / X）。
          */
         get: operations["social_publish_job_status_social_publish__job_id__get"];
         put?: never;
@@ -1000,6 +1173,20 @@ export interface components {
             weibo: {
                 [key: string]: unknown;
             };
+            /**
+             * X Publish Enabled
+             * @default false
+             */
+            x_publish_enabled: boolean;
+            /** X */
+            x?: {
+                [key: string]: unknown;
+            };
+            /**
+             * X Oauth Configured
+             * @default false
+             */
+            x_oauth_configured: boolean;
             /** X Sync Enabled */
             x_sync_enabled: boolean;
             /** X Sync Username */
@@ -1008,6 +1195,11 @@ export interface components {
             x_sync_interval_seconds: number;
             /** Review Required */
             review_required: boolean;
+            /**
+             * X Review Required
+             * @default true
+             */
+            x_review_required: boolean;
             /**
              * Auto On Complete
              * @default true
@@ -1018,8 +1210,18 @@ export interface components {
              * @default playwright
              */
             publish_engine: string;
+            /**
+             * X Publish Engine
+             * @default playwright
+             */
+            x_publish_engine: string;
             /** Dry Run */
             dry_run: boolean;
+            /**
+             * X Dry Run
+             * @default false
+             */
+            x_dry_run: boolean;
         };
         /**
          * UserInput
@@ -1126,6 +1328,78 @@ export interface components {
          * @description 触发微博自动发布。
          */
         WeiboPublishRequest: {
+            /** Title */
+            title?: string | null;
+            /** Content */
+            content?: string | null;
+            /** Hashtags */
+            hashtags?: string[] | null;
+            /** Image Url */
+            image_url?: string | null;
+            /** Share Url */
+            share_url?: string | null;
+            /** Review Approved */
+            review_approved?: boolean | null;
+            /** Version Id */
+            version_id?: string | null;
+        };
+        /** XOAuthSessionResponse */
+        XOAuthSessionResponse: {
+            /** Session Id */
+            session_id: string;
+            /** User Id */
+            user_id: string;
+            /** Logged In */
+            logged_in: boolean;
+            /**
+             * Oauth Completed
+             * @default false
+             */
+            oauth_completed: boolean;
+            /** Oauth Error */
+            oauth_error?: string | null;
+            /** X Username */
+            x_username?: string | null;
+            /** Current Url */
+            current_url: string;
+            /** Profile Path */
+            profile_path: string;
+            /**
+             * Viewport Width
+             * @default 1280
+             */
+            viewport_width: number;
+            /**
+             * Viewport Height
+             * @default 900
+             */
+            viewport_height: number;
+        };
+        /** XOAuthStartRequest */
+        XOAuthStartRequest: {
+            /** User Id */
+            user_id: string;
+        };
+        /** XPublishCreateResponse */
+        XPublishCreateResponse: {
+            /** Job Id */
+            job_id: string;
+            /**
+             * Status
+             * @default pending
+             */
+            status: string;
+        };
+        /**
+         * XPublishRequest
+         * @description 触发 X 自动发布（Playwright Profile）。
+         */
+        XPublishRequest: {
+            /**
+             * User Id
+             * @default
+             */
+            user_id: string;
             /** Title */
             title?: string | null;
             /** Content */
@@ -1846,6 +2120,7 @@ export interface operations {
     social_status_social_status_get: {
         parameters: {
             query?: {
+                user_id?: string;
                 force_refresh?: boolean;
             };
             header?: never;
@@ -1976,6 +2251,356 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WeiboPublishCreateResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    social_x_oauth_start_social_x_oauth_start_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["XOAuthStartRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["XOAuthSessionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    social_x_oauth_session_status_social_x_oauth_session__session_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["XOAuthSessionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    social_x_oauth_session_close_social_x_oauth_session__session_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    social_x_oauth_session_confirm_social_x_oauth_session__session_id__confirm_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WeiboLoginStatusResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    social_x_oauth_callback_social_x_oauth_callback_get: {
+        parameters: {
+            query?: {
+                code?: string | null;
+                state?: string | null;
+                error?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    social_x_oauth_user_status_social_x_oauth_user_get: {
+        parameters: {
+            query: {
+                user_id: string;
+                force_refresh?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    social_x_oauth_disconnect_social_x_oauth_user_delete: {
+        parameters: {
+            query: {
+                user_id: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    social_x_login_start_social_x_login_start_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["XOAuthStartRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WeiboLoginStartResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    social_x_login_close_social_x_login__session_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    social_x_login_confirm_social_x_login__session_id__confirm_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WeiboLoginStatusResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    social_publish_x_social_publish_x_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["XPublishRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["XPublishCreateResponse"];
                 };
             };
             /** @description Validation Error */

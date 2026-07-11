@@ -84,6 +84,74 @@ async def _run_social_api_flow() -> None:
     await close_db()
 
 
+async def _run_x_publish_api_flow() -> None:
+    await close_db()
+    await init_db()
+
+    prev_enabled = settings.X_PUBLISH_ENABLED
+    prev_dry = settings.X_PUBLISH_DRY_RUN
+    settings.X_PUBLISH_ENABLED = True
+    settings.X_PUBLISH_DRY_RUN = True
+    settings.X_PUBLISH_SKIP_REVIEW = False
+
+    mock_publish = AsyncMock(return_value=("https://x.com/i/web/status/dry-run", None))
+
+    transport = ASGITransport(app=app)
+    with patch(
+        "app.services.social.x_publisher.publish_to_x",
+        mock_publish,
+    ):
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            status_resp = await client.get("/social/status")
+            assert status_resp.status_code == 200
+            body = status_resp.json()
+            assert body["x_publish_enabled"] is True
+
+            blocked = await client.post(
+                "/social/publish/x",
+                json={
+                    "user_id": "demo",
+                    "title": "标题",
+                    "content": "正文",
+                    "review_approved": False,
+                },
+            )
+            assert blocked.status_code == 400
+
+            create_resp = await client.post(
+                "/social/publish/x",
+                json={
+                    "user_id": "demo",
+                    "title": "标题",
+                    "content": "正文",
+                    "review_approved": True,
+                },
+            )
+            assert create_resp.status_code == 200
+            job_id = create_resp.json()["job_id"]
+
+            for _ in range(20):
+                job_resp = await client.get(f"/social/publish/{job_id}")
+                job = job_resp.json()
+                if job["status"] in {"succeeded", "failed"}:
+                    break
+                await asyncio.sleep(0.05)
+            else:
+                pytest.fail("X 发布任务未在预期时间内完成")
+
+            assert job["status"] == "succeeded"
+            assert job["platform"] == "x"
+            assert job["post_url"] == "https://x.com/i/web/status/dry-run"
+
+    settings.X_PUBLISH_ENABLED = prev_enabled
+    settings.X_PUBLISH_DRY_RUN = prev_dry
+    await close_db()
+
+
+def test_x_publish_api() -> None:
+    asyncio.run(_run_x_publish_api_flow())
+
+
 def test_social_publish_api() -> None:
     asyncio.run(_run_social_api_flow())
 
