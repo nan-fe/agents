@@ -160,12 +160,6 @@ class SSEMessage(BaseModel):
     data: dict | None = None
 
 
-class ProductInfoCreateRequest(BaseModel):
-    """从商品链接创建选品池条目"""
-
-    url: str = Field(min_length=8, description="淘宝/天猫/京东商品详情页链接")
-
-
 class ProductInfoPreviewRequest(BaseModel):
     """识别商品链接中的信息（不入库）"""
 

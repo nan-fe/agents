@@ -212,26 +212,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/product_info/create": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Create Product Info
-         * @description 从商品链接抓取信息并加入选品池与 RAG 索引。
-         */
-        post: operations["create_product_info_product_info_create_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/product_info/{product_id}": {
         parameters: {
             query?: never;
@@ -560,46 +540,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/social-hotspots/platforms": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Social Hotspots Platforms
-         * @description 返回支持的热点分析平台列表。
-         */
-        get: operations["social_hotspots_platforms_social_hotspots_platforms_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/social-hotspots/analyze": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Social Hotspots Analyze
-         * @description 创建社交媒体热点分析任务。
-         */
-        post: operations["social_hotspots_analyze_social_hotspots_analyze_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/social-hotspots/analyze/stream": {
         parameters: {
             query?: never;
@@ -614,26 +554,6 @@ export interface paths {
          * @description SSE 流式热点分析：阶段性返回检索与大模型整合结果。
          */
         post: operations["social_hotspots_analyze_stream_social_hotspots_analyze_stream_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/social-hotspots/{job_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Social Hotspots Job Status
-         * @description 查询热点分析任务状态与结果。
-         */
-        get: operations["social_hotspots_job_status_social_hotspots__job_id__get"];
-        put?: never;
-        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -669,49 +589,6 @@ export interface components {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
         };
-        /** HotspotAnalysisResult */
-        HotspotAnalysisResult: {
-            /** Keyword */
-            keyword: string;
-            /**
-             * Generated At
-             * Format: date-time
-             */
-            generated_at: string;
-            /** Platforms */
-            platforms: ("weibo" | "xhs" | "douyin" | "x" | "reddit")[];
-            /** Summary */
-            summary: string;
-            /** Hotspots */
-            hotspots?: components["schemas"]["HotspotItem"][];
-            /** Trend Series */
-            trend_series?: components["schemas"]["TrendPoint"][];
-            /** Platform Stats */
-            platform_stats?: components["schemas"]["PlatformStat"][];
-            /** Cross Platform Hotspots */
-            cross_platform_hotspots?: string[];
-            /** Marketing Insights */
-            marketing_insights?: string[];
-            /**
-             * Data Source Notes
-             * @default
-             */
-            data_source_notes: string;
-            /** Partial Errors */
-            partial_errors?: {
-                [key: string]: string;
-            };
-        };
-        /** HotspotAnalyzeCreateResponse */
-        HotspotAnalyzeCreateResponse: {
-            /** Job Id */
-            job_id: string;
-            /**
-             * Status
-             * @default pending
-             */
-            status: string;
-        };
         /**
          * HotspotAnalyzeRequest
          * @description 社交媒体热点分析请求。
@@ -734,81 +611,6 @@ export interface components {
              * @default zh-CN
              */
             locale: string;
-        };
-        /** HotspotItem */
-        HotspotItem: {
-            /** Id */
-            id: string;
-            /**
-             * Platform
-             * @enum {string}
-             */
-            platform: "weibo" | "xhs" | "douyin" | "x" | "reddit";
-            /** Title */
-            title: string;
-            /** Summary */
-            summary: string;
-            /**
-             * Promotion Relevance
-             * @default
-             */
-            promotion_relevance: string;
-            /** Heat Score */
-            heat_score: number;
-            /**
-             * Trend
-             * @default unknown
-             * @enum {string}
-             */
-            trend: "rising" | "stable" | "falling" | "unknown";
-            /** Source Url */
-            source_url: string;
-            /** Published At */
-            published_at?: string | null;
-            /** Tags */
-            tags?: string[];
-            /**
-             * Suspicious
-             * @default false
-             */
-            suspicious: boolean;
-        };
-        /** HotspotJobResponse */
-        HotspotJobResponse: {
-            /** Job Id */
-            job_id: string;
-            /** Status */
-            status: string;
-            /** Progress */
-            progress?: string[];
-            result?: components["schemas"]["HotspotAnalysisResult"] | null;
-            /** Error */
-            error?: string | null;
-            /** Created At */
-            created_at: number;
-            /** Updated At */
-            updated_at: number;
-            /** Payload Summary */
-            payload_summary?: {
-                [key: string]: unknown;
-            };
-        };
-        /** HotspotPlatformInfo */
-        HotspotPlatformInfo: {
-            /**
-             * Id
-             * @enum {string}
-             */
-            id: "weibo" | "xhs" | "douyin" | "x" | "reddit";
-            /** Label */
-            label: string;
-            /** Description */
-            description: string;
-        };
-        /** HotspotPlatformsResponse */
-        HotspotPlatformsResponse: {
-            /** Platforms */
-            platforms: components["schemas"]["HotspotPlatformInfo"][];
         };
         /**
          * LarkOAuthRegisterRequest
@@ -903,18 +705,6 @@ export interface components {
                 [key: string]: unknown;
             } | null;
         };
-        /** PlatformStat */
-        PlatformStat: {
-            /**
-             * Platform
-             * @enum {string}
-             */
-            platform: "weibo" | "xhs" | "douyin" | "x" | "reddit";
-            /** Count */
-            count: number;
-            /** Avg Heat */
-            avg_heat: number;
-        };
         /**
          * ProductComment
          * @description 商品评论摘要（预览展示用）
@@ -948,17 +738,6 @@ export interface components {
              * @description 预览接口返回的临时令牌
              */
             preview_token: string;
-        };
-        /**
-         * ProductInfoCreateRequest
-         * @description 从商品链接创建选品池条目
-         */
-        ProductInfoCreateRequest: {
-            /**
-             * Url
-             * @description 淘宝/天猫/京东商品详情页链接
-             */
-            url: string;
         };
         /**
          * ProductInfoCreateResponse
@@ -1241,15 +1020,6 @@ export interface components {
             publish_engine: string;
             /** Dry Run */
             dry_run: boolean;
-        };
-        /** TrendPoint */
-        TrendPoint: {
-            /** Date */
-            date: string;
-            /** Count */
-            count: number;
-            /** Avg Heat */
-            avg_heat: number;
         };
         /**
          * UserInput
@@ -1699,39 +1469,6 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["ProductInfoConfirmRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProductInfoCreateResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    create_product_info_product_info_create_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ProductInfoCreateRequest"];
             };
         };
         responses: {
@@ -2303,59 +2040,6 @@ export interface operations {
             };
         };
     };
-    social_hotspots_platforms_social_hotspots_platforms_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HotspotPlatformsResponse"];
-                };
-            };
-        };
-    };
-    social_hotspots_analyze_social_hotspots_analyze_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["HotspotAnalyzeRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HotspotAnalyzeCreateResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     social_hotspots_analyze_stream_social_hotspots_analyze_stream_post: {
         parameters: {
             query?: never;
@@ -2376,37 +2060,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    social_hotspots_job_status_social_hotspots__job_id__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                job_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HotspotJobResponse"];
                 };
             };
             /** @description Validation Error */

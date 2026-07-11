@@ -993,14 +993,6 @@ class ProductInfoService:
         prepared = _pop_prepared_product(preview_token)
         return await self._persist_prepared_product(prepared, log_label="confirm_preview")
 
-    async def create_from_url(self, url: str) -> ProductInfoCreateResponse:
-        started = time.perf_counter()
-        print(f"[ProductInfoService] create_from_url 开始 url={url}")
-        prepared = await self._prepare_product_from_url(url)
-        response = await self._persist_prepared_product(prepared, log_label="create_from_url")
-        print(f"[ProductInfoService] create_from_url 总耗时 total={_elapsed_ms(started)}ms")
-        return response
-
     def delete_product(self, product_id: str) -> bool:
         removed = self.rag_agent.products_db.delete_product(product_id)
         if not removed:

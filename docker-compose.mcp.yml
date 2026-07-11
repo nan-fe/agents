@@ -1,29 +1,4 @@
 services:
-  mcp-product-scraper:
-    build:
-      context: .
-      dockerfile: mcp-product-scraper/Dockerfile
-    container_name: agents-mcp-product-scraper
-    ports:
-      - "127.0.0.1:3100:3100"
-    env_file:
-      - ./backend/.env
-    environment:
-      - PYTHONUNBUFFERED=1
-      - PYTHONPATH=/app/backend
-      - CHROMA_DB_PATH=/data/chroma_taobao_v1
-      - MCP_HOST=0.0.0.0
-      - MCP_PORT=3100
-      - MCP_PATH=/mcp
-      - MCP_WARM_RAG_ON_START=true
-      - MCP_BEARER_TOKEN=${MCP_BEARER_TOKEN:?Set MCP_BEARER_TOKEN in shell or .env}
-    volumes:
-      - ./backend/app/agents/product_rag_system/data:/app/backend/app/agents/product_rag_system/data
-      - ./data/chroma:/data/chroma_taobao_v1
-    networks:
-      - app-network
-    restart: unless-stopped
-
   mcp-lark:
     build:
       context: ./mcp-lark

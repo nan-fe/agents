@@ -604,7 +604,8 @@ async def _run_jd_product_info_e2e(tmp_path: Path) -> None:
     rag_agent.add_product_to_index = lambda _product: None  # type: ignore[method-assign]
 
     service = ProductInfoService(rag_agent)
-    result = await service.create_from_url(JD_E2E_URL)
+    preview = await service.preview_from_url(JD_E2E_URL)
+    result = await service.confirm_preview(preview.preview_token)
     print(result)
 
     product = result.product

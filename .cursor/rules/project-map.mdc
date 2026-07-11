@@ -1,0 +1,50 @@
+---
+description: 改动功能代码前先读 project-map 对应文档，遵守全局不变量
+globs:
+  - frontend-share/src/app/login/**
+  - frontend-share/src/app/register/**
+  - frontend-share/src/app/logout/**
+  - frontend-share/src/auth.ts
+  - frontend-share/src/auth.config.ts
+  - frontend-share/src/middleware.ts
+  - frontend-share/src/lib/user-service.ts
+  - frontend-share/src/lib/actions/register-action.ts
+  - frontend-share/src/app/studio/components/dialog-content.tsx
+  - frontend-share/src/app/studio/components/conversation-turn.tsx
+  - frontend-share/src/app/studio/components/result-display.tsx
+  - frontend-share/src/app/dialog/**
+  - frontend-share/src/app/studio/components/product-pool.tsx
+  - frontend-share/src/app/product_info/**
+  - frontend-share/src/app/studio/components/social-hotspot-analysis.tsx
+  - frontend-share/src/app/social-hotspots/**
+  - backend/app/main.py
+  - backend/app/services/product_info_service.py
+  - backend/app/services/social_hotspot/**
+  - backend/app/agents/orchestrator/**
+  - backend/app/memory/**
+alwaysApply: false
+---
+
+# Project Map：改功能前先读 doc
+
+开始改代码前：
+
+1. 读 [`project-map/README.md`](project-map/README.md)（全局不变量）
+2. 读下方匹配的 feature doc，按三层（数据库 / 后端 / 前端）理解后再动手
+3. 动线、路由、Schema 变更时同步更新该 doc
+
+## 路径 → 文档
+
+| 若改动涉及 | 先读 |
+|------------|------|
+| 登录、注册、NextAuth、Prisma users | [`project-map/auth-login-register.md`](project-map/auth-login-register.md) |
+| 对话生成、projects、分享、微博/飞书发布 | [`project-map/studio-content-creation.md`](project-map/studio-content-creation.md) |
+| 选品池、product_info | [`project-map/product-pool.md`](project-map/product-pool.md) |
+| 热点分析、social-hotspots SSE | [`project-map/hotspot-analysis.md`](project-map/hotspot-analysis.md) |
+
+## 常见幻觉（勿做）
+
+- 勿在 Python 后端加画室 login/register 或 session 校验
+- 勿把 SSE / 长请求放进 `next.config` rewrite
+- 勿引入 Redux/Zustand（本项目未使用）
+- 勿假设所有数据都在 Python DB（账号在 frontend-share Prisma）

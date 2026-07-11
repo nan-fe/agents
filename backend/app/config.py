@@ -72,7 +72,7 @@ class Settings(BaseSettings):
     SEARCH_HTTP_RETRY_BASE_DELAY: float = 0.5
     SEARCH_HTTP_RETRY_MAX_DELAY: float = 12.0
 
-    # 向量库路径（backend 与 mcp-product-scraper 应指向同一路径）
+    # 选品池 RAG 向量库路径
     CHROMA_DB_PATH: str = "./chroma_taobao_v1"
 
     # 选品池商品页抓取

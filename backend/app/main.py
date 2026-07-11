@@ -33,7 +33,6 @@ from app.models.schemas import (
     LarkPushReviewRequest,
     LarkStatusResponse,
     ProductInfoConfirmRequest,
-    ProductInfoCreateRequest,
     ProductInfoCreateResponse,
     ProductInfoPreviewRequest,
     ProductInfoPreviewResponse,
@@ -788,26 +787,6 @@ async def confirm_product_info(payload: ProductInfoConfirmRequest):
         raise HTTPException(
             status_code=500,
             detail="商品入库失败，请稍后重试",
-        ) from exc
-
-
-@app.post("/product_info/create", response_model=ProductInfoCreateResponse)
-async def create_product_info(payload: ProductInfoCreateRequest):
-    """从商品链接抓取信息并加入选品池与 RAG 索引。"""
-    try:
-        return await product_info_service.create_from_url(payload.url)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except httpx.HTTPError as exc:
-        raise HTTPException(
-            status_code=502,
-            detail="无法访问商品页面，请稍后重试或更换链接",
-        ) from exc
-    except Exception as exc:
-        logger.exception("创建选品池商品失败")
-        raise HTTPException(
-            status_code=500,
-            detail="商品信息解析失败，请稍后重试",
         ) from exc
 
 

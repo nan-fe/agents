@@ -121,31 +121,30 @@ const ResultDisplay = ({ result, variant = 'default' }: ResultDisplayProps) => {
   const [loginOpen, setLoginOpen] = useState(false);
   const publishAfterLoginRef = useRef(false);
 
-  useEffect(() => {
-    let cancelled = false;
-    getSocialStatus()
-      .then((status) => {
-        if (!cancelled) {
-          setSocialStatus(status);
-        }
-      })
-      .catch((error) => {
-        reportError(error, 'result/getSocialStatus');
-        setSocialStatus({
-          weibo_publish_enabled: false,
-          weibo: { configured: false, logged_in: false },
-          x_sync_enabled: false,
-          x_sync_interval_seconds: 300,
-          review_required: true,
-          auto_on_complete: false,
-          publish_engine: 'playwright',
-          dry_run: false,
-        });
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const ensureSocialStatus = useCallback(async (): Promise<SocialStatusResponse> => {
+    if (socialStatus) {
+      return socialStatus;
+    }
+    try {
+      const status = await getSocialStatus();
+      setSocialStatus(status);
+      return status;
+    } catch (error) {
+      reportError(error, 'result/getSocialStatus');
+      const fallback: SocialStatusResponse = {
+        weibo_publish_enabled: false,
+        weibo: { configured: false, logged_in: false },
+        x_sync_enabled: false,
+        x_sync_interval_seconds: 300,
+        review_required: true,
+        auto_on_complete: false,
+        publish_engine: 'playwright',
+        dry_run: false,
+      };
+      setSocialStatus(fallback);
+      return fallback;
+    }
+  }, [socialStatus]);
 
   useEffect(() => {
     const jobId = publishJobId;
@@ -273,10 +272,6 @@ const ResultDisplay = ({ result, variant = 'default' }: ResultDisplayProps) => {
     }
   }, [finalizeShare, message, result]);
 
-  const canPromptWeibo =
-    Boolean(socialStatus?.weibo_publish_enabled) &&
-    (!socialStatus?.review_required || result?.review_approved === true);
-
   const handleConfirmWeiboPublish = () => {
     if (!isWeiboReady(socialStatus)) {
       publishAfterLoginRef.current = true;
@@ -316,27 +311,34 @@ const ResultDisplay = ({ result, variant = 'default' }: ResultDisplayProps) => {
       return;
     }
 
-    if (canPromptWeibo) {
-      setModalPhase('confirm');
-      setModalOpen(true);
-      return;
-    }
+    void (async () => {
+      const status = await ensureSocialStatus();
+      const canPromptWeibo =
+        Boolean(status.weibo_publish_enabled) &&
+        (!status.review_required || result.review_approved === true);
 
-    const existingShareId = result.weibo_publish?.share_id;
-    if (existingShareId) {
-      void copyExistingShare();
-      return;
-    }
+      if (canPromptWeibo) {
+        setModalPhase('confirm');
+        setModalOpen(true);
+        return;
+      }
 
-    if (
-      socialStatus?.weibo_publish_enabled &&
-      socialStatus.review_required &&
-      result.review_approved !== true
-    ) {
-      message.warning('内容尚未审核通过，仅生成分享链接');
-    }
+      const existingShareId = result.weibo_publish?.share_id;
+      if (existingShareId) {
+        void copyExistingShare();
+        return;
+      }
 
-    void createShareOnly();
+      if (
+        status.weibo_publish_enabled &&
+        status.review_required &&
+        result.review_approved !== true
+      ) {
+        message.warning('内容尚未审核通过，仅生成分享链接');
+      }
+
+      void createShareOnly();
+    })();
   };
 
   const isMinimal = variant === 'minimal';
@@ -418,7 +420,6 @@ const ResultDisplay = ({ result, variant = 'default' }: ResultDisplayProps) => {
           <Button
             type={isMinimal ? 'text' : 'primary'}
             loading={isWorking || isPublishing}
-            disabled={socialStatus === null}
             className={
               isMinimal
                 ? '!h-auto !p-0 !font-body !text-sm !italic !text-gold-dark hover:!text-burgundy-dark'

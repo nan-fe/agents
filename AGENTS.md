@@ -68,6 +68,10 @@ The production frontend lives in `frontend-share/` (Next.js App Router). Follow 
 - `@pytest.mark.integration` tests may require Playwright/Chromium and real URLs; keep them marked and excluded from default CI when they also need network.
 - `mcp-lark` is installed editable (`pip install -e ../mcp-lark`) for Lark integration in backend tests and runtime.
 
+## Feature documentation (`project-map/`)
+
+Per-feature Agent reference docs live in [`project-map/`](project-map/). **Before changing a feature**, read [`project-map/README.md`](project-map/README.md) (global invariants + doc routing table) and the matching feature doc (e.g. `auth-login-register.md`). When writing or updating docs, follow [`.agents/skills/project-map/SKILL.md`](.agents/skills/project-map/SKILL.md) (three-layer context: database, backend, frontend). Copy structure from [`template.md`](.agents/skills/project-map/template.md).
+
 ## MCP Lark (`mcp-lark/`)
 
 ```bash
