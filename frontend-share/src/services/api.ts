@@ -889,6 +889,8 @@ export type XOAuthSessionResponse = {
   oauth_completed: boolean;
   oauth_error?: string | null;
   x_username?: string | null;
+  authorize_url?: string;
+  browserless?: boolean;
   current_url: string;
   profile_path: string;
   viewport_width: number;

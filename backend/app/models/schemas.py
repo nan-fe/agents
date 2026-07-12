@@ -326,6 +326,8 @@ class XOAuthSessionResponse(BaseModel):
     oauth_completed: bool = False
     oauth_error: str | None = None
     x_username: str | None = None
+    authorize_url: str = ""
+    browserless: bool = False
     current_url: str
     profile_path: str
     viewport_width: int = 1280

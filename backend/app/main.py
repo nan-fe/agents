@@ -1269,6 +1269,8 @@ async def social_x_oauth_start(payload: XOAuthStartRequest):
             oauth_completed=session.oauth_completed,
             oauth_error=session.oauth_error,
             x_username=session.x_username,
+            authorize_url=session.authorize_url,
+            browserless=session.browserless,
             current_url=str(state.get("current_url") or ""),
             profile_path=str(state.get("profile_path") or ""),
             viewport_width=VIEWPORT_WIDTH,
@@ -1298,6 +1300,8 @@ async def social_x_oauth_session_status(session_id: str):
         oauth_completed=session.oauth_completed,
         oauth_error=session.oauth_error,
         x_username=session.x_username,
+        authorize_url=session.authorize_url,
+        browserless=session.browserless,
         current_url=str(state.get("current_url") or ""),
         profile_path=str(state.get("profile_path") or ""),
         viewport_width=VIEWPORT_WIDTH,
@@ -1336,13 +1340,29 @@ async def social_x_oauth_callback(
     state: str | None = None,
     error: str | None = None,
 ):
-    """X OAuth 浏览器回调页（token 交换由 Playwright 会话内监听完成）。"""
+    """X OAuth 浏览器回调页（浏览器委托模式下由 HTTP 完成 token 交换）。"""
     if error:
         return HTMLResponse(
             f"<html><body><h2>授权失败</h2><p>{error}</p></body></html>",
             status_code=400,
         )
     if code and state:
+        try:
+            await x_oauth_login_session_manager.complete_from_http_callback(
+                code=code,
+                state=state,
+            )
+        except XOAuthError as exc:
+            return HTMLResponse(
+                f"<html><body><h2>授权失败</h2><p>{exc}</p></body></html>",
+                status_code=400,
+            )
+        except Exception as exc:
+            logger.warning("X OAuth HTTP 回调处理失败: %s", exc)
+            return HTMLResponse(
+                "<html><body><h2>授权处理失败</h2><p>请返回 Studio 重试连接 X。</p></body></html>",
+                status_code=502,
+            )
         return HTMLResponse(
             "<html><body><h2>正在处理 X 授权…</h2>"
             "<p>请返回 Studio 并点击「我已完成授权」。</p></body></html>"

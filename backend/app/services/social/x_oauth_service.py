@@ -176,6 +176,13 @@ class XOAuthService:
             data = resp.json().get("data") or {}
             return str(data.get("id") or "") or None, str(data.get("username") or "") or None
 
+    def user_id_from_state(self, state: str) -> str:
+        payload = _verify_state(state, _state_secret())
+        user_id = str(payload.get("user_id") or "").strip()
+        if not user_id:
+            raise XOAuthError("state 缺少 user_id")
+        return user_id
+
     async def start_authorize(self, *, user_id: str, return_url: str = "") -> str:
         if not self.is_configured():
             raise XOAuthError("X OAuth 未配置（需 X_PUBLISH_ENABLED 与客户端凭证）")

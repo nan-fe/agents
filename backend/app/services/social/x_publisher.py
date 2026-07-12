@@ -263,8 +263,14 @@ def format_x_browser_error(exc: BaseException) -> str:
             "X 浏览器 Profile 被占用，请稍后重试；"
             "若持续失败，请联系管理员清理 Profile 目录中的锁文件"
         )
-    if "executable doesn't exist" in message.lower():
+    lowered = message.lower()
+    if "executable doesn't exist" in lowered:
         return "服务器未安装 Playwright Chromium，请联系管理员执行 playwright install chromium"
+    if "xserver" in lowered or "missing x server" in lowered or "$display" in lowered:
+        return (
+            "服务器无图形界面，无法打开可见浏览器。"
+            "请使用 OAuth 授权链接完成连接，或设置 X_PUBLISH_HEADLESS=true"
+        )
     first_line = message.splitlines()[0].strip()
     if len(first_line) > 240:
         return first_line[:240] + "…"
