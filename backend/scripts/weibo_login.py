@@ -17,7 +17,9 @@ async def main() -> None:
     from app.services.social.profile_paths import resolve_weibo_profile_dir, weibo_profile_lock
     from app.services.social.weibo_publisher import _launch_context
 
-    profile_dir = resolve_weibo_profile_dir()
+    user_id = (sys.argv[1] if len(sys.argv) > 1 else "").strip() or "default"
+    profile_dir = resolve_weibo_profile_dir(user_id)
+    print(f"user_id: {user_id}")
     print(f"Profile: {profile_dir}")
     print("将用 Playwright 打开浏览器，请完成微博登录/安全验证。")
     print("看到微博首页后回到终端按 Enter，再关闭浏览器。")
@@ -26,7 +28,12 @@ async def main() -> None:
         from playwright.async_api import async_playwright
 
         async with async_playwright() as playwright:
-            context = await _launch_context(playwright, headless=False, for_login=True)
+            context = await _launch_context(
+                playwright,
+                user_id=user_id,
+                headless=False,
+                for_login=True,
+            )
             pages = context.pages
             page = pages[0] if pages else await context.new_page()
             await page.goto(
@@ -40,7 +47,8 @@ async def main() -> None:
             await context.close()
 
     print(
-        "完成。可运行: curl -s 'http://127.0.0.1:8000/social/status?force_refresh=true'"
+        "完成。可运行: curl -s "
+        f"'http://127.0.0.1:8000/social/status?user_id={user_id}&force_refresh=true'"
         " | python3 -m json.tool"
     )
 

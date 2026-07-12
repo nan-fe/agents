@@ -68,6 +68,12 @@ The production frontend lives in `frontend-share/` (Next.js App Router). Follow 
 - `@pytest.mark.integration` tests may require Playwright/Chromium and real URLs; keep them marked and excluded from default CI when they also need network.
 - `mcp-lark` is installed editable (`pip install -e ../mcp-lark`) for Lark integration in backend tests and runtime.
 
+## Feature documentation (`project-map/`)
+
+Per-feature Agent reference docs live in [`project-map/`](project-map/). **Before changing a feature**, read [`project-map/README.md`](project-map/README.md) (global invariants + doc routing table) and the matching feature doc (e.g. `auth-login-register.md`). When writing or updating docs, follow [`.agents/skills/project-map/SKILL.md`](.agents/skills/project-map/SKILL.md) (three-layer context: database, backend, frontend). Copy structure from [`template.md`](.agents/skills/project-map/template.md).
+
+For new features, bug fixes, or full-stack changes, follow the ReAct loop in [`.agents/skills/feature-react-loop/SKILL.md`](.agents/skills/feature-react-loop/SKILL.md): **Explore** (Context Brief) → **Plan** (Task 1 DB → Task 2 Backend → Task 3 Frontend, skip layers when appropriate) → **Act-Observe** (tier-1 verify + self-heal, max 3 retries) → **Final Verify** (`ruff check` + `ruff format` on `backend mcp-lark` / `pytest` / `pnpm lint` / `pnpm build`). After any `backend/` or `mcp-lark/` Python edit, run [`.agents/skills/backend-ruff/SKILL.md`](.agents/skills/backend-ruff/SKILL.md). Update `project-map` when routes or schemas change.
+
 ## MCP Lark (`mcp-lark/`)
 
 ```bash

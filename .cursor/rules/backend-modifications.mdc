@@ -1,12 +1,14 @@
 ---
-description: Backend 修改现有代码时保留类型/import，改完后跑测试验证
-globs: backend/**/*.py
+description: Backend 修改现有代码时保留类型/import，改完后跑 ruff + 测试验证
+globs:
+  - backend/**/*.py
+  - mcp-lark/**/*.py
 alwaysApply: false
 ---
 
 # Backend 修改现有代码
 
-修改 `backend/` 里**已有**代码时，遵守以下约束。
+修改 `backend/` 或 `mcp-lark/` 里**已有**代码时，遵守以下约束。Ruff 细则见 [`.agents/skills/backend-ruff/SKILL.md`](.agents/skills/backend-ruff/SKILL.md)。
 
 ## 保留类型与 import
 
@@ -26,32 +28,46 @@ async def get_user(id: str) -> User | None:
 
 ## 改完后必须验证
 
-完成修改后**不要**仅凭静态阅读宣布完成；至少运行与改动相关的检查：
+完成修改后**不要**仅凭静态阅读宣布完成。每次改动 `backend/` 或 `mcp-lark/` 的 Python 代码，**必须先跑 Ruff**（与 CI / README 一致），再跑测试。
 
-1. **相关测试**（优先）：
+### 1. Ruff（必跑，两条命令都要执行）
 
-   ```bash
-   cd backend
-   pytest tests/test_<相关模块>.py -m "not network" -q
-   ```
+在仓库根目录执行：
 
-   若影响面大或改动编排/路由，跑全量默认套件：
+```bash
+ruff check backend mcp-lark
+ruff format backend mcp-lark
+```
 
-   ```bash
-   cd backend
-   pytest tests/ -m "not network" -q
-   ```
+- 两条命令都须 **exit 0** 才能声称完成。
+- `ruff format` 会写盘；若有格式化 diff，纳入同一次改动。
+- CI 使用 `ruff format --check`；本地用 `ruff format` 直接修复，避免 push 后格式检查失败。
+- 可自动修复 lint 时：`ruff check backend mcp-lark --fix`，然后重跑上面两条。
 
-2. **静态检查**（改动涉及 import/格式时）：
+### 2. 相关测试
 
-   ```bash
-   ruff check backend
-   ```
+```bash
+cd backend
+pytest tests/test_<相关模块>.py -m "not network" -q
+```
 
-3. 若改动模块可独立导入，可快速确认无语法/导入错误：
+若影响面大或改动编排/路由，跑全量默认套件：
 
-   ```bash
-   cd backend && python -c "from app.<模块> import <符号>"
-   ```
+```bash
+cd backend
+pytest tests/ -m "not network" -q
+```
 
-测试失败或 import 报错时，先修复再继续提交或声称完成。
+`mcp-lark/` 改动时：
+
+```bash
+cd mcp-lark && pytest tests/ -q
+```
+
+### 3. 快速 import 检查（可选）
+
+```bash
+cd backend && python -c "from app.<模块> import <符号>"
+```
+
+Ruff 或测试失败时，先修复再继续提交或声称完成。

@@ -26,6 +26,7 @@ _SESSION_TTL_SEC = 600
 @dataclass
 class WeiboLoginSession:
     session_id: str
+    user_id: str
     playwright: object
     context: object
     page: object
@@ -34,7 +35,6 @@ class WeiboLoginSession:
 
     async def evaluate_login(self) -> dict[str, object]:
         url = self.page.url  # type: ignore[attr-defined]
-        # 在浏览器内轻量检测，避免 page.content() 拉取整页 HTML 干扰验证码交互
         logged_in = await self.page.evaluate(  # type: ignore[attr-defined]
             """(loginMarkers) => {
                 const href = location.href;
@@ -50,7 +50,7 @@ class WeiboLoginSession:
         return {
             "logged_in": logged_in,
             "current_url": url,
-            "profile_path": resolve_weibo_profile_dir(),
+            "profile_path": resolve_weibo_profile_dir(self.user_id),
         }
 
     async def close(self) -> None:
@@ -72,16 +72,22 @@ class WeiboLoginSessionManager:
         self._lock = asyncio.Lock()
         self._sessions: dict[str, WeiboLoginSession] = {}
 
-    async def has_active_session(self) -> bool:
-        """是否有进行中的 Studio 登录会话（与 Profile 锁互斥）。"""
+    async def has_active_session(self, user_id: str | None = None) -> bool:
         async with self._lock:
-            return bool(self._sessions)
+            if user_id is None:
+                return bool(self._sessions)
+            uid = user_id.strip()
+            return any(session.user_id == uid for session in self._sessions.values())
 
-    async def start(self) -> WeiboLoginSession:
+    async def start(self, *, user_id: str) -> WeiboLoginSession:
         if not settings.WEIBO_PUBLISH_ENABLED:
             raise ValueError("微博发布未启用（WEIBO_PUBLISH_ENABLED=false）")
         if settings.WEIBO_PUBLISH_DRY_RUN:
             raise ValueError("DRY RUN 模式下无需登录")
+
+        uid = (user_id or "").strip()
+        if not uid:
+            raise ValueError("user_id 不能为空")
 
         async with self._lock:
             await self._close_all_locked()
@@ -93,9 +99,9 @@ class WeiboLoginSessionManager:
 
                 playwright = await async_playwright().start()
                 try:
-                    # 登录始终打开可见浏览器，由用户在窗口内手动完成账号/扫码
                     context = await _launch_context(
                         playwright,
+                        user_id=uid,
                         headless=False,
                         for_login=True,
                     )
@@ -111,6 +117,7 @@ class WeiboLoginSessionManager:
                     session_id = uuid.uuid4().hex
                     session = WeiboLoginSession(
                         session_id=session_id,
+                        user_id=uid,
                         playwright=playwright,
                         context=context,
                         page=page,
@@ -146,11 +153,12 @@ class WeiboLoginSessionManager:
             profile_path = str(state["profile_path"])
             current_url = str(state["current_url"])
             await save_weibo_auth(
+                user_id=session.user_id,
                 profile_path=profile_path,
                 logged_in=True,
                 current_url=current_url,
             )
-            invalidate_weibo_login_state_cache()
+            invalidate_weibo_login_state_cache(session.user_id)
             async with self._lock:
                 await self._close_locked(session_id)
         return state

@@ -4,8 +4,10 @@ from __future__ import annotations
 
 from app.services.social.content_adapter import (
     build_weibo_payload,
+    build_x_payload,
     extract_tweet_id_from_url,
     format_weibo_text,
+    format_x_text,
     is_likely_logged_in_url,
 )
 
@@ -47,3 +49,20 @@ def test_is_likely_logged_in_url() -> None:
 def test_extract_tweet_id_from_url() -> None:
     assert extract_tweet_id_from_url("https://x.com/user/status/1234567890") == "1234567890"
     assert extract_tweet_id_from_url("https://example.com") is None
+
+
+def test_format_x_text_includes_share_link() -> None:
+    text = format_x_text(
+        title="标题",
+        content="正文",
+        share_url="https://example.com/share/x",
+        max_chars=280,
+    )
+    assert "标题" in text
+    assert "https://example.com/share/x" in text
+
+
+def test_build_x_payload() -> None:
+    payload = build_x_payload(title="T", content="C", image_url="https://img.test/a.jpg")
+    assert payload.image_url == "https://img.test/a.jpg"
+    assert len(payload.text) <= 280

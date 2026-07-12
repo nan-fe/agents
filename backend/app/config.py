@@ -72,7 +72,7 @@ class Settings(BaseSettings):
     SEARCH_HTTP_RETRY_BASE_DELAY: float = 0.5
     SEARCH_HTTP_RETRY_MAX_DELAY: float = 12.0
 
-    # 向量库路径（backend 与 mcp-product-scraper 应指向同一路径）
+    # 选品池 RAG 向量库路径
     CHROMA_DB_PATH: str = "./chroma_taobao_v1"
 
     # 选品池商品页抓取
@@ -102,14 +102,38 @@ class Settings(BaseSettings):
     WEIBO_PUBLISH_HEADLESS: bool = True
     WEIBO_PUBLISH_TIMEOUT_MS: int = 45000
     BROWSER_USE_PROFILE_PATH: str = ""
+    WEIBO_PUBLISH_PROFILE_PATH: str = ""
     # 登录/发布使用的浏览器通道：chrome=本机 Google Chrome（推荐，降低微博验证码风控）
     WEIBO_BROWSER_CHANNEL: str = "chrome"
+    # OAuth 2.0：仅用于连接身份，发帖走 Playwright Web UI
+    WEIBO_OAUTH_CLIENT_ID: str = ""
+    WEIBO_OAUTH_CLIENT_SECRET: str = ""
+    WEIBO_OAUTH_CALLBACK_URL: str = "http://localhost:8000/social/weibo/oauth/callback"
+    WEIBO_OAUTH_STATE_SECRET: str = ""
+    # X → 微博自动同步时使用的 Studio user_id（须已连接微博）
+    WEIBO_SYNC_USER_ID: str = ""
 
     # X → 微博自动同步
     X_SYNC_ENABLED: bool = False
     X_SYNC_USERNAME: str = ""
     X_SYNC_PROFILE_PATH: str = ""
     X_SYNC_INTERVAL_SECONDS: int = 300
+
+    # X 自动发布（Playwright Profile 浏览器）
+    X_PUBLISH_ENABLED: bool = True
+    X_PUBLISH_DRY_RUN: bool = False
+    X_PUBLISH_SKIP_REVIEW: bool = False
+    X_PUBLISH_HEADLESS: bool = False
+    X_PUBLISH_TIMEOUT_MS: int = 45000
+    X_PUBLISH_PROFILE_PATH: str = ""
+    X_BROWSER_CHANNEL: str = ""
+    # OAuth 2.0：仅用于连接身份（users.read），发帖走 Playwright Web UI
+    X_OAUTH_CLIENT_ID: str = ""
+    X_OAUTH_CLIENT_SECRET: str = ""
+    X_OAUTH_CALLBACK_URL: str = ""
+    X_OAUTH_SCOPES: str = ""
+    X_OAUTH_STATE_SECRET: str = ""
+    X_HTTP_PROXY: str = ""
 
     # 社交媒体热点分析
     SOCIAL_HOTSPOT_ENABLED: bool = True

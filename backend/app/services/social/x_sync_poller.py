@@ -35,9 +35,9 @@ def _save_state(state: dict[str, Any]) -> None:
 
 async def _fetch_latest_tweet_text(username: str) -> tuple[str, str] | None:
     """用 Playwright 读取 X 用户时间线最新一条推文。"""
-    profile_dir = (settings.X_SYNC_PROFILE_PATH or settings.BROWSER_USE_PROFILE_PATH or "").strip()
-    if not profile_dir:
-        raise ValueError("X 同步需要配置 X_SYNC_PROFILE_PATH 或 BROWSER_USE_PROFILE_PATH")
+    from app.services.social.profile_paths import resolve_x_profile_dir
+
+    profile_dir = resolve_x_profile_dir(settings.X_SYNC_USERNAME or "sync")
 
     from playwright.async_api import async_playwright
 
@@ -116,7 +116,11 @@ async def run_x_sync_once() -> dict[str, Any]:
             return {"skipped": True, "reason": "无新推文", "tweet_id": tweet_id}
 
         service = get_social_publish_service()
+        sync_user_id = (settings.WEIBO_SYNC_USER_ID or "").strip()
+        if not sync_user_id:
+            return {"skipped": True, "reason": "未配置 WEIBO_SYNC_USER_ID"}
         job_id = await service.start_weibo_publish(
+            user_id=sync_user_id,
             title="",
             content=text,
             hashtags=None,

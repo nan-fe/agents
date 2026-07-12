@@ -87,6 +87,7 @@ const handleSocial = (req, res, url) => {
     json(res, 200, {
       weibo_publish_enabled: false,
       weibo: { configured: false, logged_in: false },
+      weibo_oauth_configured: false,
       x_sync_enabled: false,
       x_sync_username: null,
       x_sync_interval_seconds: 300,

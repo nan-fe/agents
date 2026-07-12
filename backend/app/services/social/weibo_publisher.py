@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 
 ProgressCallback = Callable[[str], Awaitable[None] | None]
 
-_login_state_cache: tuple[float, dict[str, object]] | None = None
+_login_state_cache: dict[str, tuple[float, dict[str, object]]] = {}
 _LOGIN_STATE_CACHE_TTL_SEC = 300
 _login_check_lock = asyncio.Lock()
 _playwright_profile_lock = weibo_profile_lock
@@ -48,10 +48,13 @@ Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
 """
 
 
-def invalidate_weibo_login_state_cache() -> None:
+def invalidate_weibo_login_state_cache(user_id: str = "") -> None:
     """登录成功后清除短缓存，使 /social/status 立即反映新状态。"""
-    global _login_state_cache
-    _login_state_cache = None
+    uid = (user_id or "").strip()
+    if uid:
+        _login_state_cache.pop(uid, None)
+    else:
+        _login_state_cache.clear()
 
 
 _COMPOSE_URLS = ("https://weibo.com/",)
@@ -115,12 +118,13 @@ async def _download_image(url: str) -> Path | None:
         return None
 
 
-async def _check_weibo_login_state_playwright(profile_dir: str) -> dict[str, object]:
+async def _check_weibo_login_state_playwright(user_id: str) -> dict[str, object]:
     from playwright.async_api import async_playwright
 
+    profile_dir = resolve_weibo_profile_dir(user_id)
     async with weibo_profile_lock:
         async with async_playwright() as playwright:
-            context = await _launch_context(playwright, headless=True)
+            context = await _launch_context(playwright, user_id=user_id, headless=True)
             pages = context.pages  # type: ignore[attr-defined]
             page = pages[0] if pages else await context.new_page()  # type: ignore[attr-defined]
             await page.goto(
@@ -139,21 +143,26 @@ async def _check_weibo_login_state_playwright(profile_dir: str) -> dict[str, obj
                 "current_url": url,
                 "profile_path": profile_dir,
                 "driver": "playwright",
+                "user_id": user_id,
             }
 
 
-async def check_weibo_login_state(*, force_refresh: bool = False) -> dict[str, object]:
-    """检测微博登录态。默认走缓存/快速返回；force_refresh 才启动浏览器验证。"""
-    global _login_state_cache
+async def check_weibo_login_state(
+    *, user_id: str, force_refresh: bool = False
+) -> dict[str, object]:
+    """检测微博登录态。默认走缓存/DB；force_refresh 才启动浏览器验证。"""
+    uid = (user_id or "").strip()
+    if not uid:
+        return {"configured": False, "logged_in": False, "reason": "user_id 不能为空"}
 
     if not settings.WEIBO_PUBLISH_ENABLED:
         return {"configured": False, "logged_in": False, "reason": "未启用微博发布"}
     if settings.WEIBO_PUBLISH_DRY_RUN:
-        return {"configured": True, "logged_in": True, "dry_run": True}
+        return {"configured": True, "logged_in": True, "dry_run": True, "user_id": uid}
 
-    profile_dir = resolve_weibo_profile_dir()
+    profile_dir = resolve_weibo_profile_dir(uid)
 
-    stored = await get_weibo_auth()
+    stored = await get_weibo_auth(uid)
     if stored and stored.get("logged_in") and stored.get("profile_path") == profile_dir:
         return {
             "configured": True,
@@ -162,10 +171,12 @@ async def check_weibo_login_state(*, force_refresh: bool = False) -> dict[str, o
             "current_url": stored.get("current_url"),
             "confirmed_at": stored.get("confirmed_at"),
             "driver": "playwright",
+            "user_id": uid,
         }
 
-    if _login_state_cache is not None:
-        cached_at, cached_result = _login_state_cache
+    cached = _login_state_cache.get(uid)
+    if cached is not None:
+        cached_at, cached_result = cached
         if time.time() - cached_at < _LOGIN_STATE_CACHE_TTL_SEC:
             return cached_result
 
@@ -175,32 +186,41 @@ async def check_weibo_login_state(*, force_refresh: bool = False) -> dict[str, o
             "logged_in": False,
             "reason": "未检测",
             "profile_path": profile_dir,
+            "user_id": uid,
         }
 
     async with _login_check_lock:
-        if _login_state_cache is not None:
-            cached_at, cached_result = _login_state_cache
+        cached = _login_state_cache.get(uid)
+        if cached is not None:
+            cached_at, cached_result = cached
             if time.time() - cached_at < _LOGIN_STATE_CACHE_TTL_SEC:
                 return cached_result
 
         try:
-            result = await _check_weibo_login_state_playwright(profile_dir)
+            result = await _check_weibo_login_state_playwright(uid)
+            result["user_id"] = uid
             if result.get("logged_in"):
                 from app.services.social.weibo_auth_store import save_weibo_auth
 
                 await save_weibo_auth(
+                    user_id=uid,
                     profile_path=profile_dir,
                     logged_in=True,
                     current_url=str(result.get("current_url") or ""),
                 )
-            _login_state_cache = (time.time(), result)
+            _login_state_cache[uid] = (time.time(), result)
             return result
         except ImportError:
             return {"configured": False, "logged_in": False, "reason": "playwright 未安装"}
         except Exception as exc:
-            logger.warning("微博登录态检测失败: %s", exc)
-            result = {"configured": True, "logged_in": False, "reason": str(exc)}
-            _login_state_cache = (time.time(), result)
+            logger.warning("微博登录态检测失败 user_id=%s: %s", uid, exc)
+            result = {
+                "configured": True,
+                "logged_in": False,
+                "reason": str(exc),
+                "user_id": uid,
+            }
+            _login_state_cache[uid] = (time.time(), result)
             return result
 
 
@@ -227,6 +247,7 @@ def format_weibo_browser_error(exc: BaseException) -> str:
 async def _launch_context(
     playwright: object,
     *,
+    user_id: str = "",
     headless: bool | None = None,
     for_login: bool = False,
 ) -> object:
@@ -234,7 +255,7 @@ async def _launch_context(
 
     for_login=True 时使用本机 Chrome + 反自动化指纹，便于用户手动过微博验证码。
     """
-    profile_dir = resolve_weibo_profile_dir()
+    profile_dir = resolve_weibo_profile_dir(user_id)
     resolved_headless = settings.WEIBO_PUBLISH_HEADLESS if headless is None else headless
     channel = (settings.WEIBO_BROWSER_CHANNEL or "").strip()
 
@@ -348,6 +369,7 @@ async def _upload_image(page: object, image_path: Path) -> bool:
 async def publish_to_weibo(
     payload: WeiboPublishPayload,
     *,
+    user_id: str = "",
     on_progress: ProgressCallback | None = None,
 ) -> tuple[str | None, str | None]:
     """
@@ -363,7 +385,11 @@ async def publish_to_weibo(
     if not settings.WEIBO_PUBLISH_ENABLED:
         raise ValueError("微博发布未启用（WEIBO_PUBLISH_ENABLED=false）")
 
-    resolve_weibo_profile_dir()
+    uid = (user_id or "").strip()
+    if not uid:
+        raise ValueError("user_id 不能为空")
+
+    resolve_weibo_profile_dir(uid)
 
     image_path: Path | None = None
     if payload.image_url:
@@ -373,6 +399,7 @@ async def publish_to_weibo(
     try:
         return await _publish_via_playwright(
             payload,
+            user_id=uid,
             image_path=image_path,
             on_progress=on_progress,
         )
@@ -387,6 +414,7 @@ async def publish_to_weibo(
 async def _publish_via_playwright(
     payload: WeiboPublishPayload,
     *,
+    user_id: str,
     image_path: Path | None,
     on_progress: ProgressCallback | None = None,
 ) -> tuple[str | None, str | None]:
@@ -397,7 +425,7 @@ async def _publish_via_playwright(
         async with weibo_profile_lock:
             async with async_playwright() as playwright:
                 await _emit(on_progress, "启动 Playwright 浏览器…")
-                context = await _launch_context(playwright)
+                context = await _launch_context(playwright, user_id=user_id)
                 pages = context.pages  # type: ignore[attr-defined]
                 page = pages[0] if pages else await context.new_page()  # type: ignore[attr-defined]
 
