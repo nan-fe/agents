@@ -52,7 +52,7 @@ Explore → Plan → [Task N: Act → Observe → (Heal ×≤3)] → Final Verif
    - 无匹配 → 标记「新功能，Final Verify 后需按 [`template.md`](../project-map/template.md) 新建 doc」
 3. 读匹配 feature doc 的三层表 +「勿做 / 常见幻觉」
 4. 按涉及层读规范：
-   - 后端 → [`.agents/skills/fastapi/SKILL.md`](../fastapi/SKILL.md) + [`.cursor/rules/backend-modifications.mdc`](../../.cursor/rules/backend-modifications.mdc)
+   - 后端 → [`.agents/skills/fastapi/SKILL.md`](../fastapi/SKILL.md) + [`.agents/skills/backend-ruff/SKILL.md`](../backend-ruff/SKILL.md) + [`.cursor/rules/backend-modifications.mdc`](../../.cursor/rules/backend-modifications.mdc)
    - 前端 → [`frontend-share/AGENTS.md`](../../frontend-share/AGENTS.md)
    - 根规范 → [`AGENTS.md`](../../AGENTS.md)
 5. 在**相似现有代码**中确认错误处理惯例（见下方速查）
@@ -162,6 +162,7 @@ tier-1 命令见 [reference.md § Tier-1 验证](reference.md#tier-1-验证每-t
 
 | 条件 | 动作 |
 |------|------|
+| 改动 `backend/` 或 `mcp-lark/` Python | 仓库根目录 **必跑**：`ruff check backend mcp-lark` → `ruff format backend mcp-lark`（两条都 exit 0） |
 | 后端 API 变更 | backend 在 `:8000` → `cd frontend-share && pnpm gen:api` → 提交 `schema.d.ts` |
 | 动线/路由/Schema 变更 | 更新 `project-map/<feature>.md` + [`README.md`](../../project-map/README.md) 索引 |
 | 新功能无 doc | 按 [`project-map` skill](../project-map/SKILL.md) 新建 doc |
@@ -194,6 +195,7 @@ tier-1 命令见 [reference.md § Tier-1 验证](reference.md#tier-1-验证每-t
 宣布完成前：
 
 - [ ] 每个 Task 经 tier-1 通过
+- [ ] 若改动 backend/mcp-lark Python：`ruff check backend mcp-lark` 与 `ruff format backend mcp-lark` 均已通过
 - [ ] Final 终检通过
 - [ ] API 变更已 gen:api
 - [ ] 动线变更已同步 project-map

@@ -16,7 +16,7 @@ alwaysApply: false
 1. **Explore** — 读 `project-map/README.md` + 匹配 feature doc → 输出 Context Brief
 2. **Plan** — Task 1（数据源）→ Task 2（后端）→ Task 3（前端）；按改动范围跳过无关层
 3. **Act-Observe** — 每 Task 完成后立即 tier-1 验证；失败则 Observation → 修复 → 重试（≤3 轮）
-4. **Final Verify** — `pytest -m "not network"` / `pnpm lint` / `pnpm test` / `pnpm build`；API 变更须 `pnpm gen:api`
+4. **Final Verify** — backend/mcp-lark 改动须 `ruff check backend mcp-lark` + `ruff format backend mcp-lark`；`pytest -m "not network"` / `pnpm lint` / `pnpm test` / `pnpm build`；API 变更须 `pnpm gen:api`
 
 ## 与 project-map 分工
 

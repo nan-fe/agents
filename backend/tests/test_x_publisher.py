@@ -34,10 +34,7 @@ def test_compose_intent_url_encodes_text() -> None:
 
 
 def test_is_login_url_ignores_backend_oauth_callback() -> None:
-    callback = (
-        "http://localhost:8000/social/x/oauth/callback"
-        "?code=abc&state=xyz"
-    )
+    callback = "http://localhost:8000/social/x/oauth/callback?code=abc&state=xyz"
     assert _is_login_url(callback) is False
     assert _page_looks_logged_out("<html><body>X 授权成功</body></html>", callback) is False
 

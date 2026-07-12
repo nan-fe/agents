@@ -69,17 +69,26 @@ python -c "from app.models.schemas import <符号>"   # 快速 import 检查
 **仅改 schemas.py DTO（无 migration）**
 
 ```bash
+ruff check backend mcp-lark
+ruff format backend mcp-lark
 cd backend
 python -c "from app.models.schemas import <符号>"
-ruff check backend/app/models/schemas.py
 ```
 
 ### Task 2 — 后端
 
+**每次 Task 2 完成后先跑 Ruff**（仓库根目录，两条都须 exit 0）：
+
+```bash
+ruff check backend mcp-lark
+ruff format backend mcp-lark
+```
+
+再跑测试：
+
 ```bash
 cd backend
 pytest tests/test_<相关模块>.py -m "not network" -q
-ruff check backend
 ```
 
 影响面大（路由、编排器）时：
@@ -125,11 +134,12 @@ pnpm test
 
 | 改动范围 | 命令 |
 |----------|------|
-| 仅 backend | `cd backend && pytest tests/ -m "not network" -q` |
+| 仅 backend / mcp-lark Python | `ruff check backend mcp-lark` → `ruff format backend mcp-lark` → `cd backend && pytest tests/ -m "not network" -q`（mcp-lark 另跑 `cd mcp-lark && pytest tests/ -q`） |
 | 仅 frontend | `cd frontend-share && pnpm lint && pnpm test && pnpm build` |
-| 全栈 | backend pytest 全量 + frontend lint/test/build |
+| 全栈 | 上述 Ruff + backend pytest 全量 + frontend lint/test/build |
 | API 契约变更 | 上述 + `pnpm gen:api`；确认 `schema.d.ts` diff 合理 |
-| backend import/格式 | `ruff check backend && ruff format --check backend` |
+
+**Ruff 注意**：Final 阶段也用 `ruff format`（写盘修复），不要用 `--check`；CI 才用 `--check`。
 
 ### OpenAPI 契约（API 变更时）
 

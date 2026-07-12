@@ -31,9 +31,7 @@ def _mock_login_session(*, logged_in: bool = False) -> XLoginSession:
     session.evaluate_login = AsyncMock(  # type: ignore[method-assign]
         return_value={
             "logged_in": logged_in,
-            "current_url": "https://x.com/home"
-            if logged_in
-            else "https://x.com/i/flow/login",
+            "current_url": "https://x.com/home" if logged_in else "https://x.com/i/flow/login",
             "profile_path": "/tmp/x-profile",
         },
     )
@@ -41,7 +39,9 @@ def _mock_login_session(*, logged_in: bool = False) -> XLoginSession:
     return session
 
 
-def _mock_oauth_session(*, logged_in: bool = True, oauth_completed: bool = True) -> XOAuthLoginSession:
+def _mock_oauth_session(
+    *, logged_in: bool = True, oauth_completed: bool = True
+) -> XOAuthLoginSession:
     session = XOAuthLoginSession(
         session_id="test-oauth-session",
         user_id="demo-user",
