@@ -10,6 +10,7 @@ from dataclasses import dataclass, field
 from urllib.parse import parse_qs, urlparse
 
 from app.config import settings
+from app.services.social.browser_display import resolve_login_headless, use_browserless_oauth
 from app.services.social.profile_paths import resolve_x_profile_dir
 from app.services.social.x_auth_store import save_x_auth
 from app.services.social.x_oauth_service import XOAuthError, x_oauth_service
@@ -29,17 +30,29 @@ _SESSION_TTL_SEC = 600
 class XOAuthLoginSession:
     session_id: str
     user_id: str
-    playwright: object
-    context: object
-    page: object
+    playwright: object | None = None
+    context: object | None = None
+    page: object | None = None
     created_at: float = field(default_factory=time.time)
     oauth_completed: bool = False
     oauth_error: str | None = None
     x_username: str | None = None
+    authorize_url: str = ""
+    browserless: bool = False
     _profile_lock_held: bool = field(default=False, repr=False)
     _watch_task: asyncio.Task[None] | None = field(default=None, repr=False)
 
     async def evaluate_profile_login(self) -> dict[str, object]:
+        profile_path = resolve_x_profile_dir(self.user_id)
+        if self.page is None:
+            return {
+                "logged_in": False,
+                "current_url": self.authorize_url or "",
+                "profile_path": profile_path,
+                "oauth_completed": self.oauth_completed,
+                "x_username": self.x_username,
+            }
+
         url = self.page.url  # type: ignore[attr-defined]
         lowered = url.lower()
         if (
@@ -57,7 +70,7 @@ class XOAuthLoginSession:
         return {
             "logged_in": logged_in,
             "current_url": url,
-            "profile_path": resolve_x_profile_dir(self.user_id),
+            "profile_path": profile_path,
             "oauth_completed": self.oauth_completed,
             "x_username": self.x_username,
         }
@@ -69,17 +82,41 @@ class XOAuthLoginSession:
                 await self._watch_task
             except asyncio.CancelledError:
                 pass
-        try:
-            await self.context.close()  # type: ignore[attr-defined]
-        except Exception as exc:
-            logger.debug("关闭 Playwright context 失败: %s", exc)
-        try:
-            await self.playwright.stop()  # type: ignore[attr-defined]
-        except Exception as exc:
-            logger.debug("关闭 Playwright 失败: %s", exc)
+        if self.context is not None:
+            try:
+                await self.context.close()  # type: ignore[attr-defined]
+            except Exception as exc:
+                logger.debug("关闭 Playwright context 失败: %s", exc)
+        if self.playwright is not None:
+            try:
+                await self.playwright.stop()  # type: ignore[attr-defined]
+            except Exception as exc:
+                logger.debug("关闭 Playwright 失败: %s", exc)
         if self._profile_lock_held:
             _playwright_profile_lock.release()
             self._profile_lock_held = False
+
+    async def ensure_playwright(self) -> None:
+        if self.page is not None:
+            return
+        from playwright.async_api import async_playwright
+
+        playwright = await async_playwright().start()
+        try:
+            context = await _launch_context(
+                playwright,
+                user_id=self.user_id,
+                headless=resolve_login_headless(explicit=True),
+                for_login=True,
+            )
+            pages = context.pages  # type: ignore[attr-defined]
+            page = pages[0] if pages else await context.new_page()  # type: ignore[attr-defined]
+        except Exception:
+            await playwright.stop()
+            raise
+        self.playwright = playwright
+        self.context = context
+        self.page = page
 
 
 class XOAuthLoginSessionManager:
@@ -113,21 +150,34 @@ class XOAuthLoginSessionManager:
         async with self._lock:
             await self._close_all_locked()
 
+            authorize_url = await x_oauth_service.start_authorize(
+                user_id=uid,
+                return_url=settings.X_OAUTH_CALLBACK_URL,
+            )
+
+            if use_browserless_oauth():
+                session_id = uuid.uuid4().hex
+                session = XOAuthLoginSession(
+                    session_id=session_id,
+                    user_id=uid,
+                    authorize_url=authorize_url,
+                    browserless=True,
+                )
+                self._sessions[session_id] = session
+                logger.info("X OAuth 浏览器委托模式 session=%s user_id=%s", session_id, uid)
+                return session
+
             await _playwright_profile_lock.acquire()
             lock_held = True
             try:
                 from playwright.async_api import async_playwright
 
-                authorize_url = await x_oauth_service.start_authorize(
-                    user_id=uid,
-                    return_url=settings.X_OAUTH_CALLBACK_URL,
-                )
                 playwright = await async_playwright().start()
                 try:
                     context = await _launch_context(
                         playwright,
                         user_id=uid,
-                        headless=False,
+                        headless=resolve_login_headless(explicit=False),
                         for_login=True,
                     )
                     pages = context.pages  # type: ignore[attr-defined]
@@ -145,6 +195,7 @@ class XOAuthLoginSessionManager:
                         playwright=playwright,
                         context=context,
                         page=page,
+                        authorize_url=authorize_url,
                         _profile_lock_held=True,
                     )
                     session._watch_task = asyncio.create_task(self._watch_callback(session))
@@ -158,6 +209,32 @@ class XOAuthLoginSessionManager:
                 if lock_held:
                     _playwright_profile_lock.release()
                 raise
+
+    async def complete_from_http_callback(self, *, code: str, state: str) -> str | None:
+        user_id = x_oauth_service.user_id_from_state(state)
+        username = await x_oauth_service.complete_callback(code, state)
+
+        async with self._lock:
+            session = None
+            for candidate in self._sessions.values():
+                if candidate.user_id == user_id:
+                    session = candidate
+                    break
+            if session is None:
+                logger.info("X OAuth HTTP 回调完成 user_id=%s（无活跃会话）", user_id)
+                invalidate_x_login_state_cache(user_id)
+                return username
+
+            session.oauth_completed = True
+            session.oauth_error = None
+            session.x_username = username
+            invalidate_x_login_state_cache(user_id)
+            logger.info(
+                "X OAuth HTTP 回调完成 session=%s user=%s",
+                session.session_id,
+                username,
+            )
+            return username
 
     async def confirm(self, session_id: str) -> dict[str, object]:
         async with self._lock:
@@ -174,6 +251,17 @@ class XOAuthLoginSessionManager:
         if not session.oauth_completed:
             raise XOAuthError("尚未完成 X OAuth 授权，请在浏览器中登录并授权应用")
 
+        if session.page is None:
+            await _playwright_profile_lock.acquire()
+            session._profile_lock_held = True
+            try:
+                await session.ensure_playwright()
+            except Exception:
+                if session._profile_lock_held:
+                    _playwright_profile_lock.release()
+                    session._profile_lock_held = False
+                raise
+
         state = await session.evaluate_profile_login()
         if not state["logged_in"]:
             logger.warning(
@@ -181,7 +269,11 @@ class XOAuthLoginSessionManager:
                 session_id,
                 state.get("current_url"),
             )
-            raise XOAuthError("OAuth 已完成但浏览器 Profile 未检测到登录态，请重试")
+            raise XOAuthError(
+                "OAuth 已完成但服务器 Profile 未登录。"
+                "请在服务器执行一次 Profile 登录："
+                "docker exec -it agents-backend python scripts/x_login.py <user_id>"
+            )
 
         await save_x_auth(
             user_id=session.user_id,
@@ -203,6 +295,9 @@ class XOAuthLoginSessionManager:
         deadline = session.created_at + _SESSION_TTL_SEC
         try:
             while time.time() < deadline:
+                if session.page is None:
+                    await asyncio.sleep(0.4)
+                    continue
                 url = session.page.url  # type: ignore[attr-defined]
                 if callback_path not in url:
                     await asyncio.sleep(0.4)

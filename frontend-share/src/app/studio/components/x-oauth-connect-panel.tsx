@@ -30,6 +30,7 @@ const XOAuthConnectPanel = ({
   const [confirming, setConfirming] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
   const pollRef = useRef<number | null>(null);
+  const authorizeOpenedRef = useRef(false);
 
   const stopPolling = useCallback(() => {
     if (pollRef.current !== null) {
@@ -45,6 +46,7 @@ const XOAuthConnectPanel = ({
     }
     setSession(null);
     setStartError(null);
+    authorizeOpenedRef.current = false;
     onConnected();
     onClose();
     message.success('X 连接成功');
@@ -57,8 +59,13 @@ const XOAuthConnectPanel = ({
     }
     setSession(null);
     setStartError(null);
+    authorizeOpenedRef.current = false;
     onClose();
   }, [onClose, session?.session_id, stopPolling]);
+
+  const openAuthorizeUrl = useCallback((url: string) => {
+    window.open(url, '_blank', 'noopener,noreferrer');
+  }, []);
 
   const startSession = useCallback(async () => {
     if (!userId) {
@@ -69,6 +76,10 @@ const XOAuthConnectPanel = ({
     try {
       const data = await startXOAuthSession(userId);
       setSession(data);
+      if (data.browserless && data.authorize_url && !authorizeOpenedRef.current) {
+        authorizeOpenedRef.current = true;
+        openAuthorizeUrl(data.authorize_url);
+      }
       if (data.oauth_completed && data.logged_in) {
         await finishConnect();
       }
@@ -80,11 +91,12 @@ const XOAuthConnectPanel = ({
     } finally {
       setLoading(false);
     }
-  }, [finishConnect, message, userId]);
+  }, [finishConnect, message, openAuthorizeUrl, userId]);
 
   useEffect(() => {
     if (!open) {
       stopPolling();
+      authorizeOpenedRef.current = false;
       return;
     }
     void startSession();
@@ -196,9 +208,24 @@ const XOAuthConnectPanel = ({
               </div>
             ) : null}
             <p className="weibo-sync-modal__hint">
-              已打开 X Profile 浏览器并完成 OAuth 授权页。请在浏览器中登录 X 并授权应用，
-              成功后点击下方「我已完成授权」。发帖将通过浏览器模拟完成，不消耗 X API Credits。
+              {session?.browserless
+                ? '请点击下方按钮在新标签页登录 X 并授权应用，完成后返回点击「我已完成授权」。发帖将通过服务器浏览器模拟完成。'
+                : '已打开 X Profile 浏览器并完成 OAuth 授权页。请在浏览器中登录 X 并授权应用，成功后点击下方「我已完成授权」。发帖将通过浏览器模拟完成，不消耗 X API Credits。'}
             </p>
+            {session?.browserless && session.authorize_url ? (
+              <div className="weibo-sync-modal__actions">
+                <button
+                  type="button"
+                  className="weibo-sync-modal__btn weibo-sync-modal__btn--ghost"
+                  disabled={loading || confirming}
+                  onClick={() => {
+                    openAuthorizeUrl(session.authorize_url!);
+                  }}
+                >
+                  打开 X 授权页
+                </button>
+              </div>
+            ) : null}
             {session?.x_username ? (
               <p className="weibo-sync-modal__hint text-gold-dark">
                 检测到账号 @{session.x_username}

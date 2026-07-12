@@ -9,6 +9,7 @@ import uuid
 from dataclasses import dataclass, field
 
 from app.config import settings
+from app.services.social.browser_display import resolve_login_headless
 from app.services.social.profile_paths import resolve_weibo_profile_dir
 from app.services.social.weibo_auth_store import save_weibo_auth
 from app.services.social.weibo_publisher import (
@@ -102,7 +103,7 @@ class WeiboLoginSessionManager:
                     context = await _launch_context(
                         playwright,
                         user_id=uid,
-                        headless=False,
+                        headless=resolve_login_headless(explicit=False),
                         for_login=True,
                     )
                     pages = context.pages  # type: ignore[attr-defined]

@@ -15,14 +15,20 @@ RUN pip install --no-cache-dir --timeout=120 \
     -r requirements.txt
 
 # Playwright 商品页抓取需要 Chromium 及系统库
-RUN python -m playwright install-deps chromium \
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends xvfb \
+    && rm -rf /var/lib/apt/lists/* \
+    && python -m playwright install-deps chromium \
     && python -m playwright install chromium
 
 COPY backend .
 
+RUN chmod +x docker-entrypoint.sh
+
 ENV TIKTOKEN_CACHE_DIR=/app/app/data/tiktoken
 ENV PYTHONUNBUFFERED=1
+ENV X_PUBLISH_HEADLESS=true
 
 EXPOSE 8000
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["./docker-entrypoint.sh"]

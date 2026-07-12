@@ -30,6 +30,9 @@ services:
       - SHARE_STORE_PATH=/data/shares/shares.json
       - DATABASE_URL=sqlite+aiosqlite:////data/memory/memory.db
       - CHROMA_DB_PATH=/data/chroma_taobao_v1
+      - X_PUBLISH_HEADLESS=true
+      - X_BROWSER_CHANNEL=
+      - WEIBO_BROWSER_CHANNEL=
     env_file:
       - ./backend/.env
     volumes:

@@ -180,3 +180,42 @@ def test_x_oauth_api_flow() -> None:
         await close_db()
 
     asyncio.run(_run())
+
+
+def test_x_oauth_browserless_start() -> None:
+    async def _run() -> None:
+        await close_db()
+        await init_db()
+
+        prev_enabled = settings.X_PUBLISH_ENABLED
+        prev_dry = settings.X_PUBLISH_DRY_RUN
+        prev_client = settings.X_OAUTH_CLIENT_ID
+        prev_callback = settings.X_OAUTH_CALLBACK_URL
+        settings.X_PUBLISH_ENABLED = True
+        settings.X_PUBLISH_DRY_RUN = False
+        settings.X_OAUTH_CLIENT_ID = "test-client"
+        settings.X_OAUTH_CALLBACK_URL = "http://localhost:8000/social/x/oauth/callback"
+
+        transport = ASGITransport(app=app)
+        with patch(
+            "app.services.social.x_oauth_login_session.use_browserless_oauth",
+            return_value=True,
+        ):
+            async with AsyncClient(transport=transport, base_url="http://test") as client:
+                start_resp = await client.post(
+                    "/social/x/oauth/start",
+                    json={"user_id": "demo-user"},
+                )
+                assert start_resp.status_code == 200
+                body = start_resp.json()
+                assert body["browserless"] is True
+                assert body["authorize_url"].startswith("https://twitter.com/i/oauth2/authorize")
+                assert body["oauth_completed"] is False
+
+        settings.X_PUBLISH_ENABLED = prev_enabled
+        settings.X_PUBLISH_DRY_RUN = prev_dry
+        settings.X_OAUTH_CLIENT_ID = prev_client
+        settings.X_OAUTH_CALLBACK_URL = prev_callback
+        await close_db()
+
+    asyncio.run(_run())
