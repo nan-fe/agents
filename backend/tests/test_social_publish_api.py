@@ -45,13 +45,19 @@ async def _run_social_api_flow() -> None:
 
             blocked = await client.post(
                 "/social/publish/weibo",
-                json={"title": "标题", "content": "正文", "review_approved": False},
+                json={
+                    "user_id": "demo",
+                    "title": "标题",
+                    "content": "正文",
+                    "review_approved": False,
+                },
             )
             assert blocked.status_code == 400
 
             create_resp = await client.post(
                 "/social/publish/weibo",
                 json={
+                    "user_id": "demo",
                     "title": "标题",
                     "content": "正文",
                     "hashtags": ["测试"],

@@ -26,7 +26,7 @@ def _lock_file_present(path: Path) -> bool:
 weibo_profile_lock = asyncio.Lock()
 x_profile_lock = asyncio.Lock()
 
-_DEFAULT_RELATIVE = Path("data/weibo-profile")
+_DEFAULT_WEIBO_RELATIVE = Path("data/weibo-profiles")
 _DEFAULT_X_RELATIVE = Path("data/x-profiles")
 
 
@@ -35,19 +35,22 @@ def _sanitize_user_id(user_id: str) -> str:
     return cleaned or "anonymous"
 
 
-def resolve_weibo_profile_dir() -> str:
-    configured = (settings.BROWSER_USE_PROFILE_PATH or "").strip()
-    if configured:
-        path = Path(configured).expanduser()
+def resolve_weibo_profile_dir(user_id: str = "") -> str:
+    uid = _sanitize_user_id(user_id)
+    configured_root = (
+        settings.WEIBO_PUBLISH_PROFILE_PATH or settings.BROWSER_USE_PROFILE_PATH or ""
+    ).strip()
+    if configured_root:
+        root = Path(configured_root).expanduser()
+        path = root if uid == "anonymous" and not user_id.strip() else root / uid
     else:
         repo_root = Path(__file__).resolve().parents[4]
-        path = repo_root / _DEFAULT_RELATIVE
+        path = repo_root / _DEFAULT_WEIBO_RELATIVE / uid
 
     resolved = str(path.resolve())
     if "chrome" in resolved.lower():
         logger.warning(
-            "BROWSER_USE_PROFILE_PATH 路径含 chrome，登录态可能无法持久化。"
-            "请改用例如 data/weibo-profile"
+            "微博 Profile 路径含 chrome，登录态可能无法持久化。请改用例如 data/weibo-profiles"
         )
     path.mkdir(parents=True, exist_ok=True)
     return resolved
@@ -55,7 +58,9 @@ def resolve_weibo_profile_dir() -> str:
 
 def resolve_x_profile_dir(user_id: str = "") -> str:
     uid = _sanitize_user_id(user_id)
-    configured_root = (settings.X_PUBLISH_PROFILE_PATH or settings.X_SYNC_PROFILE_PATH or "").strip()
+    configured_root = (
+        settings.X_PUBLISH_PROFILE_PATH or settings.X_SYNC_PROFILE_PATH or ""
+    ).strip()
     if configured_root:
         root = Path(configured_root).expanduser()
         path = root if uid == "anonymous" and not user_id.strip() else root / uid
@@ -65,9 +70,7 @@ def resolve_x_profile_dir(user_id: str = "") -> str:
 
     resolved = str(path.resolve())
     if "chrome" in resolved.lower():
-        logger.warning(
-            "X Profile 路径含 chrome，登录态可能无法持久化。请改用例如 data/x-profiles"
-        )
+        logger.warning("X Profile 路径含 chrome，登录态可能无法持久化。请改用例如 data/x-profiles")
     path.mkdir(parents=True, exist_ok=True)
     return resolved
 

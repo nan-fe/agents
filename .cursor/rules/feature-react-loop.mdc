@@ -1,0 +1,26 @@
+---
+description: 全栈功能开发走 ReAct 循环：探索上下文 → 规划 Task → 执行验证自愈
+globs:
+  - backend/**
+  - frontend-share/src/**
+  - project-map/**
+alwaysApply: false
+---
+
+# ReAct 全栈开发循环
+
+开发新功能、修 bug、全栈改动时，遵循 [`.agents/skills/feature-react-loop/SKILL.md`](.agents/skills/feature-react-loop/SKILL.md)。
+
+## 最小流程
+
+1. **Explore** — 读 `project-map/README.md` + 匹配 feature doc → 输出 Context Brief
+2. **Plan** — Task 1（数据源）→ Task 2（后端）→ Task 3（前端）；按改动范围跳过无关层
+3. **Act-Observe** — 每 Task 完成后立即 tier-1 验证；失败则 Observation → 修复 → 重试（≤3 轮）
+4. **Final Verify** — `pytest -m "not network"` / `pnpm lint` / `pnpm test` / `pnpm build`；API 变更须 `pnpm gen:api`
+
+## 与 project-map 分工
+
+- **project-map**：功能上下文文档（三层结构、动线、勿做幻觉）
+- **feature-react-loop**：开发编排（阅读顺序、Task 顺序、验证命令、自愈协议）
+
+命令速查见 [`.agents/skills/feature-react-loop/reference.md`](.agents/skills/feature-react-loop/reference.md)。

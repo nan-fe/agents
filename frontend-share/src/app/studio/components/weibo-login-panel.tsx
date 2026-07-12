@@ -12,11 +12,12 @@ import {
 
 type WeiboLoginPanelProps = {
   open: boolean;
+  userId: string;
   onClose: () => void;
   onLoggedIn: () => void;
 };
 
-const WeiboLoginPanel = ({ open, onClose, onLoggedIn }: WeiboLoginPanelProps) => {
+const WeiboLoginPanel = ({ open, userId, onClose, onLoggedIn }: WeiboLoginPanelProps) => {
   const { message } = App.useApp();
   const [session, setSession] = useState<WeiboLoginStartResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -44,10 +45,13 @@ const WeiboLoginPanel = ({ open, onClose, onLoggedIn }: WeiboLoginPanelProps) =>
   }, [onClose, session?.session_id]);
 
   const startSession = useCallback(async () => {
+    if (!userId) {
+      return;
+    }
     setLoading(true);
     setStartError(null);
     try {
-      const data = await startWeiboLoginSession();
+      const data = await startWeiboLoginSession(userId);
       if (data.logged_in) {
         await finishLogin();
         return;
@@ -61,16 +65,15 @@ const WeiboLoginPanel = ({ open, onClose, onLoggedIn }: WeiboLoginPanelProps) =>
     } finally {
       setLoading(false);
     }
-  }, [finishLogin, message]);
+  }, [finishLogin, message, userId]);
 
   useEffect(() => {
     if (!open) {
       return;
     }
     void startSession();
-    // 仅在弹窗打开时启动一次会话
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+  }, [open, userId]);
 
   const handleConfirm = useCallback(async () => {
     if (!session?.session_id || confirming) {

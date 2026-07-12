@@ -2,7 +2,7 @@
 
 单功能 Agent 参考文档。改动功能代码前**必须先读**本页对应 doc（见下方路由表）。
 
-编写规范：[`.agents/skills/project-map/SKILL.md`](../.agents/skills/project-map/SKILL.md) · 范例：[`auth-login-register.md`](auth-login-register.md)
+编写规范：[`.agents/skills/project-map/SKILL.md`](../.agents/skills/project-map/SKILL.md) · 开发流程：[`.agents/skills/feature-react-loop/SKILL.md`](../.agents/skills/feature-react-loop/SKILL.md) · 范例：[`auth-login-register.md`](auth-login-register.md)
 
 ---
 

@@ -9,6 +9,7 @@ import {
   createShare,
   getPublishJobStatus,
   getSocialStatus,
+  getWeiboOAuthUserStatus,
   getXOAuthUserStatus,
   publishToWeibo,
   publishToX,
@@ -16,12 +17,17 @@ import {
   type PublishJobResponse,
   type ShareResult,
   type SocialStatusResponse,
+  type WeiboOAuthUserStatus,
   type XOAuthUserStatus,
 } from '@/services/api';
 import { getStudioUserId } from '@/app/studio/lib/studio-user';
 import type { SocialPublishPlatform } from './social-share-sync-modal';
 
 const SocialShareSyncModal = dynamic(() => import('./social-share-sync-modal'), {
+  ssr: false,
+});
+
+const WeiboOAuthConnectPanel = dynamic(() => import('./weibo-oauth-connect-panel'), {
   ssr: false,
 });
 
@@ -37,9 +43,16 @@ const XLoginPanel = dynamic(() => import('./x-login-panel'), {
   ssr: false,
 });
 
-const isWeiboReady = (status: SocialStatusResponse | null): boolean =>
+const isWeiboReady = (
+  status: SocialStatusResponse | null,
+  oauthStatus: WeiboOAuthUserStatus | null,
+): boolean =>
   Boolean(status?.dry_run) ||
-  Boolean(status?.weibo.configured && status?.weibo.logged_in);
+  Boolean(
+    status?.weibo_oauth_configured
+      ? oauthStatus?.connected
+      : status?.weibo.configured && status?.weibo.logged_in || oauthStatus?.connected,
+  );
 
 const isXReady = (
   status: SocialStatusResponse | null,
@@ -149,6 +162,7 @@ const resolvePublishJob = async (
           version_id: result.version_id,
         })
       : await publishToWeibo({
+          user_id: userId,
           title: result.title,
           content: result.content,
           hashtags: result.hashtags,
@@ -164,6 +178,7 @@ const ResultDisplay = ({ result, variant = 'default' }: ResultDisplayProps) => {
   const { data: session } = useSession();
   const userId = getStudioUserId(session);
   const [socialStatus, setSocialStatus] = useState<SocialStatusResponse | null>(null);
+  const [weiboOAuthStatus, setWeiboOAuthStatus] = useState<WeiboOAuthUserStatus | null>(null);
   const [xOAuthStatus, setXOAuthStatus] = useState<XOAuthUserStatus | null>(null);
   const [shareUrl, setShareUrl] = useState('');
   const [publishJobId, setPublishJobId] = useState('');
@@ -174,7 +189,8 @@ const ResultDisplay = ({ result, variant = 'default' }: ResultDisplayProps) => {
   const [modalPhase, setModalPhase] = useState<'choose' | 'confirm' | 'publishing'>('confirm');
   const [modalPlatform, setModalPlatform] = useState<SocialPublishPlatform>('weibo');
   const [modalPublishJob, setModalPublishJob] = useState<PublishJobResponse | null>(null);
-  const [loginOpen, setLoginOpen] = useState(false);
+  const [weiboOAuthOpen, setWeiboOAuthOpen] = useState(false);
+  const [weiboLoginOpen, setWeiboLoginOpen] = useState(false);
   const [xOAuthOpen, setXOAuthOpen] = useState(false);
   const [xLoginOpen, setXLoginOpen] = useState(false);
   const publishAfterLoginRef = useRef(false);
@@ -187,6 +203,10 @@ const ResultDisplay = ({ result, variant = 'default' }: ResultDisplayProps) => {
     try {
       const status = await getSocialStatus(false, userId || undefined);
       setSocialStatus(status);
+      if (userId && status.weibo_publish_enabled) {
+        const weiboOauth = await getWeiboOAuthUserStatus(userId);
+        setWeiboOAuthStatus(weiboOauth);
+      }
       if (userId && status.x_publish_enabled) {
         const oauth = await getXOAuthUserStatus(userId);
         setXOAuthStatus(oauth);
@@ -197,6 +217,7 @@ const ResultDisplay = ({ result, variant = 'default' }: ResultDisplayProps) => {
       const fallback: SocialStatusResponse = {
         weibo_publish_enabled: false,
         weibo: { configured: false, logged_in: false },
+        weibo_oauth_configured: false,
         x_publish_enabled: false,
         x: { configured: false, logged_in: false },
         x_oauth_configured: false,
@@ -363,11 +384,15 @@ const ResultDisplay = ({ result, variant = 'default' }: ResultDisplayProps) => {
   }, [finalizeShare, message, modalPlatform, result, userId]);
 
   const handleConfirmPublish = () => {
-    if (modalPlatform === 'weibo' && !isWeiboReady(socialStatus)) {
+    if (modalPlatform === 'weibo' && !isWeiboReady(socialStatus, weiboOAuthStatus)) {
       publishAfterLoginRef.current = true;
       pendingPlatformRef.current = 'weibo';
       setModalOpen(false);
-      setLoginOpen(true);
+      if (socialStatus?.weibo_oauth_configured) {
+        setWeiboOAuthOpen(true);
+      } else {
+        setWeiboLoginOpen(true);
+      }
       return;
     }
     if (modalPlatform === 'x' && !isXReady(socialStatus, xOAuthStatus)) {
@@ -477,35 +502,68 @@ const ResultDisplay = ({ result, variant = 'default' }: ResultDisplayProps) => {
 
   return (
     <>
-      <WeiboLoginPanel
-        open={loginOpen}
-        onClose={() => {
-          publishAfterLoginRef.current = false;
-          setLoginOpen(false);
-        }}
-        onLoggedIn={() => {
-          void getSocialStatus(true)
-            .then((status) => {
-              setSocialStatus(status);
-              if (
-                publishAfterLoginRef.current &&
-                pendingPlatformRef.current === 'weibo' &&
-                isWeiboReady(status)
-              ) {
-                publishAfterLoginRef.current = false;
-                setModalPlatform('weibo');
-                setModalPhase('confirm');
-                setModalOpen(true);
-              }
-            })
-            .catch((error) => {
-              reportError(error, 'result/getSocialStatus');
-            });
-        }}
-      />
-
       {userId && (
         <>
+          <WeiboOAuthConnectPanel
+            open={weiboOAuthOpen}
+            userId={userId}
+            onClose={() => {
+              publishAfterLoginRef.current = false;
+              setWeiboOAuthOpen(false);
+            }}
+            onConnected={() => {
+              void getWeiboOAuthUserStatus(userId, true)
+                .then(async (oauth) => {
+                  setWeiboOAuthStatus(oauth);
+                  const status = await getSocialStatus(true, userId);
+                  setSocialStatus(status);
+                  if (
+                    publishAfterLoginRef.current &&
+                    pendingPlatformRef.current === 'weibo' &&
+                    isWeiboReady(status, oauth)
+                  ) {
+                    publishAfterLoginRef.current = false;
+                    setModalPlatform('weibo');
+                    setModalPhase('confirm');
+                    setModalOpen(true);
+                  }
+                })
+                .catch((error) => {
+                  reportError(error, 'result/getWeiboOAuthUserStatus');
+                });
+            }}
+          />
+          <WeiboLoginPanel
+            open={weiboLoginOpen}
+            userId={userId}
+            onClose={() => {
+              publishAfterLoginRef.current = false;
+              setWeiboLoginOpen(false);
+            }}
+            onLoggedIn={() => {
+              void getSocialStatus(true, userId)
+                .then((status) => {
+                  setSocialStatus(status);
+                  return getWeiboOAuthUserStatus(userId, true);
+                })
+                .then((oauth) => {
+                  setWeiboOAuthStatus(oauth);
+                  if (
+                    publishAfterLoginRef.current &&
+                    pendingPlatformRef.current === 'weibo' &&
+                    isWeiboReady(socialStatus, oauth)
+                  ) {
+                    publishAfterLoginRef.current = false;
+                    setModalPlatform('weibo');
+                    setModalPhase('confirm');
+                    setModalOpen(true);
+                  }
+                })
+                .catch((error) => {
+                  reportError(error, 'result/getSocialStatus');
+                });
+            }}
+          />
           <XOAuthConnectPanel
             open={xOAuthOpen}
             userId={userId}

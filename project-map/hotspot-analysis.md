@@ -4,7 +4,7 @@
 
 **入口**：`/studio` → 侧栏「热点分析」
 
-> **边界**：`SocialSyncSettings`（X→微博同步）非本功能，仅共用 `/studio` 布局。
+> **边界**：`SocialSyncSettings`（侧栏微博/X 登录）非本功能，仅共用 `/studio` 布局。
 
 ---
 

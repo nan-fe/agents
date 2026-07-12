@@ -272,7 +272,9 @@ class XOAuthService:
             await session.commit()
             return True
 
-    async def user_status(self, user_id: str, *, profile_logged_in: bool | None = None) -> dict[str, Any]:
+    async def user_status(
+        self, user_id: str, *, profile_logged_in: bool | None = None
+    ) -> dict[str, Any]:
         profile_ready = profile_logged_in if profile_logged_in is not None else False
         row = await self.get_user_token_row(user_id)
         if row is None:

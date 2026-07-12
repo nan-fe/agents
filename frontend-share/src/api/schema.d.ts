@@ -420,6 +420,99 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/social/weibo/oauth/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Social Weibo Oauth Start
+         * @description 在 Playwright Profile 内启动微博 OAuth 授权。
+         */
+        post: operations["social_weibo_oauth_start_social_weibo_oauth_start_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/social/weibo/oauth/session/{session_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Social Weibo Oauth Session Status */
+        get: operations["social_weibo_oauth_session_status_social_weibo_oauth_session__session_id__get"];
+        put?: never;
+        post?: never;
+        /** Social Weibo Oauth Session Close */
+        delete: operations["social_weibo_oauth_session_close_social_weibo_oauth_session__session_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/social/weibo/oauth/session/{session_id}/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Social Weibo Oauth Session Confirm */
+        post: operations["social_weibo_oauth_session_confirm_social_weibo_oauth_session__session_id__confirm_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/social/weibo/oauth/callback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Social Weibo Oauth Callback
+         * @description 微博 OAuth 浏览器回调页（token 交换由 Playwright 会话内监听完成）。
+         */
+        get: operations["social_weibo_oauth_callback_social_weibo_oauth_callback_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/social/weibo/oauth/user": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Social Weibo Oauth User Status */
+        get: operations["social_weibo_oauth_user_status_social_weibo_oauth_user_get"];
+        put?: never;
+        post?: never;
+        /** Social Weibo Oauth Disconnect */
+        delete: operations["social_weibo_oauth_disconnect_social_weibo_oauth_user_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/social/weibo/login/start": {
         parameters: {
             query?: never;
@@ -431,7 +524,7 @@ export interface paths {
         put?: never;
         /**
          * Social Weibo Login Start
-         * @description 启动微博登录会话（打开 Profile 浏览器，用户手动完成登录）。
+         * @description Fallback：手动 Profile 登录微博（OAuth 未配置时使用）。
          */
         post: operations["social_weibo_login_start_social_weibo_login_start_post"];
         delete?: never;
@@ -1174,6 +1267,11 @@ export interface components {
                 [key: string]: unknown;
             };
             /**
+             * Weibo Oauth Configured
+             * @default false
+             */
+            weibo_oauth_configured: boolean;
+            /**
              * X Publish Enabled
              * @default false
              */
@@ -1313,6 +1411,43 @@ export interface components {
             /** Profile Path */
             profile_path: string;
         };
+        /** WeiboOAuthSessionResponse */
+        WeiboOAuthSessionResponse: {
+            /** Session Id */
+            session_id: string;
+            /** User Id */
+            user_id: string;
+            /** Logged In */
+            logged_in: boolean;
+            /**
+             * Oauth Completed
+             * @default false
+             */
+            oauth_completed: boolean;
+            /** Oauth Error */
+            oauth_error?: string | null;
+            /** Weibo Screen Name */
+            weibo_screen_name?: string | null;
+            /** Current Url */
+            current_url: string;
+            /** Profile Path */
+            profile_path: string;
+            /**
+             * Viewport Width
+             * @default 1280
+             */
+            viewport_width: number;
+            /**
+             * Viewport Height
+             * @default 900
+             */
+            viewport_height: number;
+        };
+        /** WeiboOAuthStartRequest */
+        WeiboOAuthStartRequest: {
+            /** User Id */
+            user_id: string;
+        };
         /** WeiboPublishCreateResponse */
         WeiboPublishCreateResponse: {
             /** Job Id */
@@ -1328,6 +1463,11 @@ export interface components {
          * @description 触发微博自动发布。
          */
         WeiboPublishRequest: {
+            /**
+             * User Id
+             * @default
+             */
+            user_id: string;
             /** Title */
             title?: string | null;
             /** Content */
@@ -2149,9 +2289,139 @@ export interface operations {
             };
         };
     };
-    social_weibo_login_start_social_weibo_login_start_post: {
+    social_weibo_oauth_start_social_weibo_oauth_start_post: {
         parameters: {
             query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WeiboOAuthStartRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WeiboOAuthSessionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    social_weibo_oauth_session_status_social_weibo_oauth_session__session_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WeiboOAuthSessionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    social_weibo_oauth_session_close_social_weibo_oauth_session__session_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    social_weibo_oauth_session_confirm_social_weibo_oauth_session__session_id__confirm_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WeiboLoginStatusResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    social_weibo_oauth_callback_social_weibo_oauth_callback_get: {
+        parameters: {
+            query?: {
+                code?: string | null;
+                state?: string | null;
+                error?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -2164,7 +2434,112 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    social_weibo_oauth_user_status_social_weibo_oauth_user_get: {
+        parameters: {
+            query: {
+                user_id: string;
+                force_refresh?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    social_weibo_oauth_disconnect_social_weibo_oauth_user_delete: {
+        parameters: {
+            query: {
+                user_id: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    social_weibo_login_start_social_weibo_login_start_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WeiboOAuthStartRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
                     "application/json": components["schemas"]["WeiboLoginStartResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

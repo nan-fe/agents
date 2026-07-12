@@ -12,6 +12,7 @@ description: >-
 
 - **索引 + 全局不变量**：[`project-map/README.md`](../../project-map/README.md)
 - **范例**：[`auth-login-register.md`](../../project-map/auth-login-register.md)
+- **开发流程（ReAct）**：[`feature-react-loop` skill](../feature-react-loop/SKILL.md) — 探索 → 规划 → 执行/自愈 → 验证
 - **Cursor 自动触发**：[`.cursor/rules/project-map.mdc`](../../.cursor/rules/project-map.mdc)
 
 ---

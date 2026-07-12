@@ -39,7 +39,7 @@ backend/app/services/social/
 ├── profile_paths.py         # resolve_weibo_profile_dir、锁清理
 frontend-share/src/app/studio/components/
 ├── weibo-login-panel.tsx    # 弹窗：提示 +「我已登录」
-├── social-sync-settings.tsx # 入口按钮「登录微博」
+├── social-sync-settings.tsx # 侧栏入口「连接微博 / 连接 X」
 frontend-share/src/services/api.ts
 └── startWeiboLoginSession / confirmWeiboLogin / closeWeiboLoginSession
 backend/app/main.py

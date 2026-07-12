@@ -31,7 +31,8 @@ alwaysApply: false
 
 1. 读 [`project-map/README.md`](project-map/README.md)（全局不变量）
 2. 读下方匹配的 feature doc，按三层（数据库 / 后端 / 前端）理解后再动手
-3. 动线、路由、Schema 变更时同步更新该 doc
+3. 按 [`.agents/skills/feature-react-loop/SKILL.md`](.agents/skills/feature-react-loop/SKILL.md) 走 ReAct 流程：输出 Context Brief → Plan → 每 Task tier-1 验证 → Final 终检
+4. 动线、路由、Schema 变更时同步更新该 doc
 
 ## 路径 → 文档
 

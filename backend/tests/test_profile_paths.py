@@ -27,14 +27,27 @@ def test_resolve_x_profile_dir_per_user(tmp_path, monkeypatch) -> None:
     assert path_b.endswith("user-b")
 
 
+def test_resolve_weibo_profile_dir_per_user(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(
+        __import__("app.services.social.profile_paths", fromlist=["settings"]).settings,
+        "WEIBO_PUBLISH_PROFILE_PATH",
+        str(tmp_path / "weibo-profiles"),
+    )
+    path_a = resolve_weibo_profile_dir("user-a")
+    path_b = resolve_weibo_profile_dir("user-b")
+    assert path_a != path_b
+    assert path_a.endswith("user-a")
+    assert path_b.endswith("user-b")
+
+
 def test_resolve_weibo_profile_dir_warns_on_chrome_in_path(caplog) -> None:
     with patch.object(
         __import__("app.services.social.profile_paths", fromlist=["settings"]).settings,
         "BROWSER_USE_PROFILE_PATH",
         "/tmp/chrome-weibo-profile",
     ):
-        path = resolve_weibo_profile_dir()
-    assert path.endswith("chrome-weibo-profile")
+        path = resolve_weibo_profile_dir("demo")
+    assert "chrome-weibo-profile" in path
     assert "chrome" in caplog.text.lower() or any(
         "chrome" in record.message.lower() for record in caplog.records
     )

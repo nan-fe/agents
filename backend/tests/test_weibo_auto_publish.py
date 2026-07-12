@@ -30,7 +30,7 @@ def test_check_weibo_login_state_skips_browser_without_force_refresh() -> None:
                 "app.services.social.weibo_publisher._check_weibo_login_state_playwright",
                 mock_browser,
             ):
-                result = await check_weibo_login_state(force_refresh=False)
+                result = await check_weibo_login_state(user_id="demo", force_refresh=False)
         assert result["logged_in"] is False
         assert result["reason"] == "未检测"
         mock_browser.assert_not_called()
@@ -63,7 +63,7 @@ def test_check_weibo_login_state_uses_playwright_on_force_refresh() -> None:
                     "app.services.social.weibo_auth_store.save_weibo_auth",
                     AsyncMock(),
                 ):
-                    result = await check_weibo_login_state(force_refresh=True)
+                    result = await check_weibo_login_state(user_id="demo", force_refresh=True)
         assert result["logged_in"] is True
         mock_browser.assert_awaited_once()
 
@@ -95,7 +95,7 @@ def test_check_weibo_login_state_uses_db_when_confirmed() -> None:
                     "app.services.social.weibo_publisher._check_weibo_login_state_playwright",
                     mock_browser,
                 ):
-                    result = await check_weibo_login_state(force_refresh=False)
+                    result = await check_weibo_login_state(user_id="demo", force_refresh=False)
         assert result["logged_in"] is True
         mock_browser.assert_not_called()
 

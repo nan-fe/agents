@@ -644,9 +644,7 @@ async def _publish_via_playwright(
                     current_url = page.url  # type: ignore[attr-defined]
                     body = await page.content()  # type: ignore[attr-defined]
                     if _page_looks_logged_out(body, current_url):
-                        raise RuntimeError(
-                            "X 未登录，请先在 Studio 连接 X 账号"
-                        )
+                        raise RuntimeError("X 未登录，请先在 Studio 连接 X 账号")
 
                     if image_path is not None:
                         await _emit(on_progress, "上传配图…")
@@ -657,17 +655,13 @@ async def _publish_via_playwright(
                             await _wait_for_media_ready(page)
 
                     if await _compose_over_limit(page):
-                        raise RuntimeError(
-                            "正文超出 X 280 字符限制，发布按钮不可用"
-                        )
+                        raise RuntimeError("正文超出 X 280 字符限制，发布按钮不可用")
 
                     await _emit(on_progress, "点击发布…")
                     published = await _click_publish(page)
                     if not published:
                         if await _compose_over_limit(page):
-                            raise RuntimeError(
-                                "正文超出 X 280 字符限制，发布按钮不可用"
-                            )
+                            raise RuntimeError("正文超出 X 280 字符限制，发布按钮不可用")
                         raise RuntimeError("未找到可点击的发布按钮")
 
                     await page.wait_for_timeout(4000)  # type: ignore[attr-defined]

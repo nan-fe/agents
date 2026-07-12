@@ -11,6 +11,8 @@ from app.services.social.content_adapter import build_weibo_payload, build_x_pay
 from app.services.social.profile_paths import resolve_weibo_profile_dir, resolve_x_profile_dir
 from app.services.social.publish_job_store import publish_job_store
 from app.services.social.weibo_login_session import weibo_login_session_manager
+from app.services.social.weibo_oauth_login_session import weibo_oauth_login_session_manager
+from app.services.social.weibo_oauth_service import weibo_oauth_service
 from app.services.social.weibo_publisher import check_weibo_login_state, publish_to_weibo
 from app.services.social.x_login_session import x_login_session_manager
 from app.services.social.x_oauth_login_session import x_oauth_login_session_manager
@@ -43,7 +45,40 @@ def build_weibo_publish_meta(
 
 
 class SocialPublishService:
-    async def get_x_user_status(self, user_id: str, *, force_refresh: bool = False) -> dict[str, Any]:
+    async def get_weibo_user_status(
+        self,
+        user_id: str,
+        *,
+        force_refresh: bool = False,
+    ) -> dict[str, Any]:
+        uid = (user_id or "").strip()
+        if not uid:
+            raise ValueError("user_id 不能为空")
+
+        if force_refresh and (
+            await weibo_oauth_login_session_manager.has_active_session(uid)
+            or await weibo_login_session_manager.has_active_session(uid)
+        ):
+            profile_state = {
+                "configured": True,
+                "logged_in": False,
+                "reason": "连接进行中",
+                "profile_path": resolve_weibo_profile_dir(uid),
+                "user_id": uid,
+            }
+        else:
+            profile_state = await check_weibo_login_state(user_id=uid, force_refresh=force_refresh)
+
+        oauth_status = await weibo_oauth_service.user_status(
+            uid,
+            profile_logged_in=bool(profile_state.get("logged_in")),
+        )
+        oauth_status["profile"] = profile_state
+        return oauth_status
+
+    async def get_x_user_status(
+        self, user_id: str, *, force_refresh: bool = False
+    ) -> dict[str, Any]:
         uid = (user_id or "").strip()
         if not uid:
             raise ValueError("user_id 不能为空")
@@ -75,17 +110,18 @@ class SocialPublishService:
         user_id: str = "",
         force_refresh: bool = False,
     ) -> dict[str, Any]:
-        if force_refresh and await weibo_login_session_manager.has_active_session():
-            weibo = {
-                "configured": True,
-                "logged_in": False,
-                "reason": "登录进行中",
-                "profile_path": resolve_weibo_profile_dir(),
-            }
-        else:
-            weibo = await check_weibo_login_state(force_refresh=force_refresh)
-
         uid = (user_id or "").strip()
+        if uid:
+            weibo = (await self.get_weibo_user_status(uid, force_refresh=force_refresh)).get(
+                "profile", {}
+            )
+        else:
+            weibo = {
+                "configured": settings.WEIBO_PUBLISH_ENABLED,
+                "logged_in": False,
+                "reason": "未指定 user_id",
+            }
+
         if uid:
             x_state = (await self.get_x_user_status(uid, force_refresh=force_refresh)).get(
                 "profile", {}
@@ -100,6 +136,7 @@ class SocialPublishService:
         return {
             "weibo_publish_enabled": settings.WEIBO_PUBLISH_ENABLED,
             "weibo": weibo,
+            "weibo_oauth_configured": weibo_oauth_service.is_configured(),
             "x_publish_enabled": settings.X_PUBLISH_ENABLED,
             "x": x_state,
             "x_oauth_configured": x_oauth_service.is_configured(),
@@ -118,6 +155,7 @@ class SocialPublishService:
     async def start_weibo_publish(
         self,
         *,
+        user_id: str = "",
         title: str = "",
         content: str = "",
         hashtags: list[str] | None = None,
@@ -128,8 +166,18 @@ class SocialPublishService:
         if not settings.WEIBO_PUBLISH_ENABLED:
             raise ValueError("微博发布未启用")
 
+        uid = (user_id or "").strip()
+        if not uid:
+            raise ValueError("user_id 不能为空")
+
         if not settings.WEIBO_PUBLISH_SKIP_REVIEW and review_approved is not True:
             raise ValueError("内容尚未审核通过，无法自动发布到微博")
+
+        weibo_status = await self.get_weibo_user_status(uid)
+        if not settings.WEIBO_PUBLISH_DRY_RUN and not weibo_status.get("connected"):
+            if weibo_oauth_service.is_configured():
+                raise ValueError("请先通过 OAuth 连接微博账号")
+            raise ValueError("微博未登录，请先连接微博账号")
 
         payload = build_weibo_payload(
             title=title,
@@ -147,6 +195,7 @@ class SocialPublishService:
                 "title": title,
                 "text_preview": payload.text[:120],
                 "has_image": bool(payload.image_url),
+                "user_id": uid,
             },
         )
 
@@ -160,6 +209,7 @@ class SocialPublishService:
             try:
                 post_url, screenshot_path = await publish_to_weibo(
                     payload,
+                    user_id=uid,
                     on_progress=on_progress,
                 )
                 await publish_job_store.mark_succeeded(job.job_id, post_url=post_url)

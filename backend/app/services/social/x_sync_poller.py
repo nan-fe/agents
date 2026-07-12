@@ -116,7 +116,11 @@ async def run_x_sync_once() -> dict[str, Any]:
             return {"skipped": True, "reason": "无新推文", "tweet_id": tweet_id}
 
         service = get_social_publish_service()
+        sync_user_id = (settings.WEIBO_SYNC_USER_ID or "").strip()
+        if not sync_user_id:
+            return {"skipped": True, "reason": "未配置 WEIBO_SYNC_USER_ID"}
         job_id = await service.start_weibo_publish(
+            user_id=sync_user_id,
             title="",
             content=text,
             hashtags=None,

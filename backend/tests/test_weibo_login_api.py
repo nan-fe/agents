@@ -22,6 +22,7 @@ def memory_db(monkeypatch):
 def _mock_session(*, logged_in: bool = False) -> WeiboLoginSession:
     session = WeiboLoginSession(
         session_id="test-session",
+        user_id="demo",
         playwright=MagicMock(),
         context=MagicMock(),
         page=MagicMock(),
@@ -66,7 +67,10 @@ def test_weibo_login_api_flow() -> None:
                     AsyncMock(),
                 ):
                     async with AsyncClient(transport=transport, base_url="http://test") as client:
-                        start_resp = await client.post("/social/weibo/login/start")
+                        start_resp = await client.post(
+                            "/social/weibo/login/start",
+                            json={"user_id": "demo"},
+                        )
                         assert start_resp.status_code == 200
                         body = start_resp.json()
                         assert body["session_id"] == "test-session"
@@ -123,7 +127,10 @@ def test_weibo_login_start_disabled() -> None:
         settings.WEIBO_PUBLISH_ENABLED = False
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
-            resp = await client.post("/social/weibo/login/start")
+            resp = await client.post(
+                "/social/weibo/login/start",
+                json={"user_id": "demo"},
+            )
             assert resp.status_code == 400
         settings.WEIBO_PUBLISH_ENABLED = prev
         await close_db()

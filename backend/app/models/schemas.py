@@ -265,6 +265,7 @@ class LarkOAuthRegisterResponse(BaseModel):
 class WeiboPublishRequest(BaseModel):
     """触发微博自动发布。"""
 
+    user_id: str = ""
     title: str | None = None
     content: str | None = None
     hashtags: List[str] | None = None
@@ -301,6 +302,23 @@ class XOAuthStartRequest(BaseModel):
     user_id: str
 
 
+class WeiboOAuthStartRequest(BaseModel):
+    user_id: str
+
+
+class WeiboOAuthSessionResponse(BaseModel):
+    session_id: str
+    user_id: str
+    logged_in: bool
+    oauth_completed: bool = False
+    oauth_error: str | None = None
+    weibo_screen_name: str | None = None
+    current_url: str
+    profile_path: str
+    viewport_width: int = 1280
+    viewport_height: int = 900
+
+
 class XOAuthSessionResponse(BaseModel):
     session_id: str
     user_id: str
@@ -330,6 +348,7 @@ class PublishJobResponse(BaseModel):
 class SocialStatusResponse(BaseModel):
     weibo_publish_enabled: bool
     weibo: dict
+    weibo_oauth_configured: bool = False
     x_publish_enabled: bool = False
     x: dict = Field(default_factory=dict)
     x_oauth_configured: bool = False

@@ -55,12 +55,14 @@ from app.models.schemas import (
     VersionSnapshot,
     WeiboLoginStartResponse,
     WeiboLoginStatusResponse,
+    WeiboOAuthSessionResponse,
+    WeiboOAuthStartRequest,
     WeiboPublishCreateResponse,
     WeiboPublishRequest,
+    XOAuthSessionResponse,
+    XOAuthStartRequest,
     XPublishCreateResponse,
     XPublishRequest,
-    XOAuthStartRequest,
-    XOAuthSessionResponse,
 )
 from app.services.dialog_stream_store import (
     DialogStream,
@@ -74,6 +76,8 @@ from app.services.product_page_scraper import get_product_screenshot_dir
 from app.services.share_service import share_store
 from app.services.social.social_service import get_social_publish_service
 from app.services.social.weibo_login_session import weibo_login_session_manager
+from app.services.social.weibo_oauth_login_session import weibo_oauth_login_session_manager
+from app.services.social.weibo_oauth_service import WeiboOAuthError, weibo_oauth_service
 from app.services.social.weibo_publisher import (
     VIEWPORT_HEIGHT,
     VIEWPORT_WIDTH,
@@ -1005,17 +1009,146 @@ async def social_status(user_id: str = "", force_refresh: bool = False):
     return SocialStatusResponse(**data)
 
 
-@app.post("/social/weibo/login/start", response_model=WeiboLoginStartResponse)
-async def social_weibo_login_start():
-    """启动微博登录会话（打开 Profile 浏览器，用户手动完成登录）。"""
+@app.post("/social/weibo/oauth/start", response_model=WeiboOAuthSessionResponse)
+async def social_weibo_oauth_start(payload: WeiboOAuthStartRequest):
+    """在 Playwright Profile 内启动微博 OAuth 授权。"""
+    uid = (payload.user_id or "").strip()
+    if not uid:
+        raise HTTPException(status_code=400, detail="user_id 不能为空")
     try:
-        session = await weibo_login_session_manager.start()
+        session = await weibo_oauth_login_session_manager.start(user_id=uid)
+        state = await session.evaluate_profile_login()
+        return WeiboOAuthSessionResponse(
+            session_id=session.session_id,
+            user_id=uid,
+            logged_in=bool(state.get("logged_in")),
+            oauth_completed=session.oauth_completed,
+            oauth_error=session.oauth_error,
+            weibo_screen_name=session.weibo_screen_name,
+            current_url=str(state.get("current_url") or ""),
+            profile_path=str(state.get("profile_path") or ""),
+            viewport_width=VIEWPORT_WIDTH,
+            viewport_height=VIEWPORT_HEIGHT,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except Exception as exc:
+        from app.services.social.weibo_publisher import format_weibo_browser_error
+
+        logger.warning("微博 OAuth 会话启动失败: %s", exc)
+        raise HTTPException(status_code=502, detail=format_weibo_browser_error(exc)) from exc
+
+
+@app.get("/social/weibo/oauth/session/{session_id}", response_model=WeiboOAuthSessionResponse)
+async def social_weibo_oauth_session_status(session_id: str):
+    session = await weibo_oauth_login_session_manager.get_session(session_id)
+    if session is None:
+        raise HTTPException(status_code=404, detail="OAuth 会话不存在或已过期")
+    state = await session.evaluate_profile_login()
+    return WeiboOAuthSessionResponse(
+        session_id=session.session_id,
+        user_id=session.user_id,
+        logged_in=bool(state.get("logged_in")),
+        oauth_completed=session.oauth_completed,
+        oauth_error=session.oauth_error,
+        weibo_screen_name=session.weibo_screen_name,
+        current_url=str(state.get("current_url") or ""),
+        profile_path=str(state.get("profile_path") or ""),
+        viewport_width=VIEWPORT_WIDTH,
+        viewport_height=VIEWPORT_HEIGHT,
+    )
+
+
+@app.delete("/social/weibo/oauth/session/{session_id}")
+async def social_weibo_oauth_session_close(session_id: str):
+    await weibo_oauth_login_session_manager.close(session_id)
+    return {"ok": True}
+
+
+@app.post(
+    "/social/weibo/oauth/session/{session_id}/confirm", response_model=WeiboLoginStatusResponse
+)
+async def social_weibo_oauth_session_confirm(session_id: str):
+    try:
+        state = await weibo_oauth_login_session_manager.confirm(session_id)
+        return WeiboLoginStatusResponse(
+            session_id=session_id,
+            logged_in=True,
+            current_url=str(state["current_url"]),
+            profile_path=str(state["profile_path"]),
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except WeiboOAuthError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.warning("微博 OAuth 确认失败: %s", exc)
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@app.get("/social/weibo/oauth/callback")
+async def social_weibo_oauth_callback(
+    code: str | None = None,
+    state: str | None = None,
+    error: str | None = None,
+):
+    """微博 OAuth 浏览器回调页（token 交换由 Playwright 会话内监听完成）。"""
+    if error:
+        return HTMLResponse(
+            f"<html><body><h2>授权失败</h2><p>{error}</p></body></html>",
+            status_code=400,
+        )
+    if code and state:
+        return HTMLResponse(
+            "<html><body><h2>正在处理微博授权…</h2>"
+            "<p>请返回 Studio 并点击「我已完成授权」。</p></body></html>"
+        )
+    return HTMLResponse(
+        "<html><body><h2>缺少授权参数</h2></body></html>",
+        status_code=400,
+    )
+
+
+@app.get("/social/weibo/oauth/user")
+async def social_weibo_oauth_user_status(user_id: str, force_refresh: bool = False):
+    uid = (user_id or "").strip()
+    if not uid:
+        raise HTTPException(status_code=400, detail="user_id 不能为空")
+    return await get_social_publish_service().get_weibo_user_status(
+        uid, force_refresh=force_refresh
+    )
+
+
+@app.delete("/social/weibo/oauth/user")
+async def social_weibo_oauth_disconnect(user_id: str):
+    uid = (user_id or "").strip()
+    if not uid:
+        raise HTTPException(status_code=400, detail="user_id 不能为空")
+    removed = await weibo_oauth_service.disconnect_user(uid)
+    from app.services.social.weibo_auth_store import clear_weibo_auth
+
+    await clear_weibo_auth(uid)
+    invalidate_weibo_login_state_cache(uid)
+    return {"ok": removed}
+
+
+@app.post("/social/weibo/login/start", response_model=WeiboLoginStartResponse)
+async def social_weibo_login_start(payload: WeiboOAuthStartRequest):
+    """Fallback：手动 Profile 登录微博（OAuth 未配置时使用）。"""
+    uid = (payload.user_id or "").strip()
+    if not uid:
+        raise HTTPException(status_code=400, detail="user_id 不能为空")
+    try:
+        session = await weibo_login_session_manager.start(user_id=uid)
         state = await session.evaluate_login()
         if state["logged_in"]:
-            invalidate_weibo_login_state_cache()
+            invalidate_weibo_login_state_cache(uid)
             from app.services.social.weibo_auth_store import save_weibo_auth
 
             await save_weibo_auth(
+                user_id=uid,
                 profile_path=str(state["profile_path"]),
                 logged_in=True,
                 current_url=str(state["current_url"]),
@@ -1103,6 +1236,7 @@ async def social_publish_weibo(payload: WeiboPublishRequest):
 
     try:
         job_id = await get_social_publish_service().start_weibo_publish(
+            user_id=payload.user_id,
             title=str(result.get("title") or ""),
             content=str(result.get("content") or ""),
             hashtags=result.get("hashtags"),

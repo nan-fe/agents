@@ -17,7 +17,7 @@
 
 ## Agent 阅读指引
 
-> 通用规范：[`project-map` skill](../.agents/skills/project-map/SKILL.md) · 索引：[`README.md`](README.md)
+> 通用规范：[`project-map` skill](../.agents/skills/project-map/SKILL.md) · 开发流程：[`feature-react-loop` skill](../.agents/skills/feature-react-loop/SKILL.md) · 索引：[`README.md`](README.md)
 
 | 层级 | 关注点 | 路径 |
 |------|--------|------|

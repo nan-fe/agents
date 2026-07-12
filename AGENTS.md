@@ -72,6 +72,8 @@ The production frontend lives in `frontend-share/` (Next.js App Router). Follow 
 
 Per-feature Agent reference docs live in [`project-map/`](project-map/). **Before changing a feature**, read [`project-map/README.md`](project-map/README.md) (global invariants + doc routing table) and the matching feature doc (e.g. `auth-login-register.md`). When writing or updating docs, follow [`.agents/skills/project-map/SKILL.md`](.agents/skills/project-map/SKILL.md) (three-layer context: database, backend, frontend). Copy structure from [`template.md`](.agents/skills/project-map/template.md).
 
+For new features, bug fixes, or full-stack changes, follow the ReAct loop in [`.agents/skills/feature-react-loop/SKILL.md`](.agents/skills/feature-react-loop/SKILL.md): **Explore** (Context Brief) → **Plan** (Task 1 DB → Task 2 Backend → Task 3 Frontend, skip layers when appropriate) → **Act-Observe** (tier-1 verify + self-heal, max 3 retries) → **Final Verify** (`pytest` / `pnpm lint` / `pnpm build`). Update `project-map` when routes or schemas change.
+
 ## MCP Lark (`mcp-lark/`)
 
 ```bash

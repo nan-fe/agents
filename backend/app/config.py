@@ -102,8 +102,16 @@ class Settings(BaseSettings):
     WEIBO_PUBLISH_HEADLESS: bool = True
     WEIBO_PUBLISH_TIMEOUT_MS: int = 45000
     BROWSER_USE_PROFILE_PATH: str = ""
+    WEIBO_PUBLISH_PROFILE_PATH: str = ""
     # 登录/发布使用的浏览器通道：chrome=本机 Google Chrome（推荐，降低微博验证码风控）
     WEIBO_BROWSER_CHANNEL: str = "chrome"
+    # OAuth 2.0：仅用于连接身份，发帖走 Playwright Web UI
+    WEIBO_OAUTH_CLIENT_ID: str = ""
+    WEIBO_OAUTH_CLIENT_SECRET: str = ""
+    WEIBO_OAUTH_CALLBACK_URL: str = "http://localhost:8000/social/weibo/oauth/callback"
+    WEIBO_OAUTH_STATE_SECRET: str = ""
+    # X → 微博自动同步时使用的 Studio user_id（须已连接微博）
+    WEIBO_SYNC_USER_ID: str = ""
 
     # X → 微博自动同步
     X_SYNC_ENABLED: bool = False
@@ -120,10 +128,10 @@ class Settings(BaseSettings):
     X_PUBLISH_PROFILE_PATH: str = ""
     X_BROWSER_CHANNEL: str = ""
     # OAuth 2.0：仅用于连接身份（users.read），发帖走 Playwright Web UI
-    X_OAUTH_CLIENT_ID: str = "QVc3czBiR1RIbjFKRGlzZHRlV0M6MTpjaQ"
-    X_OAUTH_CLIENT_SECRET: str = "5vL1yqJ83pNC2DGx9Xu7e0-3KsDhsCHYxBJqHNISazw7jSKLtt"
-    X_OAUTH_CALLBACK_URL: str = "http://localhost:8000/social/x/oauth/callback"
-    X_OAUTH_SCOPES: str = "users.read offline.access"
+    X_OAUTH_CLIENT_ID: str = ""
+    X_OAUTH_CLIENT_SECRET: str = ""
+    X_OAUTH_CALLBACK_URL: str = ""
+    X_OAUTH_SCOPES: str = ""
     X_OAUTH_STATE_SECRET: str = ""
     X_HTTP_PROXY: str = ""
 
